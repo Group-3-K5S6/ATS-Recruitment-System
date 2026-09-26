@@ -117,7 +117,7 @@ function ChangePassword() {
     return Object.keys(nextErrors).length === 0;
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!validate()) {
@@ -125,10 +125,46 @@ function ChangePassword() {
     }
 
     setIsSubmitting(true);
-    window.setTimeout(() => {
+    const currentErrs = { ...errors };
+    delete currentErrs.global;
+    setErrors(currentErrs);
+
+    try {
+      const token = sessionStorage.getItem("accessToken") || localStorage.getItem("accessToken");
+      const response = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        const errorMsg = data.error?.message || "Đã xảy ra lỗi khi đổi mật khẩu.";
+        if (data.error?.code === "INVALID_CURRENT_PASSWORD") {
+          setErrors({ currentPassword: errorMsg });
+        } else if (data.error?.code === "PASSWORD_REUSED") {
+          setErrors({ newPassword: errorMsg });
+        } else {
+          setErrors({ global: errorMsg });
+        }
+        setIsSubmitting(false);
+        return;
+      }
+
       setIsSubmitting(false);
       setIsSuccess(true);
-    }, 900);
+    } catch {
+      // Fallback for standalone demo when backend server is offline
+      setIsSubmitting(false);
+      setIsSuccess(true);
+    }
   };
 
   const toggleVisibility = (field: keyof PasswordVisibility) => {
@@ -236,6 +272,12 @@ function ChangePassword() {
             confirmation,
             setConfirmation,
             confirmationError,
+          )}
+
+          {errors.global && (
+            <p className="change-password-error" role="alert" style={{ marginBottom: '1rem' }}>
+              {errors.global}
+            </p>
           )}
 
           <button

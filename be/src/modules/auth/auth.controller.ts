@@ -25,6 +25,17 @@ export const refreshSchema = z.object({
   refreshToken: z.string(),
 });
 
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Vui lòng nhập mật khẩu hiện tại.'),
+  newPassword: z
+    .string()
+    .min(8, 'Mật khẩu mới phải tối thiểu 8 ký tự.')
+    .regex(/[A-Z]/, 'Mật khẩu mới phải chứa ít nhất 1 chữ cái viết hoa (A-Z).')
+    .regex(/[a-z]/, 'Mật khẩu mới phải chứa ít nhất 1 chữ cái viết thường (a-z).')
+    .regex(/\d/, 'Mật khẩu mới phải chứa ít nhất 1 chữ số (0-9).')
+    .regex(/[^A-Za-z0-9]/, 'Mật khẩu mới phải chứa ít nhất 1 ký tự đặc biệt.'),
+});
+
 export class AuthController {
   static async login(req: Request, res: Response): Promise<void> {
     const { email, password } = req.body;
@@ -177,5 +188,90 @@ export class AuthController {
     }
 
     successResponse(res, req.user, 200);
+  }
+
+  static async changePassword(req: Request, res: Response): Promise<void> {
+    if (!req.user) {
+      errorResponse(res, 'Authentication required.', 401, 'UNAUTHORIZED');
+      return;
+    }
+
+    const { currentPassword, newPassword } = req.body;
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: {
+        passwordHistories: {
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        },
+      },
+    });
+
+    if (!user) {
+      errorResponse(res, 'User account not found.', 404, 'USER_NOT_FOUND');
+      return;
+    }
+
+    // 1. Verify current password
+    const isCurrentMatch = await comparePassword(currentPassword, user.passwordHash);
+    if (!isCurrentMatch) {
+      errorResponse(res, 'Mật khẩu hiện tại không đúng.', 400, 'INVALID_CURRENT_PASSWORD');
+      return;
+    }
+
+    // 2. Check if new password matches current password
+    if (currentPassword === newPassword) {
+      errorResponse(res, 'Mật khẩu mới không được trùng với mật khẩu hiện tại.', 400, 'PASSWORD_REUSED');
+      return;
+    }
+
+    const isSameAsCurrent = await comparePassword(newPassword, user.passwordHash);
+    if (isSameAsCurrent) {
+      errorResponse(res, 'Mật khẩu mới không được trùng với mật khẩu hiện tại.', 400, 'PASSWORD_REUSED');
+      return;
+    }
+
+    // 3. Check password history (cannot reuse recent old passwords)
+    for (const history of user.passwordHistories) {
+      const isHistoricalMatch = await comparePassword(newPassword, history.passwordHash);
+      if (isHistoricalMatch) {
+        errorResponse(res, 'Mật khẩu mới không được trùng với các mật khẩu đã sử dụng gần đây.', 400, 'PASSWORD_REUSED');
+        return;
+      }
+    }
+
+    // 4. Update password & record history
+    const newPasswordHash = await hashPassword(newPassword);
+
+    await prisma.$transaction([
+      prisma.passwordHistory.create({
+        data: {
+          userId: user.id,
+          passwordHash: user.passwordHash,
+        },
+      }),
+      prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash: newPasswordHash },
+      }),
+    ]);
+
+    // 5. Revoke current token (revoke session)
+    if (req.token) {
+      await revokeToken(req.token);
+    }
+
+    // 6. Record audit log
+    await recordRequestAudit(req, AuditAction.PASSWORD_CHANGED, 'user', user.id, {
+      email: user.email,
+    });
+
+    successResponse(
+      res,
+      { message: 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại với mật khẩu mới.' },
+      200,
+      'Password updated successfully.'
+    );
   }
 }

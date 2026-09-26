@@ -72,6 +72,16 @@ Tài liệu đặc tả toàn diện về **Authentication, Role-Based Access Co
 - **Mục đích**: Thu hồi token (đưa vào blacklist bảng `RevokedToken`).
 - **Audit Action**: `LOGOUT`
 
+#### `POST /api/auth/change-password`
+- **Auth**: Required (`Bearer <token>`)
+- **Mục đích**: Đổi mật khẩu tài khoản hiện tại, kiểm tra độ phức tạp của mật khẩu mới, kiểm tra trùng mật khẩu cũ/gần đây, thu hồi token hiện tại và lưu vết audit log.
+- **Rules**:
+  - Yêu cầu mật khẩu hiện tại (`currentPassword`) và mật khẩu mới (`newPassword`).
+  - Mật khẩu mới phải đáp ứng chính sách: tối thiểu 8 ký tự, 1 chữ hoa, 1 chữ thường, 1 số, 1 ký tự đặc biệt.
+  - Không cho phép trùng với mật khẩu hiện tại hoặc các mật khẩu trong lịch sử (`PasswordHistory`).
+  - Thu hồi token cũ (`RevokedToken`) sau khi đổi mật khẩu thành công.
+- **Audit Action**: `PASSWORD_CHANGED`
+
 #### `GET /api/auth/me`
 - **Auth**: Required
 - **Mục đích**: Trả về danh tính người dùng hiện tại, roles và permissions thực tế từ server.

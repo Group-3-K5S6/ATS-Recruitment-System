@@ -101,7 +101,10 @@ export async function runSeed() {
   ) {
     const user = await prisma.user.upsert({
       where: { email },
-      update: { departmentId: deptId || null },
+      update: {
+        departmentId: deptId || null,
+        passwordHash: defaultPasswordHash,
+      },
       create: {
         email,
         fullName,

@@ -10,7 +10,7 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:seed": "ts-node prisma/seed.ts",
-    "test": "node scripts/run-tests.js"
+    "test": "vitest run"
   },
   "dependencies": {
     "@prisma/client": "^6.4.1",
@@ -33,6 +33,7 @@
     "supertest": "^7.0.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.2",
+    "vite": "^5.4.14",
     "vitest": "^3.0.8"
   }
 }
