@@ -13,6 +13,11 @@ import "./App.css";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import ChangePassword from "./pages/ChangePassword";
+import {
+  ForbiddenPage,
+  NotFoundPage,
+  ServerErrorPage,
+} from "./pages/ErrorPages";
 
 import Dashboard from "./components/Dashboard";
 
@@ -108,6 +113,7 @@ function Login() {
     />
   );
 }
+
   // ==============================
   // TRANG ĐĂNG NHẬP
   // ==============================
@@ -355,6 +361,20 @@ function Login() {
   );
 }
 
+function DashboardRoute() {
+  const handleLogout = async () => {
+    clearLocalSession();
+  };
+
+  return (
+    <Dashboard
+      role="Admin"
+      userName="Nguyễn Văn An"
+      onLogout={handleLogout}
+    />
+  );
+}
+
 // ====================================
 // ROUTER
 // ====================================
@@ -381,6 +401,11 @@ function App() {
         />
 
         <Route
+          path="/dashboard"
+          element={<DashboardRoute />}
+        />
+
+        <Route
           path="/forgot-password"
           element={<ForgotPassword />}
         />
@@ -395,13 +420,14 @@ function App() {
           element={<ChangePassword />}
         />
 
+        <Route path="/403" element={<ForbiddenPage />} />
+        <Route path="/404" element={<NotFoundPage />} />
+        <Route path="/500" element={<ServerErrorPage />} />
+
         <Route
           path="*"
           element={
-            <Navigate
-              to="/login"
-              replace
-            />
+            <NotFoundPage />
           }
         />
 
