@@ -1,0 +1,17 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const candidate_controller_1 = require("./candidate.controller");
+const authenticate_1 = require("../../middleware/authenticate");
+const authorize_1 = require("../../middleware/authorize");
+const validate_1 = require("../../middleware/validate");
+const permissions_1 = require("../../rbac/permissions");
+const router = (0, express_1.Router)();
+router.use(authenticate_1.authenticate);
+router.get('/', (0, authorize_1.requirePermission)(permissions_1.PermissionCode.CANDIDATES_READ), candidate_controller_1.CandidateController.list);
+router.get('/:id', (0, authorize_1.requirePermission)(permissions_1.PermissionCode.CANDIDATES_READ), candidate_controller_1.CandidateController.getById);
+router.get('/:id/cv', (0, authorize_1.requirePermission)(permissions_1.PermissionCode.CANDIDATES_READ), candidate_controller_1.CandidateController.getCv);
+router.post('/', (0, authorize_1.requirePermission)(permissions_1.PermissionCode.CANDIDATES_CREATE), (0, validate_1.validateBody)(candidate_controller_1.createCandidateSchema), candidate_controller_1.CandidateController.create);
+router.put('/:id', (0, authorize_1.requirePermission)(permissions_1.PermissionCode.CANDIDATES_UPDATE), (0, validate_1.validateBody)(candidate_controller_1.updateCandidateSchema), candidate_controller_1.CandidateController.update);
+router.delete('/:id', (0, authorize_1.requirePermission)(permissions_1.PermissionCode.CANDIDATES_DELETE), candidate_controller_1.CandidateController.delete);
+exports.default = router;
