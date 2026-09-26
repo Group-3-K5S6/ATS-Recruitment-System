@@ -1,0 +1,56 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+spring:
+  application:
+    name: ats-recruitment-system
+
+  # ── SQL Server ──
+  datasource:
+    url: jdbc:sqlserver://localhost:1433;databaseName=ats_recruitment;encrypt=true;trustServerCertificate=true
+    username: sa
+    password: YourPassword@123
+    driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.SQLServerDialect
+        format_sql: true
+
+  # ── Mail (SMTP) ──
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: your-email@gmail.com
+    password: your-app-password
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+
+# ── JWT ──
+app:
+  jwt:
+    secret: YTJzLXJlY3J1aXRtZW50LXN5c3RlbS1zZWNyZXQta2V5LXRoaXMtaXMtYS12ZXJ5LWxvbmctc2VjcmV0LWtleS1mb3Itand0
+    expiration-ms: 86400000        # 24 giờ
+    refresh-expiration-ms: 604800000 # 7 ngày
+
+  # ── Password Reset ──
+  password-reset:
+    expiration-minutes: 30
+    base-url: http://localhost:3000/reset-password
+
+# ── Logging ──
+logging:
+  level:
+    com.ats.recruitment: DEBUG
+    org.springframework.security: DEBUG
