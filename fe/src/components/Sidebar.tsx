@@ -5,6 +5,7 @@ import { roleMenus } from "../data/roleMenus";
 type SidebarProps = {
   role: Role;
   userName: string;
+  onLogout: () => Promise<void>;
 };
 
 const roleLabel: Record<Role, string> = {
@@ -16,14 +17,25 @@ const roleLabel: Record<Role, string> = {
   Admin: "Quản trị hệ thống",
 };
 
-function Sidebar({ role, userName }: SidebarProps) {
+function Sidebar({
+  role,
+  userName,
+  onLogout,
+}: SidebarProps) {
   const [open, setOpen] = useState(false);
 
   const menu = roleMenus[role];
 
+  const handleLogout = async () => {
+    await onLogout();
+  };
+
   return (
     <>
-      <button className="mobile-menu-button" onClick={() => setOpen(!open)}>
+      <button
+        className="mobile-menu-button"
+        onClick={() => setOpen(!open)}
+      >
         ☰
       </button>
 
@@ -57,14 +69,22 @@ function Sidebar({ role, userName }: SidebarProps) {
           {menu.map((item, index) => (
             <button
               key={item.label}
-              className={`sidebar-menu-item ${index === 0 ? "active" : ""}`}
+              className={`sidebar-menu-item ${
+                index === 0 ? "active" : ""
+              }`}
             >
               {item.label}
             </button>
           ))}
         </nav>
 
-        <button className="logout-button">Đăng xuất</button>
+        <button
+          type="button"
+          className="logout-button"
+          onClick={handleLogout}
+        >
+          Đăng xuất
+        </button>
       </aside>
     </>
   );
