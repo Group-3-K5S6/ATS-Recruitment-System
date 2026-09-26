@@ -1,8 +1,10 @@
+import crypto from 'crypto';
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../database/prisma';
 import { comparePassword, hashPassword } from '../../utils/password';
-import { signAccessToken, signRefreshToken, verifyRefreshToken, revokeToken } from '../../utils/token';
+import { signAccessToken, signRefreshToken, verifyRefreshToken, revokeToken, hashToken } from '../../utils/token';
+import { sendResetPasswordEmail } from '../../utils/email';
 import { successResponse, errorResponse } from '../../utils/response';
 import { recordRequestAudit } from '../../middleware/audit-logger';
 import { AuditAction } from '../../rbac/types';
@@ -35,6 +37,22 @@ export const changePasswordSchema = z.object({
     .regex(/\d/, 'Mật khẩu mới phải chứa ít nhất 1 chữ số (0-9).')
     .regex(/[^A-Za-z0-9]/, 'Mật khẩu mới phải chứa ít nhất 1 ký tự đặc biệt.'),
 });
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().email('Email không đúng định dạng.'),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1, 'Mã xác thực không được để trống.'),
+  newPassword: z
+    .string()
+    .min(8, 'Mật khẩu mới phải tối thiểu 8 ký tự.')
+    .regex(/[A-Z]/, 'Mật khẩu mới phải chứa ít nhất 1 chữ cái viết hoa (A-Z).')
+    .regex(/[a-z]/, 'Mật khẩu mới phải chứa ít nhất 1 chữ cái viết thường (a-z).')
+    .regex(/\d/, 'Mật khẩu mới phải chứa ít nhất 1 chữ số (0-9).')
+    .regex(/[^A-Za-z0-9]/, 'Mật khẩu mới phải chứa ít nhất 1 ký tự đặc biệt.'),
+});
+
 
 export class AuthController {
   static async login(req: Request, res: Response): Promise<void> {
@@ -274,4 +292,123 @@ export class AuthController {
       'Password updated successfully.'
     );
   }
+
+  static async forgotPassword(req: Request, res: Response): Promise<void> {
+    const { email } = req.body;
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const GENERIC_RESPONSE_MESSAGE =
+      'Nếu email tồn tại trong hệ thống, chúng tôi đã gửi một liên kết đặt lại mật khẩu. Liên kết có hiệu lực trong 30 phút.';
+
+    const user = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+
+    if (user && user.isActive) {
+      const rawToken = crypto.randomBytes(32).toString('hex');
+      const tokenHash = hashToken(rawToken);
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // Valid for 30 minutes
+
+      await prisma.passwordResetToken.create({
+        data: {
+          email: user.email,
+          tokenHash,
+          expiresAt,
+        },
+      });
+
+      await sendResetPasswordEmail(user.email, rawToken);
+
+      await recordRequestAudit(req, AuditAction.PASSWORD_RESET_REQUESTED, 'user', user.id, {
+        email: user.email,
+      });
+    }
+
+    successResponse(res, { message: GENERIC_RESPONSE_MESSAGE }, 200, GENERIC_RESPONSE_MESSAGE);
+  }
+
+  static async resetPassword(req: Request, res: Response): Promise<void> {
+    const { token, newPassword } = req.body;
+    const tokenHash = hashToken(token);
+
+    const resetTokenRecord = await prisma.passwordResetToken.findUnique({
+      where: { tokenHash },
+    });
+
+    if (!resetTokenRecord) {
+      errorResponse(res, 'Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.', 400, 'INVALID_TOKEN');
+      return;
+    }
+
+    if (resetTokenRecord.usedAt !== null) {
+      errorResponse(res, 'Liên kết đặt lại mật khẩu này đã được sử dụng.', 400, 'TOKEN_ALREADY_USED');
+      return;
+    }
+
+    if (resetTokenRecord.expiresAt < new Date()) {
+      errorResponse(res, 'Liên kết đặt lại mật khẩu đã hết hạn (chỉ có hiệu lực trong 30 phút).', 400, 'EXPIRED_TOKEN');
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: resetTokenRecord.email },
+      include: {
+        passwordHistories: {
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        },
+      },
+    });
+
+    if (!user || !user.isActive) {
+      errorResponse(res, 'Tài khoản người dùng không tồn tại hoặc đã bị khóa.', 400, 'USER_NOT_FOUND');
+      return;
+    }
+
+    // Check password reuse
+    const isSameAsCurrent = await comparePassword(newPassword, user.passwordHash);
+    if (isSameAsCurrent) {
+      errorResponse(res, 'Mật khẩu mới không được trùng với mật khẩu hiện tại.', 400, 'PASSWORD_REUSED');
+      return;
+    }
+
+    for (const history of user.passwordHistories) {
+      const isHistoricalMatch = await comparePassword(newPassword, history.passwordHash);
+      if (isHistoricalMatch) {
+        errorResponse(res, 'Mật khẩu mới không được trùng với các mật khẩu đã sử dụng gần đây.', 400, 'PASSWORD_REUSED');
+        return;
+      }
+    }
+
+    const newPasswordHash = await hashPassword(newPassword);
+
+    await prisma.$transaction([
+      prisma.passwordResetToken.update({
+        where: { id: resetTokenRecord.id },
+        data: { usedAt: new Date() },
+      }),
+      prisma.passwordHistory.create({
+        data: {
+          userId: user.id,
+          passwordHash: user.passwordHash,
+        },
+      }),
+      prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash: newPasswordHash },
+      }),
+    ]);
+
+    await recordRequestAudit(req, AuditAction.PASSWORD_RESET_COMPLETED, 'user', user.id, {
+      email: user.email,
+    });
+
+    successResponse(
+      res,
+      { message: 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập với mật khẩu mới.' },
+      200,
+      'Password reset successfully.'
+    );
+  }
 }
+

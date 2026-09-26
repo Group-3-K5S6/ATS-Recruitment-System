@@ -82,9 +82,29 @@ Tài liệu đặc tả toàn diện về **Authentication, Role-Based Access Co
   - Thu hồi token cũ (`RevokedToken`) sau khi đổi mật khẩu thành công.
 - **Audit Action**: `PASSWORD_CHANGED`
 
+#### `POST /api/auth/forgot-password`
+- **Auth**: Public
+- **Mục đích**: Yêu cầu liên kết đặt lại mật khẩu qua email.
+- **Rules**:
+  - Nhập email hợp lệ (`email`).
+  - Nếu email tồn tại và tài khoản đang hoạt động (`isActive`), tạo reset token có hiệu lực trong 30 phút (`PasswordResetToken`) và gửi email liên kết đặt lại mật khẩu.
+  - Trường hợp email không tồn tại trong hệ thống, vẫn phản hồi cùng một thông báo thành công chung nhằm ngăn ngừa tấn công thăm dò email (Email Enumeration Attack).
+- **Audit Action**: `PASSWORD_RESET_REQUESTED`
+
+#### `POST /api/auth/reset-password`
+- **Auth**: Public
+- **Mục đích**: Đặt lại mật khẩu mới thông qua liên kết chứa token xác thực.
+- **Rules**:
+  - Yêu cầu mã token (`token`) và mật khẩu mới (`newPassword`).
+  - Liên kết/Token chỉ sử dụng được 1 lần duy nhất (`usedAt !== null` sẽ từ chối với lỗi `TOKEN_ALREADY_USED`).
+  - Token hết hạn sau 30 phút kể từ khi khởi tạo (`expiresAt < now` sẽ từ chối với lỗi `EXPIRED_TOKEN`).
+  - Mật khẩu mới phải tuân thủ chính sách độ phức tạp và không được trùng với mật khẩu hiện tại hoặc các mật khẩu trong lịch sử.
+- **Audit Action**: `PASSWORD_RESET_COMPLETED`
+
 #### `GET /api/auth/me`
 - **Auth**: Required
 - **Mục đích**: Trả về danh tính người dùng hiện tại, roles và permissions thực tế từ server.
+
 
 ---
 

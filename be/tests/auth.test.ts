@@ -4,6 +4,10 @@ import jwt from 'jsonwebtoken';
 import { app } from '../src/app';
 import { env } from '../src/config/env';
 import { loginAndGetToken, authHeader } from './test-helper';
+import { prisma } from '../src/database/prisma';
+import { sentEmailsLog } from '../src/utils/email';
+import { hashToken } from '../src/utils/token';
+
 
 describe('1. Authentication & Token Revocation Security', () => {
   let candidateToken: string;
@@ -206,4 +210,171 @@ describe('1. Authentication & Token Revocation Security', () => {
       expect(reuseRes.body.error.code).toBe('PASSWORD_REUSED');
     });
   });
+
+  describe('3. Forgot & Reset Password via Email (SCRUM-51)', () => {
+    it('displays identical message for non-existent email as existing email (Criteria 3)', async () => {
+      const nonExistantEmail = `nonexistent_${Date.now()}@ats.local`;
+
+      const res = await request(app)
+        .post('/api/auth/forgot-password')
+        .send({ email: nonExistantEmail });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.message).toBe(
+        'Nếu email tồn tại trong hệ thống, chúng tôi đã gửi một liên kết đặt lại mật khẩu. Liên kết có hiệu lực trong 30 phút.'
+      );
+    });
+
+    it('generates reset token valid for 30 minutes and dispatches reset email (Criteria 1 & 3)', async () => {
+      const email = `reset_test_${Date.now()}@ats.local`;
+      const password = 'Password123!';
+
+      // Register test candidate
+      await request(app)
+        .post('/api/auth/register')
+        .send({ email, password, fullName: 'Reset Tester' });
+
+      // Request forgot password
+      const forgotRes = await request(app)
+        .post('/api/auth/forgot-password')
+        .send({ email });
+
+      expect(forgotRes.status).toBe(200);
+      expect(forgotRes.body.data.message).toBe(
+        'Nếu email tồn tại trong hệ thống, chúng tôi đã gửi một liên kết đặt lại mật khẩu. Liên kết có hiệu lực trong 30 phút.'
+      );
+
+      // Verify token record in database
+      const dbToken = await prisma.passwordResetToken.findFirst({
+        where: { email },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      expect(dbToken).toBeDefined();
+      expect(dbToken?.usedAt).toBeNull();
+
+      // Expiry should be ~30 minutes in future (e.g. 29-30 mins)
+      const now = Date.now();
+      const diffMinutes = (dbToken!.expiresAt.getTime() - now) / (1000 * 60);
+      expect(diffMinutes).toBeGreaterThan(28);
+      expect(diffMinutes).toBeLessThanOrEqual(30.1);
+
+      // Verify email log entry
+      const sentEmail = sentEmailsLog.find((e) => e.email === email);
+      expect(sentEmail).toBeDefined();
+      expect(sentEmail?.resetLink).toContain('/reset-password?token=');
+    });
+
+    it('resets password successfully and prevents token reuse (Criteria 1 & 2)', async () => {
+      const email = `reset_reuse_${Date.now()}@ats.local`;
+      const origPassword = 'Password123!';
+      const newPassword = 'NewResetPassword123!';
+
+      // 1. Register user
+      await request(app)
+        .post('/api/auth/register')
+        .send({ email, password: origPassword, fullName: 'Reuse Tester' });
+
+      // 2. Forgot password request
+      sentEmailsLog.length = 0; // clear log
+      await request(app).post('/api/auth/forgot-password').send({ email });
+
+      const emailEntry = sentEmailsLog.find((e) => e.email === email);
+      expect(emailEntry).toBeDefined();
+      const rawToken = new URL(emailEntry!.resetLink).searchParams.get('token');
+      expect(rawToken).toBeTruthy();
+
+      // 3. Reset password using valid raw token
+      const resetRes = await request(app)
+        .post('/api/auth/reset-password')
+        .send({
+          token: rawToken,
+          newPassword,
+        });
+
+      expect(resetRes.status).toBe(200);
+      expect(resetRes.body.data.message).toContain('Đặt lại mật khẩu thành công');
+
+      // 4. Verification: Old password fails login
+      const oldLogin = await request(app).post('/api/auth/login').send({ email, password: origPassword });
+      expect(oldLogin.status).toBe(401);
+
+      // 5. Verification: New password succeeds login
+      const newLogin = await request(app).post('/api/auth/login').send({ email, password: newPassword });
+      expect(newLogin.status).toBe(200);
+
+      // 6. Criteria 2: Single-use check — reusing the same token must fail
+      const secondResetRes = await request(app)
+        .post('/api/auth/reset-password')
+        .send({
+          token: rawToken,
+          newPassword: 'AnotherPassword123!',
+        });
+
+      expect(secondResetRes.status).toBe(400);
+      expect(secondResetRes.body.error.code).toBe('TOKEN_ALREADY_USED');
+    });
+
+    it('rejects password reset when token is expired (Criteria 1)', async () => {
+      const email = `expired_token_${Date.now()}@ats.local`;
+      const expiredRawToken = `expired-raw-token-${Date.now()}`;
+      const tokenHash = hashToken(expiredRawToken);
+
+      // Create an expired token record (expired 10 minutes ago)
+      await prisma.passwordResetToken.create({
+        data: {
+          email,
+          tokenHash,
+          expiresAt: new Date(Date.now() - 10 * 60 * 1000),
+        },
+      });
+
+      const res = await request(app)
+        .post('/api/auth/reset-password')
+        .send({
+          token: expiredRawToken,
+          newPassword: 'NewPassword123!',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('EXPIRED_TOKEN');
+      expect(res.body.error.message).toContain('hiệu lực trong 30 phút');
+    });
+
+    it('rejects password reset when new password matches current password or fails policy', async () => {
+      const email = `policy_test_${Date.now()}@ats.local`;
+      const origPassword = 'Password123!';
+
+      await request(app)
+        .post('/api/auth/register')
+        .send({ email, password: origPassword, fullName: 'Policy Tester' });
+
+      sentEmailsLog.length = 0;
+      await request(app).post('/api/auth/forgot-password').send({ email });
+
+      const emailEntry = sentEmailsLog.find((e) => e.email === email);
+      const rawToken = new URL(emailEntry!.resetLink).searchParams.get('token');
+
+      // Fails complexity policy
+      const weakRes = await request(app)
+        .post('/api/auth/reset-password')
+        .send({
+          token: rawToken,
+          newPassword: 'weak',
+        });
+      expect(weakRes.status).toBe(400);
+      expect(weakRes.body.error.code).toBe('VALIDATION_ERROR');
+
+      // Reuses current password
+      const sameRes = await request(app)
+        .post('/api/auth/reset-password')
+        .send({
+          token: rawToken,
+          newPassword: origPassword,
+        });
+      expect(sameRes.status).toBe(400);
+      expect(sameRes.body.error.code).toBe('PASSWORD_REUSED');
+    });
+  });
 });
+
