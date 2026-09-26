@@ -4,12 +4,17 @@ import type { Role } from "../data/roleMenus";
 type DashboardProps = {
   role: Role;
   userName: string;
+  onLogout: () => Promise<void>;
 };
 
-function Dashboard({ role, userName }: DashboardProps) {
+function Dashboard({
+  role,
+  userName,
+  onLogout,
+}: DashboardProps) {
   return (
     <div className="dashboard-layout">
-      <Sidebar role={role} userName={userName} />
+      <Sidebar role={role} userName={userName} onLogout={onLogout} />
 
       <main className="dashboard-content">
         <header className="dashboard-header">

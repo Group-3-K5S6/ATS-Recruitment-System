@@ -1407,3 +1407,53 @@
     min-height: 44px;
   }
 }
+/* =========================
+   S1-02 - PHIÊN HẾT HẠN
+========================= */
+
+.session-message {
+  margin-bottom: 20px;
+  padding: 12px 14px;
+
+  color: #1e40af;
+  background: #eff6ff;
+
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+
+/* =========================
+   S1-02 - ĐĂNG XUẤT
+========================= */
+
+.dashboard-wrapper {
+  min-height: 100vh;
+}
+
+
+
+.logout-button {
+  min-height: 40px;
+
+  padding: 0 18px;
+
+  color: #b42318;
+
+  background: #ffffff;
+
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+
+  font-size: 13px;
+  font-weight: bold;
+
+  cursor: pointer;
+}
+
+.logout-button:hover {
+  background: #fef2f2;
+}
