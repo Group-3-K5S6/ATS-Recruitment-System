@@ -2,11 +2,19 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import "./App.css";
 
+import Dashboard from "./components/Dashboard";
+import type { Role } from "./data/roleMenus";
+
 function App() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+
+  const [loggedIn, setLoggedIn] = useState(false);
+
+  // Tạm thời test vai trò Recruiter
+  const [role] = useState<Role>("Admin");
 
   const handleLogin = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -17,8 +25,12 @@ function App() {
       return;
     }
 
-    setError("Giao diện đã hoàn thành, đang chờ kết nối Backend.");
+    setLoggedIn(true);
   };
+
+  if (loggedIn) {
+    return <Dashboard role={role} userName="Nguyễn Văn An" />;
+  }
 
   return (
     <div className="login-page">
@@ -33,9 +45,7 @@ function App() {
         </div>
 
         <div className="left-content">
-          <span className="small-title">
-            HỆ THỐNG TUYỂN DỤNG NỘI BỘ
-          </span>
+          <span className="small-title">HỆ THỐNG TUYỂN DỤNG NỘI BỘ</span>
 
           <h1>
             Tuyển đúng người.
@@ -44,8 +54,8 @@ function App() {
           </h1>
 
           <p className="description">
-            Quản lý tập trung yêu cầu tuyển dụng, ứng viên,
-            phỏng vấn và quyết định tuyển dụng trên một hệ thống duy nhất.
+            Quản lý tập trung yêu cầu tuyển dụng, ứng viên, phỏng vấn và quyết
+            định tuyển dụng trên một hệ thống duy nhất.
           </p>
 
           <div className="feature-box">
@@ -53,9 +63,7 @@ function App() {
 
             <div>
               <h3>Phân quyền theo vai trò</h3>
-              <p>
-                Chỉ truy cập đúng dữ liệu thuộc phạm vi được cấp.
-              </p>
+              <p>Chỉ truy cập đúng dữ liệu thuộc phạm vi được cấp.</p>
             </div>
           </div>
 
@@ -64,23 +72,17 @@ function App() {
 
             <div>
               <h3>Quy trình tuyển dụng tập trung</h3>
-              <p>
-                Theo dõi xuyên suốt từ yêu cầu tuyển dụng đến nhận việc.
-              </p>
+              <p>Theo dõi xuyên suốt từ yêu cầu tuyển dụng đến nhận việc.</p>
             </div>
           </div>
         </div>
 
-        <p className="copyright">
-          © 2026 ATS Recruitment System
-        </p>
+        <p className="copyright">© 2026 ATS Recruitment System</p>
       </section>
 
       <section className="right-panel">
         <div className="login-card">
-          <span className="welcome">
-            CHÀO MỪNG TRỞ LẠI
-          </span>
+          <span className="welcome">CHÀO MỪNG TRỞ LẠI</span>
 
           <h2>Đăng nhập</h2>
 
@@ -130,16 +132,9 @@ function App() {
               </div>
             </div>
 
-            {error && (
-              <div className="error-message">
-                {error}
-              </div>
-            )}
+            {error && <div className="error-message">{error}</div>}
 
-            <button
-              type="submit"
-              className="login-button"
-            >
+            <button type="submit" className="login-button">
               Đăng nhập
             </button>
           </form>
