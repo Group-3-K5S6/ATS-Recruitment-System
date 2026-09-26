@@ -1,8 +1,11 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { BrowserRouter, Navigate, Route, Routes, Link } from "react-router-dom";
 import "./App.css";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 
-function App() {
+function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -107,7 +110,7 @@ function App() {
             <div className="form-group">
               <div className="password-header">
                 <label>Mật khẩu</label>
-                <a href="#">Quên mật khẩu?</a>
+                <Link to="/forgot-password">Quên mật khẩu?</Link>
               </div>
 
               <div className="input-box">
@@ -150,6 +153,20 @@ function App() {
         </div>
       </section>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
