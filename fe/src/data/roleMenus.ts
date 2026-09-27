@@ -1,16 +1,23 @@
 export type Role =
+  | "Candidate"
   | "Recruiter"
   | "HiringManager"
   | "Interviewer"
   | "HRManager"
   | "Approver"
   | "Admin";
-
 export interface MenuItem {
   label: string;
 }
 
 export const roleMenus: Record<Role, MenuItem[]> = {
+  Candidate: [
+    { label: "Vị trí tuyển dụng" },
+    { label: "Hồ sơ của tôi" },
+    { label: "Trạng thái hồ sơ" },
+    { label: "Lịch phỏng vấn" },
+    { label: "Offer của tôi" },
+  ],
   Recruiter: [
     { label: "Tổng quan" },
     { label: "Yêu cầu tuyển dụng" },

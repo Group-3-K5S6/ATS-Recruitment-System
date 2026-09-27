@@ -6,6 +6,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./components/Dashboard";
 import type { Role } from "./data/roleMenus";
+import RolePermissions from "./pages/RolePermissions";
 
 function Login() {
   const [email, setEmail] = useState("");
@@ -31,7 +32,7 @@ function Login() {
   };
 
   if (loggedIn) {
-    return <Dashboard role={role} userName="Nguyễn Văn An" />;
+    return <RolePermissions />;
   }
 
   return (
