@@ -36,6 +36,8 @@ function Login() {
   const [error, setError] = useState("");
 
   const [loggedIn, setLoggedIn] = useState(false);
+  const [role, setRole] = useState<Role>("Admin");
+  const [userName, setUserName] = useState("Nguyễn Văn An");
 
   // S1-02:
   // Kiểm tra xem phiên trước đó có bị hết hạn hay không
@@ -43,10 +45,7 @@ function Login() {
     consumeSessionExpired()
   );
 
-  // Tạm thời test vai trò Admin
-  const [role] = useState<Role>("Admin");
-
-  const handleLogin = (
+  const handleLogin = async (
     e: FormEvent<HTMLFormElement>
   ) => {
     e.preventDefault();
@@ -61,16 +60,27 @@ function Login() {
       return;
     }
 
-    /*
-      Hiện tại đang test Frontend.
-
-      Khi Backend S1-01 hoàn thành:
-      - gửi email + password tới API đăng nhập
-      - nhận access token / refresh token
-      - lấy role thật của người dùng
-    */
-
-    setLoggedIn(true);
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error?.message || "Đăng nhập thất bại.");
+      const authenticatedUser = result.data.user;
+      const roleMap: Record<string, Role> = {
+        ADMIN: "Admin", HR_MANAGER: "HRManager", RECRUITER: "Recruiter",
+        HIRING_MANAGER: "HiringManager", INTERVIEWER: "Interviewer", APPROVER: "Approver",
+      };
+      sessionStorage.setItem("accessToken", result.data.accessToken);
+      sessionStorage.setItem("refreshToken", result.data.refreshToken);
+      setRole(roleMap[authenticatedUser.roles[0]] || "Recruiter");
+      setUserName(authenticatedUser.fullName);
+      setLoggedIn(true);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Không thể kết nối máy chủ.");
+    }
   };
 
   // ==============================
@@ -78,18 +88,10 @@ function Login() {
   // ==============================
 
   const handleLogout = async () => {
-    /*
-      Khi Backend S1-02 hoàn thành:
-
-      FE sẽ gọi API logout tại đây.
-
-      Backend phải:
-      - làm mất hiệu lực phiên
-      - thu hồi refresh token
-      - không cho token cũ tiếp tục sử dụng
-
-      Hiện tại mới làm phần Frontend.
-    */
+    const token = sessionStorage.getItem("accessToken");
+    if (token) {
+      await fetch("/api/auth/logout", { method: "POST", headers: { Authorization: `Bearer ${token}` } }).catch(() => undefined);
+    }
 
     clearLocalSession();
 
@@ -108,7 +110,7 @@ function Login() {
   return (
     <Dashboard
       role={role}
-      userName="Nguyễn Văn An"
+      userName={userName}
       onLogout={handleLogout}
     />
   );

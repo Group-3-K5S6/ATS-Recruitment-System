@@ -67,7 +67,7 @@ export class AuthController {
       }
     }
 
-    const payload = { userId: user.id, email: user.email };
+    const payload = { userId: user.id, email: user.email, sessionVersion: user.sessionVersion };
     const accessToken = signAccessToken(payload);
     const refreshToken = signRefreshToken(payload);
 
@@ -166,7 +166,13 @@ export class AuthController {
       return;
     }
 
-    const newAccessToken = signAccessToken({ userId: payload.userId, email: payload.email });
+    const user = await prisma.user.findUnique({ where: { id: payload.userId }, select: { isActive: true, sessionVersion: true } });
+    if (!user || !user.isActive || (payload.sessionVersion ?? 0) !== user.sessionVersion) {
+      errorResponse(res, 'Session has been revoked. Please log in again.', 401, 'SESSION_REVOKED');
+      return;
+    }
+
+    const newAccessToken = signAccessToken({ userId: payload.userId, email: payload.email, sessionVersion: user.sessionVersion });
     successResponse(res, { accessToken: newAccessToken }, 200);
   }
 

@@ -154,14 +154,52 @@ export class UserController {
       return;
     }
 
+    const target = await prisma.user.findUnique({ where: { id } });
+    if (!target) {
+      errorResponse(res, 'User not found.', 404, 'NOT_FOUND');
+      return;
+    }
+
     const updated = await prisma.user.update({
       where: { id },
-      data: { isActive: false },
+      data: { isActive: false, sessionVersion: { increment: 1 } },
       select: { id: true, email: true, isActive: true },
     });
 
     await recordRequestAudit(req, AuditAction.USER_DISABLED, 'user', id);
 
     successResponse(res, updated, 200, 'User account has been disabled.');
+  }
+
+  static async enable(req: Request, res: Response): Promise<void> {
+    const { id } = req.params;
+    if (!UserPolicy.canDisableUser(req.user!, id)) {
+      errorResponse(res, 'Access denied. Cannot modify this account or self.', 403, 'FORBIDDEN_ACTION');
+      return;
+    }
+    const target = await prisma.user.findUnique({ where: { id } });
+    if (!target) {
+      errorResponse(res, 'User not found.', 404, 'NOT_FOUND');
+      return;
+    }
+    const updated = await prisma.user.update({ where: { id }, data: { isActive: true }, select: { id: true, email: true, isActive: true } });
+    await recordRequestAudit(req, AuditAction.USER_ENABLED, 'user', id);
+    successResponse(res, updated, 200, 'User account has been enabled.');
+  }
+
+  static async revokeSessions(req: Request, res: Response): Promise<void> {
+    const { id } = req.params;
+    if (!UserPolicy.canDisableUser(req.user!, id)) {
+      errorResponse(res, 'Access denied. Cannot revoke sessions for this account.', 403, 'FORBIDDEN_ACTION');
+      return;
+    }
+    const target = await prisma.user.findUnique({ where: { id } });
+    if (!target) {
+      errorResponse(res, 'User not found.', 404, 'NOT_FOUND');
+      return;
+    }
+    await prisma.user.update({ where: { id }, data: { sessionVersion: { increment: 1 } } });
+    await recordRequestAudit(req, AuditAction.SESSIONS_REVOKED, 'user', id);
+    successResponse(res, { id }, 200, 'All user sessions have been revoked.');
   }
 }

@@ -39,4 +39,16 @@ router.patch(
   UserController.disable
 );
 
+router.patch(
+  '/:id/enable',
+  requirePermission(PermissionCode.USERS_DISABLE),
+  UserController.enable
+);
+
+router.post(
+  '/:id/revoke-sessions',
+  requirePermission(PermissionCode.USERS_DISABLE),
+  UserController.revokeSessions
+);
+
 export default router;

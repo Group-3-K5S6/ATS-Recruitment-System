@@ -69,6 +69,11 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     return;
   }
 
+  if ((payload.sessionVersion ?? 0) !== user.sessionVersion) {
+    errorResponse(res, 'Session has been revoked. Please log in again.', 401, 'SESSION_REVOKED');
+    return;
+  }
+
   const roles: RoleType[] = [];
   const permissionSet = new Set<PermissionCode>();
 

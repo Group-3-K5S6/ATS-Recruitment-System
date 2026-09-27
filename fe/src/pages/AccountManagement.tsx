@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 
 type AccountStatus = "Hoạt động" | "Đã khóa";
 
 type Account = {
-  id: number;
+  id: string;
   name: string;
   email: string;
   department: string;
@@ -21,32 +21,56 @@ type AccountForm = {
 const PAGE_SIZE = 20;
 
 const AccountManagement = () => {
-  const [accounts, setAccounts] = useState<Account[]>([
-    {
-      id: 1,
-      name: "Nguyễn Văn An",
-      email: "an.nguyen@example.com",
-      department: "Công nghệ",
-      role: "Quản trị hệ thống",
-      status: "Hoạt động",
-    },
-    {
-      id: 2,
-      name: "Trần Thị Mai",
-      email: "mai.tran@example.com",
-      department: "Nhân sự",
-      role: "Nhân viên tuyển dụng",
-      status: "Hoạt động",
-    },
-    {
-      id: 3,
-      name: "Lê Minh Đức",
-      email: "duc.le@example.com",
-      department: "Công nghệ",
-      role: "Người phỏng vấn",
-      status: "Đã khóa",
-    },
-  ]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState("");
+
+  const loadAccounts = async () => {
+    setLoading(true);
+    setApiError("");
+    try {
+      const response = await fetch("/api/users", {
+        headers: { Authorization: `Bearer ${sessionStorage.getItem("accessToken") || ""}` },
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error?.message || "Không tải được danh sách tài khoản.");
+      setAccounts(result.data.map((user: any) => ({
+        id: user.id,
+        name: user.fullName,
+        email: user.email,
+        department: user.department?.name || "Chưa phân phòng ban",
+        role: user.roles.join(", "),
+        status: (user.isActive ? "Hoạt động" : "Đã khóa") as AccountStatus,
+      })));
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Lỗi kết nối API.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { void loadAccounts(); }, []);
+
+  const updateAccountAccess = async (account: Account, operation: "disable" | "enable" | "revoke-sessions") => {
+    const messages = {
+      disable: `Khóa tài khoản ${account.email}? Các phiên đang đăng nhập sẽ bị thu hồi.`,
+      enable: `Mở khóa tài khoản ${account.email}?`,
+      "revoke-sessions": `Thu hồi tất cả phiên của ${account.email}?`,
+    };
+    if (!window.confirm(messages[operation])) return;
+    setApiError("");
+    try {
+      const response = await fetch(`/account-api/api/users/${encodeURIComponent(account.id)}/${operation}`, {
+        method: operation === "revoke-sessions" ? "POST" : "PATCH",
+        headers: { Authorization: `Bearer ${sessionStorage.getItem("accessToken") || ""}` },
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error?.message || "Không thực hiện được thao tác.");
+      await loadAccounts();
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Lỗi kết nối API.");
+    }
+  };
 
   const [searchText, setSearchText] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
@@ -54,7 +78,7 @@ const AccountManagement = () => {
   const [currentPage, setCurrentPage] = useState(1);
 
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<AccountForm>({
     name: "",
     email: "",
@@ -150,12 +174,12 @@ const AccountManagement = () => {
       const nextId =
         accounts.length === 0
           ? 1
-          : Math.max(...accounts.map((account) => account.id)) + 1;
+          : Math.max(...accounts.map((account) => Number(account.id))) + 1;
 
       setAccounts((currentAccounts) => [
         ...currentAccounts,
         {
-          id: nextId,
+          id: String(nextId),
           name,
           email,
           department,
@@ -182,6 +206,8 @@ const AccountManagement = () => {
 
   return (
     <div style={{ padding: "24px", fontFamily: "Arial, sans-serif" }}>
+      {apiError && <p role="alert" style={{ color: "#BF2600" }}>{apiError}</p>}
+      {loading && <p>Đang tải tài khoản...</p>}
       <div
         style={{
           display: "flex",
@@ -368,14 +394,18 @@ const AccountManagement = () => {
                 <td style={{ padding: "12px" }}>{account.role}</td>
                 <td style={{ padding: "12px" }}>{account.status}</td>
                 <td style={{ padding: "12px" }}>
-                  <button type="button" onClick={() => openEditForm(account)}>
-                    Sửa
-                  </button>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <button type="button" onClick={() => void updateAccountAccess(account, account.status === "Hoạt động" ? "disable" : "enable")}>
+                      {account.status === "Hoạt động" ? "Khóa" : "Mở khóa"}
+                    </button>
+                    <button type="button" onClick={() => void updateAccountAccess(account, "revoke-sessions")}>Thu hồi phiên</button>
+                    <button type="button" onClick={() => openEditForm(account)}>Sửa</button>
+                  </div>
                 </td>
               </tr>
             ))}
 
-            {displayedAccounts.length === 0 && (
+            {!loading && displayedAccounts.length === 0 && (
               <tr>
                 <td colSpan={7} style={{ padding: "20px", textAlign: "center" }}>
                   Không tìm thấy tài khoản phù hợp.

@@ -6,6 +6,7 @@ import { prisma } from '../database/prisma';
 export interface TokenPayload {
   userId: string;
   email: string;
+  sessionVersion?: number;
 }
 
 export function hashToken(token: string): string {

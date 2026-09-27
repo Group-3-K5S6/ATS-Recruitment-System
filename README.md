@@ -1,5 +1,30 @@
 # ATS-Recruitment-System
 Hệ thống tuyển dụng nội bộ (ATS) hỗ trợ quản lý toàn bộ quy trình tuyển dụng.
+
+## Chạy luồng quản lý tài khoản
+
+Backend chính (cổng 4000) và frontend (Vite) giữ cách chạy hiện có. API gateway nằm trong `be/account-session-api`, mặc định chạy ở cổng 4100.
+
+```powershell
+# Terminal 1: backend ATS
+cd be
+npm install
+npm run prisma:push
+npm run prisma:generate
+npm run dev
+
+# Terminal 2: gateway cho thao tác khóa/mở khóa/thu hồi phiên
+cd be/account-session-api
+npm install
+npm run dev
+
+# Terminal 3: frontend
+cd fe
+npm install
+npm run dev
+```
+
+Đăng nhập bằng tài khoản Admin đã seed để xem **Quản lý tài khoản**. Khóa tài khoản sẽ thu hồi các phiên ngay lập tức; mở khóa không khôi phục token cũ. Gateway mặc định chuyển tiếp tới backend `http://localhost:4000`.
 ## 1. Giới thiệu dự án
 
 ### 1.1. Bối cảnh

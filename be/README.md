@@ -67,6 +67,9 @@ npm install
 # 2. Đồng bộ database SQLite và generate Prisma Client
 npm run prisma:push
 
+# Generate Prisma Client sau khi thay đổi schema
+npm run prisma:generate
+
 # 3. Khởi tạo dữ liệu mẫu (Seed 7 roles, permissions, users và kịch bản test)
 npm run prisma:seed
 
