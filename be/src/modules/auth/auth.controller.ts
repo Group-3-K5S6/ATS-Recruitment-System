@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../database/prisma';
-import { comparePassword, hashPassword } from '../../utils/password';
+import { comparePassword } from '../../utils/password';
 import {
   signAccessToken,
   signRefreshToken,
@@ -20,20 +20,13 @@ export const loginSchema = z.object({
   password: z.string().min(6),
 });
 
-export const registerSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(6),
-  fullName: z.string().min(2),
-  phone: z.string().optional(),
-});
-
 export const refreshSchema = z.object({
   refreshToken: z.string().min(1),
 });
 
 export const logoutSchema = z.object({
-  refreshToken: z.string().optional(),
-}).default({});
+  refreshToken: z.string().min(1),
+});
 
 export class AuthController {
   static async login(req: Request, res: Response): Promise<void> {
@@ -102,57 +95,6 @@ export class AuthController {
       200,
       'Login successful'
     );
-  }
-
-  static async register(req: Request, res: Response): Promise<void> {
-    const { email, password, fullName, phone } = req.body;
-
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) {
-      errorResponse(res, 'Email is already registered.', 409, 'EMAIL_EXISTS');
-      return;
-    }
-
-    const passwordHash = await hashPassword(password);
-    const candidateRole = await prisma.role.findUnique({ where: { name: RoleType.CANDIDATE } });
-
-    if (!candidateRole) {
-      errorResponse(res, 'Candidate role not configured.', 500, 'ROLE_MISSING');
-      return;
-    }
-
-    const newUser = await prisma.user.create({
-      data: {
-        email,
-        passwordHash,
-        fullName,
-        isActive: true,
-        roles: {
-          create: {
-            roleId: candidateRole.id,
-          },
-        },
-        candidateProfile: {
-          create: {
-            fullName,
-            email,
-            phone: phone || null,
-          },
-        },
-      },
-      select: {
-        id: true,
-        email: true,
-        fullName: true,
-        createdAt: true,
-      },
-    });
-
-    await recordRequestAudit(req, AuditAction.USER_CREATED, 'user', newUser.id, {
-      role: RoleType.CANDIDATE,
-    });
-
-    successResponse(res, newUser, 201, 'Registration successful. Candidate profile created.');
   }
 
   static async logout(req: Request, res: Response): Promise<void> {
