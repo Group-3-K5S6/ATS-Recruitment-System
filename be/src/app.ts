@@ -14,6 +14,7 @@ import offerRoutes from './modules/offers/offer.routes';
 import reportRoutes from './modules/reports/report.routes';
 import userRoutes from './modules/users/user.routes';
 import auditLogRoutes from './modules/audit-logs/audit-log.routes';
+import roleManagementRoutes from './modules/role-management/role-management.routes';
 
 export function createApp() {
   const app = express();
@@ -39,6 +40,8 @@ export function createApp() {
   app.use('/api/reports', reportRoutes);
   app.use('/api/users', userRoutes);
   app.use('/api/audit-logs', auditLogRoutes);
+  // Gắn API quản lý vai trò vào backend chính để dùng chung phiên và database.
+  app.use('/api/role-management', roleManagementRoutes);
 
   // Catch-all 404
   app.use((_req: Request, res: Response) => {

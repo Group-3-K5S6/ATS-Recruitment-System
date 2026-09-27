@@ -1,5 +1,5 @@
-const ROLE_API_URL =
-  import.meta.env.VITE_ROLE_API_URL || "http://localhost:4001";
+// API quản lý vai trò nay chạy cùng backend ATS trên cổng 4000.
+const ATS_API_URL = import.meta.env.VITE_ATS_API_URL || "http://localhost:4000";
 
 type ApiResponse<T> = {
   success: boolean;
@@ -20,7 +20,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = sessionStorage.getItem("accessToken");
   if (!token) throw new Error("Phiên đăng nhập không còn hiệu lực. Vui lòng đăng nhập lại.");
 
-  const response = await fetch(`${ROLE_API_URL}${path}`, {
+  const response = await fetch(`${ATS_API_URL}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",

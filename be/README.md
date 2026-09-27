@@ -48,6 +48,7 @@ Hệ thống phân quyền Backend an toàn, bảo vệ dữ liệu nhân sự, 
 │   │   ├── offers/              # Đề xuất và phê duyệt đãi ngộ
 │   │   ├── reports/             # Báo cáo theo phạm vi phòng ban/recruiter
 │   │   ├── users/               # Quản lý tài khoản và phân quyền
+│   │   ├── role-management/     # Gán/thu hồi vai trò qua API Admin
 │   │   └── audit-logs/          # Tra cứu lịch sử kiểm toán
 │   ├── app.ts                   # Cấu hình Express app và security headers
 │   └── server.ts                # Server bootstrap
@@ -79,6 +80,8 @@ npm run build
 # 6. Khởi động server
 npm start
 ```
+
+API quản lý vai trò được tích hợp trong backend này tại `/api/role-management`, dùng chung JWT, Prisma và cơ sở dữ liệu. Các endpoint yêu cầu tài khoản `ADMIN`; frontend gọi cùng backend trên cổng `4000`.
 
 ---
 
