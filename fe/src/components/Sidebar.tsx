@@ -5,6 +5,10 @@ import { roleMenus } from "../data/roleMenus";
 type SidebarProps = {
   role: Role;
   userName: string;
+  onLogout: () => Promise<void>;
+
+  // Dùng cho Dashboard/S1-08.
+  // Trang khác như ErrorPages không bắt buộc truyền.
   selectedMenu?: string;
   onMenuSelect?: (label: string) => void;
 };
@@ -18,27 +22,35 @@ const roleLabel: Record<Role, string> = {
   Admin: "Quản trị hệ thống",
 };
 
-function Sidebar({ role, userName, selectedMenu, onMenuSelect }: SidebarProps) {
+function Sidebar({
+  role,
+  userName,
+  onLogout,
+  selectedMenu,
+  onMenuSelect,
+}: SidebarProps) {
   const [open, setOpen] = useState(false);
-  const [localSelectedMenu, setLocalSelectedMenu] = useState("Tổng quan");
-  const menu = roleMenus[role];
-  const activeMenu = selectedMenu ?? localSelectedMenu;
 
-  const handleMenuSelect = (label: string) => {
-    setLocalSelectedMenu(label);
-    onMenuSelect?.(label);
-    setOpen(false);
+  const menu = roleMenus[role];
+
+  const handleLogout = async () => {
+    await onLogout();
   };
 
   return (
     <>
-      <button className="mobile-menu-button" onClick={() => setOpen(!open)}>
+      <button
+        type="button"
+        className="mobile-menu-button"
+        onClick={() => setOpen(!open)}
+      >
         ☰
       </button>
 
       <aside className={`sidebar ${open ? "open" : ""}`}>
         <div className="sidebar-logo">
           <div className="sidebar-logo-icon">A</div>
+
           <div>
             <h2>ATS</h2>
             <p>Hệ Thống Tuyển Dụng Nội Bộ</p>
@@ -54,6 +66,7 @@ function Sidebar({ role, userName, selectedMenu, onMenuSelect }: SidebarProps) {
               .join("")
               .toUpperCase()}
           </div>
+
           <div>
             <strong>{userName}</strong>
             <p>{roleLabel[role]}</p>
@@ -65,15 +78,29 @@ function Sidebar({ role, userName, selectedMenu, onMenuSelect }: SidebarProps) {
             <button
               key={item.label}
               type="button"
-              className={`sidebar-menu-item ${activeMenu === item.label ? "active" : ""}`}
-              onClick={() => handleMenuSelect(item.label)}
+              className={`sidebar-menu-item ${
+                selectedMenu === item.label ? "active" : ""
+              }`}
+              onClick={() => {
+                if (onMenuSelect) {
+                  onMenuSelect(item.label);
+                }
+
+                setOpen(false);
+              }}
             >
               {item.label}
             </button>
           ))}
         </nav>
 
-        <button className="logout-button">Đăng xuất</button>
+        <button
+          type="button"
+          className="logout-button"
+          onClick={handleLogout}
+        >
+          Đăng xuất
+        </button>
       </aside>
     </>
   );

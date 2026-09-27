@@ -1,30 +1,44 @@
 import { useState } from "react";
 import Sidebar from "./Sidebar";
 import AccountManagement from "../pages/AccountManagement";
-
 import type { Role } from "../data/roleMenus";
-
 type DashboardProps = {
   role: Role;
   userName: string;
+  onLogout: () => Promise<void>;
 };
 
-function Dashboard({ role, userName }: DashboardProps) {
+function Dashboard({
+  role,
+  userName,
+  onLogout,
+}: DashboardProps) {
   const [selectedMenu, setSelectedMenu] = useState("Tổng quan");
 
   return (
     <div className="dashboard-layout">
-      <Sidebar role={role} userName={userName} selectedMenu={selectedMenu} onMenuSelect={setSelectedMenu} />
+      <Sidebar
+  role={role}
+  userName={userName}
+  onLogout={onLogout}
+  selectedMenu={selectedMenu}
+  onMenuSelect={setSelectedMenu}
+/>
+<main className="dashboard-content">
+  {selectedMenu === "Quản lý tài khoản" && (
+    <AccountManagement />
+  )}
 
-      <main className="dashboard-content">
-        {selectedMenu === "Quản lý tài khoản" && <AccountManagement />}
-
-<div
-  style={{
-    display: selectedMenu === "Quản lý tài khoản" ? "none" : undefined,
-  }}
->
-        <header className="dashboard-header">
+  <div
+    style={{
+      display:
+        selectedMenu === "Quản lý tài khoản"
+          ? "none"
+          : undefined,
+    }}
+  >
+    <header className="dashboard-header">
+      
           <div>
             <h1>Tổng quan</h1>
             <p>Chào mừng {userName}</p>
