@@ -1,0 +1,55 @@
+import { RoleType } from './roles';
+import { PermissionCode } from './permissions';
+
+export interface AuthenticatedUser {
+  id: string;
+  email: string;
+  fullName: string;
+  departmentId: string | null;
+  roles: RoleType[];
+  permissions: PermissionCode[];
+}
+
+export enum AuditAction {
+  LOGIN = 'LOGIN',
+  LOGOUT = 'LOGOUT',
+
+  USER_CREATED = 'USER_CREATED',
+  USER_UPDATED = 'USER_UPDATED',
+  USER_DISABLED = 'USER_DISABLED',
+  ROLE_CHANGED = 'ROLE_CHANGED',
+
+  REQUISITION_CREATED = 'REQUISITION_CREATED',
+  REQUISITION_UPDATED = 'REQUISITION_UPDATED',
+  REQUISITION_APPROVED = 'REQUISITION_APPROVED',
+  REQUISITION_REJECTED = 'REQUISITION_REJECTED',
+
+  CANDIDATE_CREATED = 'CANDIDATE_CREATED',
+  CANDIDATE_UPDATED = 'CANDIDATE_UPDATED',
+  CANDIDATE_VIEWED = 'CANDIDATE_VIEWED',
+  CANDIDATE_DELETED = 'CANDIDATE_DELETED',
+
+  INTERVIEW_CREATED = 'INTERVIEW_CREATED',
+  INTERVIEW_UPDATED = 'INTERVIEW_UPDATED',
+
+  EVALUATION_CREATED = 'EVALUATION_CREATED',
+  EVALUATION_UPDATED = 'EVALUATION_UPDATED',
+
+  OFFER_CREATED = 'OFFER_CREATED',
+  OFFER_UPDATED = 'OFFER_UPDATED',
+  OFFER_APPROVED = 'OFFER_APPROVED',
+  OFFER_REJECTED = 'OFFER_REJECTED',
+}
+
+export type ResourceType =
+  | 'user'
+  | 'requisition'
+  | 'job'
+  | 'candidate'
+  | 'application'
+  | 'interview'
+  | 'evaluation'
+  | 'offer'
+  | 'report'
+  | 'organization'
+  | 'audit_log';
