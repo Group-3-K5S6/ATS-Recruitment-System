@@ -1,0 +1,17 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const user_controller_1 = require("./user.controller");
+const authenticate_1 = require("../../middleware/authenticate");
+const authorize_1 = require("../../middleware/authorize");
+const validate_1 = require("../../middleware/validate");
+const permissions_1 = require("../../rbac/permissions");
+const router = (0, express_1.Router)();
+router.use(authenticate_1.authenticate);
+router.get('/', (0, authorize_1.requirePermission)(permissions_1.PermissionCode.USERS_READ), user_controller_1.UserController.list);
+router.post('/', (0, authorize_1.requirePermission)(permissions_1.PermissionCode.USERS_CREATE), (0, validate_1.validateBody)(user_controller_1.createUserSchema), user_controller_1.UserController.create);
+router.patch('/:id', (0, authorize_1.requirePermission)(permissions_1.PermissionCode.USERS_UPDATE), (0, validate_1.validateBody)(user_controller_1.updateUserSchema), user_controller_1.UserController.update);
+router.put('/:id/roles', (0, authorize_1.requirePermission)(permissions_1.PermissionCode.ROLES_UPDATE), (0, validate_1.validateBody)(user_controller_1.assignRolesSchema), user_controller_1.UserController.assignRoles);
+router.patch('/:id/disable', (0, authorize_1.requirePermission)(permissions_1.PermissionCode.USERS_DISABLE), user_controller_1.UserController.disable);
+router.patch('/:id/enable', (0, authorize_1.requirePermission)(permissions_1.PermissionCode.USERS_UPDATE), user_controller_1.UserController.enable);
+exports.default = router;
