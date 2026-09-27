@@ -69,8 +69,16 @@ Tài liệu đặc tả toàn diện về **Authentication, Role-Based Access Co
 
 #### `POST /api/auth/logout`
 - **Auth**: Required (`Bearer <token>`)
-- **Mục đích**: Thu hồi token (đưa vào blacklist bảng `RevokedToken`).
+- **Body**: `{ "refreshToken": "<refresh-token>" }` (optional for backward compatibility; when supplied, it must belong to the authenticated user).
+- **Mục đích**: Thu hồi access token hiện tại và refresh token của phiên để không thể tiếp tục gia hạn.
 - **Audit Action**: `LOGOUT`
+
+#### `POST /api/auth/refresh`
+- **Auth**: Public, yêu cầu refresh token hợp lệ trong body.
+- **Body**: `{ "refreshToken": "<refresh-token>" }`
+- **Mục đích**: Gia hạn phiên đang hoạt động bằng cách thu hồi refresh token đã dùng và cấp cặp access/refresh token mới.
+- **Output**: `{ accessToken, refreshToken }`
+- **Denied**: Refresh token hết hạn, đã thu hồi, hoặc tài khoản không còn hoạt động nhận `401`.
 
 #### `GET /api/auth/me`
 - **Auth**: Required

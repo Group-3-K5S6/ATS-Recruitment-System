@@ -2,7 +2,13 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../database/prisma';
 import { comparePassword, hashPassword } from '../../utils/password';
-import { signAccessToken, signRefreshToken, verifyRefreshToken, revokeToken } from '../../utils/token';
+import {
+  signAccessToken,
+  signRefreshToken,
+  verifyRefreshToken,
+  revokeToken,
+  isTokenRevoked,
+} from '../../utils/token';
 import { successResponse, errorResponse } from '../../utils/response';
 import { recordRequestAudit } from '../../middleware/audit-logger';
 import { AuditAction } from '../../rbac/types';
@@ -22,8 +28,12 @@ export const registerSchema = z.object({
 });
 
 export const refreshSchema = z.object({
-  refreshToken: z.string(),
+  refreshToken: z.string().min(1),
 });
+
+export const logoutSchema = z.object({
+  refreshToken: z.string().optional(),
+}).default({});
 
 export class AuthController {
   static async login(req: Request, res: Response): Promise<void> {
@@ -150,6 +160,14 @@ export class AuthController {
       await revokeToken(req.token);
     }
 
+    const refreshToken: unknown = req.body?.refreshToken;
+    if (typeof refreshToken === 'string' && req.user) {
+      const refreshPayload = verifyRefreshToken(refreshToken);
+      if (refreshPayload?.userId === req.user.id) {
+        await revokeToken(refreshToken);
+      }
+    }
+
     if (req.user) {
       await recordRequestAudit(req, AuditAction.LOGOUT, 'user', req.user.id);
     }
@@ -161,13 +179,27 @@ export class AuthController {
     const { refreshToken } = req.body;
     const payload = verifyRefreshToken(refreshToken);
 
-    if (!payload) {
+    if (!payload || (await isTokenRevoked(refreshToken))) {
       errorResponse(res, 'Invalid or expired refresh token.', 401, 'INVALID_REFRESH_TOKEN');
       return;
     }
 
-    const newAccessToken = signAccessToken({ userId: payload.userId, email: payload.email });
-    successResponse(res, { accessToken: newAccessToken }, 200);
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { id: true, email: true, isActive: true },
+    });
+
+    if (!user || !user.isActive || user.email !== payload.email) {
+      errorResponse(res, 'User account not found or deactivated.', 401, 'ACCOUNT_INACTIVE');
+      return;
+    }
+
+    // Rotate refresh tokens so a previously used token cannot renew the session again.
+    await revokeToken(refreshToken);
+    const tokenPayload = { userId: user.id, email: user.email };
+    const accessToken = signAccessToken(tokenPayload);
+    const nextRefreshToken = signRefreshToken(tokenPayload);
+    successResponse(res, { accessToken, refreshToken: nextRefreshToken }, 200);
   }
 
   static async me(req: Request, res: Response): Promise<void> {
