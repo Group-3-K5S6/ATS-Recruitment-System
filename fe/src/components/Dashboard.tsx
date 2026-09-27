@@ -1,4 +1,7 @@
+import { useState } from "react";
 import Sidebar from "./Sidebar";
+import AccountManagement from "../pages/AccountManagement";
+
 import type { Role } from "../data/roleMenus";
 
 type DashboardProps = {
@@ -7,11 +10,20 @@ type DashboardProps = {
 };
 
 function Dashboard({ role, userName }: DashboardProps) {
+  const [selectedMenu, setSelectedMenu] = useState("Tổng quan");
+
   return (
     <div className="dashboard-layout">
-      <Sidebar role={role} userName={userName} />
+      <Sidebar role={role} userName={userName} selectedMenu={selectedMenu} onMenuSelect={setSelectedMenu} />
 
       <main className="dashboard-content">
+        {selectedMenu === "Quản lý tài khoản" && <AccountManagement />}
+
+<div
+  style={{
+    display: selectedMenu === "Quản lý tài khoản" ? "none" : undefined,
+  }}
+>
         <header className="dashboard-header">
           <div>
             <h1>Tổng quan</h1>
@@ -742,6 +754,7 @@ function Dashboard({ role, userName }: DashboardProps) {
             </section>
           </>
         )}
+        </div>
       </main>
     </div>
   );

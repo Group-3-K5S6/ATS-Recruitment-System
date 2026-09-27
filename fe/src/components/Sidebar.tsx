@@ -5,6 +5,8 @@ import { roleMenus } from "../data/roleMenus";
 type SidebarProps = {
   role: Role;
   userName: string;
+  selectedMenu?: string;
+  onMenuSelect?: (label: string) => void;
 };
 
 const roleLabel: Record<Role, string> = {
@@ -16,10 +18,17 @@ const roleLabel: Record<Role, string> = {
   Admin: "Quản trị hệ thống",
 };
 
-function Sidebar({ role, userName }: SidebarProps) {
+function Sidebar({ role, userName, selectedMenu, onMenuSelect }: SidebarProps) {
   const [open, setOpen] = useState(false);
-
+  const [localSelectedMenu, setLocalSelectedMenu] = useState("Tổng quan");
   const menu = roleMenus[role];
+  const activeMenu = selectedMenu ?? localSelectedMenu;
+
+  const handleMenuSelect = (label: string) => {
+    setLocalSelectedMenu(label);
+    onMenuSelect?.(label);
+    setOpen(false);
+  };
 
   return (
     <>
@@ -30,7 +39,6 @@ function Sidebar({ role, userName }: SidebarProps) {
       <aside className={`sidebar ${open ? "open" : ""}`}>
         <div className="sidebar-logo">
           <div className="sidebar-logo-icon">A</div>
-
           <div>
             <h2>ATS</h2>
             <p>Hệ Thống Tuyển Dụng Nội Bộ</p>
@@ -46,7 +54,6 @@ function Sidebar({ role, userName }: SidebarProps) {
               .join("")
               .toUpperCase()}
           </div>
-
           <div>
             <strong>{userName}</strong>
             <p>{roleLabel[role]}</p>
@@ -54,10 +61,12 @@ function Sidebar({ role, userName }: SidebarProps) {
         </div>
 
         <nav className="sidebar-menu">
-          {menu.map((item, index) => (
+          {menu.map((item) => (
             <button
               key={item.label}
-              className={`sidebar-menu-item ${index === 0 ? "active" : ""}`}
+              type="button"
+              className={`sidebar-menu-item ${activeMenu === item.label ? "active" : ""}`}
+              onClick={() => handleMenuSelect(item.label)}
             >
               {item.label}
             </button>
