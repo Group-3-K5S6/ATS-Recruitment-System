@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Sidebar from "./Sidebar";
 import AccountManagement from "../pages/AccountManagement";
+import RoleAssignment from "../pages/RoleAssignment";
 import type { Role } from "../data/roleMenus";
 type DashboardProps = {
   role: Role;
@@ -24,15 +25,16 @@ function Dashboard({
   selectedMenu={selectedMenu}
   onMenuSelect={setSelectedMenu}
 />
-<main className="dashboard-content">
+  <main className="dashboard-content">
   {selectedMenu === "Quản lý tài khoản" && (
     <AccountManagement />
   )}
+  {selectedMenu === "Vai trò & quyền" && <RoleAssignment />}
 
   <div
     style={{
       display:
-        selectedMenu === "Quản lý tài khoản"
+        selectedMenu === "Quản lý tài khoản" || selectedMenu === "Vai trò & quyền"
           ? "none"
           : undefined,
     }}

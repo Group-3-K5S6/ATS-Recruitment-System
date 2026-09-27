@@ -6,6 +6,7 @@ import {
   Route,
   Routes,
   Link,
+  useNavigate,
 } from "react-router-dom";
 
 import "./App.css";
@@ -20,6 +21,7 @@ import {
 } from "./pages/ErrorPages";
 
 import Dashboard from "./components/Dashboard";
+import { login, logout } from "./services/roleApi";
 
 
 import type { Role } from "./data/roleMenus";
@@ -27,15 +29,34 @@ import type { Role } from "./data/roleMenus";
 import {
   consumeSessionExpired,
   clearLocalSession,
+  getLocalSession,
+  saveLocalSession,
 } from "./services/session";
 
+const roleByCode: Record<string, Role> = {
+  CANDIDATE: "Candidate",
+  RECRUITER: "Recruiter",
+  HIRING_MANAGER: "HiringManager",
+  INTERVIEWER: "Interviewer",
+  HR_MANAGER: "HRManager",
+  APPROVER: "Approver",
+  ADMIN: "Admin",
+};
+
+function resolveRole(roles: string[]): Role {
+  const priority = ["ADMIN", "HR_MANAGER", "RECRUITER", "HIRING_MANAGER", "INTERVIEWER", "APPROVER", "CANDIDATE"];
+  const roleCode = priority.find((role) => roles.includes(role));
+  return roleByCode[roleCode || "CANDIDATE"];
+}
+
 function Login() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
 
-  const [loggedIn, setLoggedIn] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // S1-02:
   // Kiểm tra xem phiên trước đó có bị hết hạn hay không
@@ -43,10 +64,7 @@ function Login() {
     consumeSessionExpired()
   );
 
-  // Tạm thời test vai trò Admin
-  const [role] = useState<Role>("Admin");
-
-  const handleLogin = (
+  const handleLogin = async (
     e: FormEvent<HTMLFormElement>
   ) => {
     e.preventDefault();
@@ -61,58 +79,17 @@ function Login() {
       return;
     }
 
-    /*
-      Hiện tại đang test Frontend.
-
-      Khi Backend S1-01 hoàn thành:
-      - gửi email + password tới API đăng nhập
-      - nhận access token / refresh token
-      - lấy role thật của người dùng
-    */
-
-    setLoggedIn(true);
+    setIsSubmitting(true);
+    try {
+      const result = await login(email.trim(), password);
+      saveLocalSession(result.accessToken, result.refreshToken, result.user);
+      navigate("/dashboard");
+    } catch (loginError) {
+      setError(loginError instanceof Error ? loginError.message : "Không thể đăng nhập.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
-
-  // ==============================
-  // S1-02 - ĐĂNG XUẤT
-  // ==============================
-
-  const handleLogout = async () => {
-    /*
-      Khi Backend S1-02 hoàn thành:
-
-      FE sẽ gọi API logout tại đây.
-
-      Backend phải:
-      - làm mất hiệu lực phiên
-      - thu hồi refresh token
-      - không cho token cũ tiếp tục sử dụng
-
-      Hiện tại mới làm phần Frontend.
-    */
-
-    clearLocalSession();
-
-    setLoggedIn(false);
-
-    setEmail("");
-    setPassword("");
-    setError("");
-  };
-
-  // ==============================
-  // SAU KHI ĐĂNG NHẬP
-  // ==============================
-
-  if (loggedIn) {
-  return (
-    <Dashboard
-      role={role}
-      userName="Nguyễn Văn An"
-      onLogout={handleLogout}
-    />
-  );
-}
 
   // ==============================
   // TRANG ĐĂNG NHẬP
@@ -260,7 +237,8 @@ function Login() {
                   ✉
                 </span>
 
-                <input
+              <input
+                  id="login-email"
                   type="email"
                   placeholder="tenban@congty.vn"
                   value={email}
@@ -296,6 +274,7 @@ function Login() {
                 </span>
 
                 <input
+                  id="login-password"
                   type={
                     showPassword
                       ? "text"
@@ -341,8 +320,9 @@ function Login() {
             <button
               type="submit"
               className="login-button"
+              disabled={isSubmitting}
             >
-              Đăng nhập
+              {isSubmitting ? "Đang đăng nhập…" : "Đăng nhập"}
             </button>
 
           </form>
@@ -362,14 +342,20 @@ function Login() {
 }
 
 function DashboardRoute() {
+  const [session, setSession] = useState(() => getLocalSession());
   const handleLogout = async () => {
+    const token = sessionStorage.getItem("accessToken");
+    if (token) await logout(token).catch(() => undefined);
     clearLocalSession();
+    setSession(null);
   };
+
+  if (!session) return <Navigate to="/login" replace />;
 
   return (
     <Dashboard
-      role="Admin"
-      userName="Nguyễn Văn An"
+      role={resolveRole(session.roles || [])}
+      userName={session.fullName}
       onLogout={handleLogout}
     />
   );
