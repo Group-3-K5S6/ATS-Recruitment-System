@@ -2,22 +2,66 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import "./App.css";
 
+const API_BASE_URL = "http://localhost:8080/api";
+
+type LoginResponse = {
+  accessToken: string;
+  tokenType: string;
+  userId: number;
+  email: string;
+  roles: string[];
+};
+
+type ApiResponse<T> = {
+  success: boolean;
+  message: string;
+  data: T | null;
+};
+
 function App() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleLogin = (e: FormEvent<HTMLFormElement>) => {
+  const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
+    setSuccess("");
 
     if (!email.trim() || !password.trim()) {
       setError("Vui lòng nhập đầy đủ email công ty và mật khẩu.");
       return;
     }
 
-    setError("Giao diện đã hoàn thành, đang chờ kết nối Backend.");
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+      const result = (await response.json()) as ApiResponse<LoginResponse>;
+
+      if (!response.ok || !result.success || !result.data) {
+        setError(result.message || "Email hoặc mật khẩu không chính xác.");
+        return;
+      }
+
+      sessionStorage.setItem("ats.accessToken", result.data.accessToken);
+      sessionStorage.setItem("ats.user", JSON.stringify({
+        userId: result.data.userId,
+        email: result.data.email,
+        roles: result.data.roles,
+      }));
+      setSuccess(`Đăng nhập thành công. Vai trò: ${result.data.roles.join(", ")}.`);
+    } catch {
+      setError("Không kết nối được máy chủ. Hãy kiểm tra backend đang chạy rồi thử lại.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -90,23 +134,26 @@ function App() {
 
           <form onSubmit={handleLogin}>
             <div className="form-group">
-              <label>Email công ty</label>
+              <label htmlFor="email">Email công ty</label>
 
               <div className="input-box">
                 <span className="input-icon">✉</span>
 
                 <input
+                  id="email"
                   type="email"
+                  autoComplete="username"
                   placeholder="tenban@congty.vn"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  required
                 />
               </div>
             </div>
 
             <div className="form-group">
               <div className="password-header">
-                <label>Mật khẩu</label>
+                <label htmlFor="password">Mật khẩu</label>
                 <a href="#">Quên mật khẩu?</a>
               </div>
 
@@ -114,10 +161,13 @@ function App() {
                 <span className="input-icon">🔒</span>
 
                 <input
+                  id="password"
                   type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
                   placeholder="Nhập mật khẩu"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  required
                 />
 
                 <button
@@ -130,17 +180,15 @@ function App() {
               </div>
             </div>
 
-            {error && (
-              <div className="error-message">
-                {error}
-              </div>
-            )}
+            {error && <div className="error-message" role="alert">{error}</div>}
+            {success && <div className="success-message" role="status">{success}</div>}
 
             <button
               type="submit"
               className="login-button"
+              disabled={isSubmitting}
             >
-              Đăng nhập
+              {isSubmitting ? "Đang đăng nhập…" : "Đăng nhập"}
             </button>
           </form>
 

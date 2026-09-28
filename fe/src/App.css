@@ -359,3 +359,17 @@
     font-size: 29px;
   }
 }
+.success-message {
+  margin-bottom: 15px;
+  padding: 11px 13px;
+  color: #067647;
+  background: #ecfdf3;
+  border: 1px solid #abefc6;
+  border-radius: 10px;
+  font-size: 13px;
+}
+.login-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
