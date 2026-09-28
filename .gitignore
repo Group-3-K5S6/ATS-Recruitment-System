@@ -22,12 +22,8 @@
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 replay_pid*
-
-# Node and local development data
+# Node.js
 node_modules/
-**/node_modules/
-**/dist/
+dist/
+**/prisma/ats.db
 **/.env
-**/*.db
-**/*.db-journal
-**/.vite/
