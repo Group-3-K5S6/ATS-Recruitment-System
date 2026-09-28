@@ -17,5 +17,7 @@ export function consumeSessionExpired() {
 
 export function clearLocalSession() {
   sessionStorage.removeItem("accessToken");
+  sessionStorage.removeItem("refreshToken");
+  sessionStorage.removeItem("currentUser");
   sessionStorage.removeItem(SESSION_EXPIRED_KEY);
 }

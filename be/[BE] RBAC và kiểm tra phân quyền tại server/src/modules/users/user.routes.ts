@@ -1,0 +1,15 @@
+import { Router } from 'express';
+import { authenticate } from '../../middleware/authenticate';
+import { requirePermission, requireRole } from '../../middleware/authorize';
+import { RoleType } from '../../rbac/roles';
+import { UserController } from './user.controller';
+const router = Router();
+router.use(authenticate);
+router.get('/me', requirePermission('profile:read'), UserController.getProfile);
+router.patch('/me', requirePermission('profile:update'), UserController.updateProfile);
+router.put('/me/password', requirePermission('profile:update'), UserController.changePassword);
+router.get('/', requireRole(RoleType.ADMIN, RoleType.HR_MANAGER), requirePermission('users:read'), UserController.list);
+router.post('/', requireRole(RoleType.ADMIN), requirePermission('users:create'), UserController.create);
+router.put('/:id/roles', requireRole(RoleType.ADMIN), requirePermission('roles:update'), UserController.assignRoles);
+router.patch('/:id/disable', requireRole(RoleType.ADMIN), requirePermission('users:disable'), UserController.disable);
+export default router;

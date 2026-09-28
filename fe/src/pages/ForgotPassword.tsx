@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import AuthLayout from "../components/AuthLayout";
+import { apiRequest } from "../services/api";
 
 const GENERIC_MESSAGE =
   "Nếu email này tồn tại trong hệ thống, bạn sẽ nhận được mã OTP xác thực có hiệu lực trong 30 phút và chỉ sử dụng được 1 lần.";
@@ -31,7 +32,7 @@ function ForgotPassword() {
     "0",
   )}:${String(secondsRemaining % 60).padStart(2, "0")}`;
 
-  const handleEmailSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleEmailSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
 
@@ -40,11 +41,20 @@ function ForgotPassword() {
       return;
     }
 
-    setStep("otp");
-    setSecondsRemaining(1800);
+    try {
+      const result = await apiRequest<{ previewCode?: string }>("/auth/forgot-password", {
+        method: "POST", body: JSON.stringify({ email: email.trim() }),
+      }, false);
+      // The backend returns this helper only in development, until email delivery is configured.
+      if (result.previewCode) setOtp(result.previewCode);
+      setStep("otp");
+      setSecondsRemaining(1800);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Không gửi được mã xác thực.");
+    }
   };
 
-  const handleOtpSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleOtpSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
 
@@ -53,13 +63,29 @@ function ForgotPassword() {
       return;
     }
 
-    navigate("/reset-password");
+    try {
+      const result = await apiRequest<{ resetToken: string }>("/auth/verify-reset-code", {
+        method: "POST", body: JSON.stringify({ email: email.trim(), code: otp }),
+      }, false);
+      sessionStorage.setItem("passwordResetToken", result.resetToken);
+      navigate("/reset-password");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Mã xác thực không hợp lệ.");
+    }
   };
 
-  const handleResend = () => {
+  const handleResend = async () => {
     setOtp("");
     setError("");
-    setSecondsRemaining(1800);
+    try {
+      const result = await apiRequest<{ previewCode?: string }>("/auth/forgot-password", {
+        method: "POST", body: JSON.stringify({ email: email.trim() }),
+      }, false);
+      if (result.previewCode) setOtp(result.previewCode);
+      setSecondsRemaining(1800);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Không gửi lại được mã.");
+    }
   };
 
   return (

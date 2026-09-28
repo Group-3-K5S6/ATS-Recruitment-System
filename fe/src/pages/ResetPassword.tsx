@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import AuthLayout from "../components/AuthLayout";
+import { apiRequest } from "../services/api";
 
 function ResetPassword() {
   const [password, setPassword] = useState("");
@@ -11,7 +12,7 @@ function ResetPassword() {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
 
@@ -20,12 +21,30 @@ function ResetPassword() {
       return;
     }
 
+    if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+      setError("Mật khẩu cần có chữ hoa, chữ thường, chữ số và ký tự đặc biệt.");
+      return;
+    }
+
     if (password !== confirmation) {
       setError("Mật khẩu xác nhận không khớp.");
       return;
     }
 
-    setSubmitted(true);
+    const resetToken = sessionStorage.getItem("passwordResetToken");
+    if (!resetToken) {
+      setError("Mã xác thực đã hết hạn. Vui lòng yêu cầu mã mới.");
+      return;
+    }
+    try {
+      await apiRequest("/auth/reset-password", {
+        method: "POST", body: JSON.stringify({ resetToken, newPassword: password }),
+      }, false);
+      sessionStorage.removeItem("passwordResetToken");
+      setSubmitted(true);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Không thể đặt lại mật khẩu.");
+    }
   };
 
   return (

@@ -6,11 +6,6 @@ type SidebarProps = {
   role: Role;
   userName: string;
   onLogout: () => Promise<void>;
-
-  // Dùng cho Dashboard/S1-08.
-  // Trang khác như ErrorPages không bắt buộc truyền.
-  selectedMenu?: string;
-  onMenuSelect?: (label: string) => void;
 };
 
 const roleLabel: Record<Role, string> = {
@@ -26,8 +21,6 @@ function Sidebar({
   role,
   userName,
   onLogout,
-  selectedMenu,
-  onMenuSelect,
 }: SidebarProps) {
   const [open, setOpen] = useState(false);
 
@@ -40,7 +33,6 @@ function Sidebar({
   return (
     <>
       <button
-        type="button"
         className="mobile-menu-button"
         onClick={() => setOpen(!open)}
       >
@@ -74,20 +66,12 @@ function Sidebar({
         </div>
 
         <nav className="sidebar-menu">
-          {menu.map((item) => (
+          {menu.map((item, index) => (
             <button
               key={item.label}
-              type="button"
               className={`sidebar-menu-item ${
-                selectedMenu === item.label ? "active" : ""
+                index === 0 ? "active" : ""
               }`}
-              onClick={() => {
-                if (onMenuSelect) {
-                  onMenuSelect(item.label);
-                }
-
-                setOpen(false);
-              }}
             >
               {item.label}
             </button>

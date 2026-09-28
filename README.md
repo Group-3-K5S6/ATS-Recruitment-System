@@ -1,5 +1,19 @@
 # ATS-Recruitment-System
 Hệ thống tuyển dụng nội bộ (ATS) hỗ trợ quản lý toàn bộ quy trình tuyển dụng.
+
+## Chạy Frontend và Backend
+
+Mở PowerShell tại thư mục dự án, cài dependency cho hai phần một lần, sau đó chạy chung:
+
+```powershell
+npm install --prefix fe
+npm install --prefix "be/[BE] RBAC và kiểm tra phân quyền tại server"
+npm run dev
+```
+
+Lệnh `npm run dev` tạo file cấu hình development từ `.env.example` nếu cần, khởi tạo Prisma/SQLite và dữ liệu RBAC trước khi chạy backend tại `http://localhost:4000` cùng frontend tại `http://localhost:5173`. FE gọi `/api` qua proxy Vite. Tài khoản development mặc định: `admin@ats.local` / `Password123!`.
+
+API và chi tiết cấu hình backend nằm trong `be/[BE] RBAC và kiểm tra phân quyền tại server/README.md`.
 ## 1. Giới thiệu dự án
 
 ### 1.1. Bối cảnh

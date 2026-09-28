@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import "../App.css";
+import { apiRequest } from "../services/api";
+import { clearLocalSession } from "../services/session";
 
 type PasswordVisibility = {
   current: boolean;
@@ -117,7 +119,7 @@ function ChangePassword() {
     return Object.keys(nextErrors).length === 0;
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!validate()) {
@@ -125,10 +127,18 @@ function ChangePassword() {
     }
 
     setIsSubmitting(true);
-    window.setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      await apiRequest("/users/me/password", {
+        method: "PUT",
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      clearLocalSession();
       setIsSuccess(true);
-    }, 900);
+    } catch (requestError) {
+      setErrors({ currentPassword: requestError instanceof Error ? requestError.message : "Không thể đổi mật khẩu." });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const toggleVisibility = (field: keyof PasswordVisibility) => {

@@ -1,0 +1,107 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String       @id @default(cuid())
+  email              String       @unique
+  passwordHash       String
+  fullName           String
+  phone              String?
+  departmentId       String?
+  isActive           Boolean      @default(true)
+  tokenVersion       Int          @default(0)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  roles              UserRole[]
+  revokedTokens      RevokedToken[]
+  passwordResetCodes PasswordResetCode[]
+  auditLogs          AuditLog[]
+  profile            UserProfile?
+}
+
+model UserProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  title       String?
+  phone       String?
+  avatarUrl   String?
+  timezone    String   @default("Asia/Ho_Chi_Minh")
+  preferences String?
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  description String?
+  users       UserRole[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  code        String           @unique
+  module      String
+  description String?
+  roles       RolePermission[]
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  @@id([userId, roleId])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  @@id([roleId, permissionId])
+}
+
+model RevokedToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([expiresAt])
+}
+
+model PasswordResetCode {
+  id         String   @id @default(cuid())
+  userId     String
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int      @default(0)
+  usedAt     DateTime?
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, expiresAt])
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  actorId      String?
+  action       String
+  resourceType String
+  resourceId   String?
+  ipAddress    String?
+  userAgent    String?
+  metadata     String?
+  createdAt    DateTime @default(now())
+  actor        User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  @@index([createdAt])
+  @@index([actorId, createdAt])
+}

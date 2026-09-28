@@ -1,0 +1,11 @@
+{
+  "name": "ats-recruitment-system",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "setup:be": "node scripts/dev.js setup",
+    "dev": "node scripts/dev.js",
+    "dev:fe": "npm run dev --prefix fe",
+    "dev:be": "npm run dev --prefix \"be/[BE] RBAC và kiểm tra phân quyền tại server\""
+  }
+}

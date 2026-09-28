@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import {
   BrowserRouter,
@@ -13,11 +13,6 @@ import "./App.css";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import ChangePassword from "./pages/ChangePassword";
-import {
-  ForbiddenPage,
-  NotFoundPage,
-  ServerErrorPage,
-} from "./pages/ErrorPages";
 
 import Dashboard from "./components/Dashboard";
 
@@ -27,7 +22,18 @@ import type { Role } from "./data/roleMenus";
 import {
   consumeSessionExpired,
   clearLocalSession,
+  markSessionExpired,
 } from "./services/session";
+import { apiRequest, getCurrentUser, login as loginApi, restoreCurrentUser } from "./services/api";
+
+const roleMap: Record<string, Role> = {
+  RECRUITER: "Recruiter",
+  HIRING_MANAGER: "HiringManager",
+  INTERVIEWER: "Interviewer",
+  HR_MANAGER: "HRManager",
+  APPROVER: "Approver",
+  ADMIN: "Admin",
+};
 
 function Login() {
   const [email, setEmail] = useState("");
@@ -35,18 +41,52 @@ function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
 
-  const [loggedIn, setLoggedIn] = useState(false);
+  const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
+  const [loggedIn, setLoggedIn] = useState(() => Boolean(getCurrentUser()));
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // S1-02:
   // Kiểm tra xem phiên trước đó có bị hết hạn hay không
-  const [sessionExpired] = useState(() =>
+  const [sessionExpired, setSessionExpired] = useState(() =>
     consumeSessionExpired()
   );
 
-  // Tạm thời test vai trò Admin
-  const [role] = useState<Role>("Admin");
+  const role = currentUser?.roles.map((value) => roleMap[value]).find(Boolean);
 
-  const handleLogin = (
+  useEffect(() => {
+    const onExpired = () => {
+      markSessionExpired();
+      setSessionExpired(true);
+      setCurrentUser(null);
+      setLoggedIn(false);
+    };
+    window.addEventListener("ats:session-expired", onExpired);
+    return () => window.removeEventListener("ats:session-expired", onExpired);
+  }, []);
+
+  useEffect(() => {
+    if (!loggedIn) return;
+    let active = true;
+    restoreCurrentUser().then((user) => {
+      if (!active) return;
+      setCurrentUser(user);
+      if (!user.roles.some((value) => roleMap[value])) {
+        clearLocalSession();
+        setCurrentUser(null);
+        setLoggedIn(false);
+      }
+    }).catch(() => {
+      if (active) {
+        setCurrentUser(null);
+        setLoggedIn(false);
+      }
+    });
+    return () => { active = false; };
+  // Validate the saved login once when the app loads.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleLogin = async (
     e: FormEvent<HTMLFormElement>
   ) => {
     e.preventDefault();
@@ -61,16 +101,21 @@ function Login() {
       return;
     }
 
-    /*
-      Hiện tại đang test Frontend.
-
-      Khi Backend S1-01 hoàn thành:
-      - gửi email + password tới API đăng nhập
-      - nhận access token / refresh token
-      - lấy role thật của người dùng
-    */
-
-    setLoggedIn(true);
+    setIsSubmitting(true);
+    try {
+      const user = await loginApi(email.trim(), password);
+      const userRole = user.roles.map((value) => roleMap[value]).find(Boolean);
+      if (!userRole) {
+        clearLocalSession();
+        throw new Error("Tài khoản này chưa có vai trò sử dụng giao diện nhân sự nội bộ.");
+      }
+      setCurrentUser(user);
+      setLoggedIn(true);
+    } catch (loginError) {
+      setError(loginError instanceof Error ? loginError.message : "Đăng nhập thất bại.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // ==============================
@@ -78,22 +123,14 @@ function Login() {
   // ==============================
 
   const handleLogout = async () => {
-    /*
-      Khi Backend S1-02 hoàn thành:
-
-      FE sẽ gọi API logout tại đây.
-
-      Backend phải:
-      - làm mất hiệu lực phiên
-      - thu hồi refresh token
-      - không cho token cũ tiếp tục sử dụng
-
-      Hiện tại mới làm phần Frontend.
-    */
+    try {
+      await apiRequest("/auth/logout", { method: "POST", body: JSON.stringify({ refreshToken: sessionStorage.getItem("refreshToken") }) });
+    } catch { /* Clear local credentials even when the server is unavailable. */ }
 
     clearLocalSession();
 
     setLoggedIn(false);
+    setCurrentUser(null);
 
     setEmail("");
     setPassword("");
@@ -105,15 +142,15 @@ function Login() {
   // ==============================
 
   if (loggedIn) {
+  if (!role || !currentUser) return null;
   return (
     <Dashboard
       role={role}
-      userName="Nguyễn Văn An"
+      userName={currentUser.fullName}
       onLogout={handleLogout}
     />
   );
 }
-
   // ==============================
   // TRANG ĐĂNG NHẬP
   // ==============================
@@ -341,8 +378,9 @@ function Login() {
             <button
               type="submit"
               className="login-button"
+              disabled={isSubmitting}
             >
-              Đăng nhập
+              {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
             </button>
 
           </form>
@@ -358,20 +396,6 @@ function Login() {
       </section>
 
     </div>
-  );
-}
-
-function DashboardRoute() {
-  const handleLogout = async () => {
-    clearLocalSession();
-  };
-
-  return (
-    <Dashboard
-      role="Admin"
-      userName="Nguyễn Văn An"
-      onLogout={handleLogout}
-    />
   );
 }
 
@@ -401,11 +425,6 @@ function App() {
         />
 
         <Route
-          path="/dashboard"
-          element={<DashboardRoute />}
-        />
-
-        <Route
           path="/forgot-password"
           element={<ForgotPassword />}
         />
@@ -420,14 +439,13 @@ function App() {
           element={<ChangePassword />}
         />
 
-        <Route path="/403" element={<ForbiddenPage />} />
-        <Route path="/404" element={<NotFoundPage />} />
-        <Route path="/500" element={<ServerErrorPage />} />
-
         <Route
           path="*"
           element={
-            <NotFoundPage />
+            <Navigate
+              to="/login"
+              replace
+            />
           }
         />
 
