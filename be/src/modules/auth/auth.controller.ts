@@ -8,7 +8,7 @@ import { recordRequestAudit } from '../../middleware/audit-logger';
 import { AuditAction } from '../../rbac/types';
 import { RoleType } from '../../rbac/roles';
 import { PermissionCode } from '../../rbac/permissions';
-
+import { MenuService } from '../menu/menu.service';
 export const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
@@ -178,4 +178,24 @@ export class AuthController {
 
     successResponse(res, req.user, 200);
   }
+  static async menu(req: Request, res: Response): Promise<void> {
+  if (!req.user) {
+    errorResponse(
+      res,
+      'Authentication required before accessing menu.',
+      401,
+      'UNAUTHORIZED'
+    );
+    return;
+  }
+
+  const menu = MenuService.getMenuForUser(req.user);
+
+  successResponse(
+    res,
+    menu,
+    200,
+    'User navigation menu retrieved successfully'
+  );
+}
 }
