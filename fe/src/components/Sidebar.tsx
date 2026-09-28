@@ -8,6 +8,7 @@ type SidebarProps = {
 };
 
 const roleLabel: Record<Role, string> = {
+  Candidate: "Ứng viên",
   Recruiter: "Nhân viên tuyển dụng",
   HiringManager: "Trưởng bộ phận",
   Interviewer: "Người phỏng vấn",
@@ -23,7 +24,11 @@ function Sidebar({ role, userName }: SidebarProps) {
 
   return (
     <>
-      <button className="mobile-menu-button" onClick={() => setOpen(!open)}>
+      <button
+        type="button"
+        className="mobile-menu-button"
+        onClick={() => setOpen(!open)}
+      >
         ☰
       </button>
 
@@ -56,6 +61,7 @@ function Sidebar({ role, userName }: SidebarProps) {
         <nav className="sidebar-menu">
           {menu.map((item, index) => (
             <button
+              type="button"
               key={item.label}
               className={`sidebar-menu-item ${index === 0 ? "active" : ""}`}
             >
@@ -64,7 +70,9 @@ function Sidebar({ role, userName }: SidebarProps) {
           ))}
         </nav>
 
-        <button className="logout-button">Đăng xuất</button>
+        <button type="button" className="logout-button">
+          Đăng xuất
+        </button>
       </aside>
     </>
   );

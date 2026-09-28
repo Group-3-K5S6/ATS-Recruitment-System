@@ -4,8 +4,6 @@ import { BrowserRouter, Navigate, Route, Routes, Link } from "react-router-dom";
 import "./App.css";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
-import Dashboard from "./components/Dashboard";
-import type { Role } from "./data/roleMenus";
 import RolePermissions from "./pages/RolePermissions";
 
 function Login() {
@@ -17,7 +15,6 @@ function Login() {
   const [loggedIn, setLoggedIn] = useState(false);
 
   // Tạm thời test vai trò Recruiter
-  const [role] = useState<Role>("Admin");
 
   const handleLogin = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
