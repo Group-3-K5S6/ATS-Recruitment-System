@@ -10,5 +10,6 @@ router.post('/register', validateBody(registerSchema), AuthController.register);
 router.post('/refresh', validateBody(refreshSchema), AuthController.refresh);
 router.post('/logout', authenticate, AuthController.logout);
 router.get('/me', authenticate, AuthController.me);
+router.get('/me/menu', authenticate, AuthController.menu);
 
 export default router;
