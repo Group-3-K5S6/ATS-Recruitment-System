@@ -31,7 +31,7 @@ function Sidebar({
 }: SidebarProps) {
   const [open, setOpen] = useState(false);
 
-  const menu = roleMenus[role];
+  const menu = [...roleMenus[role], { label: "Hồ sơ cá nhân" }];
 
   const handleLogout = async () => {
     await onLogout();
