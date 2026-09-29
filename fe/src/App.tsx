@@ -7,7 +7,7 @@ import "./App.css";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import ChangePassword from "./pages/ChangePassword";
-import Profile from "./pages/Profile";
+import UserProfilePage from "./pages/UserProfilePage";
 import {
   ForbiddenPage,
   NotFoundPage,
@@ -269,7 +269,7 @@ function App() {
         <Route path="/login" element={<Login />} />
 
         <Route path="/dashboard" element={<DashboardRoute />} />
-        <Route path="/profile" element={<Profile />} />
+        <Route path="/profile" element={<UserProfilePage />} />
 
         <Route path="/forgot-password" element={<ForgotPassword />} />
 
