@@ -8,6 +8,7 @@ import { authenticate } from '../../middleware/authenticate';
 import { requirePermission } from '../../middleware/authorize';
 import { validateBody } from '../../middleware/validate';
 import { PermissionCode } from '../../rbac/permissions';
+import { asyncHandler } from '../../utils/async-handler';
 
 const router = Router();
 
@@ -16,39 +17,39 @@ router.use(authenticate);
 router.get(
   '/',
   requirePermission(PermissionCode.USERS_READ),
-  UserController.list
+  asyncHandler(UserController.list)
 );
 
 router.post(
   '/',
   requirePermission(PermissionCode.USERS_CREATE),
   validateBody(createUserSchema),
-  UserController.create
+  asyncHandler(UserController.create)
 );
 
 router.put(
   '/:id/roles',
   requirePermission(PermissionCode.ROLES_UPDATE),
   validateBody(assignRolesSchema),
-  UserController.assignRoles
+  asyncHandler(UserController.assignRoles)
 );
 
 router.patch(
   '/:id/disable',
   requirePermission(PermissionCode.USERS_DISABLE),
-  UserController.disable
+  asyncHandler(UserController.disable)
 );
 
 router.patch(
   '/:id/enable',
   requirePermission(PermissionCode.USERS_DISABLE),
-  UserController.enable
+  asyncHandler(UserController.enable)
 );
 
 router.post(
   '/:id/revoke-sessions',
   requirePermission(PermissionCode.USERS_DISABLE),
-  UserController.revokeSessions
+  asyncHandler(UserController.revokeSessions)
 );
 
 export default router;

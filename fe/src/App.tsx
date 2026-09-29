@@ -34,6 +34,7 @@ function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [loggedIn, setLoggedIn] = useState(false);
   const [role, setRole] = useState<Role>("Admin");
@@ -61,25 +62,63 @@ function Login() {
     }
 
     try {
+      setIsSubmitting(true);
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), password }),
       });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error?.message || "Đăng nhập thất bại.");
-      const authenticatedUser = result.data.user;
+      const responseText = await response.text();
+      let result: {
+        data?: {
+          user?: { roles?: string[]; fullName?: string };
+          accessToken?: string;
+          refreshToken?: string;
+        };
+        error?: { message?: string };
+      } | null;
+      try {
+        result = responseText ? JSON.parse(responseText) : null;
+      } catch {
+        result = null;
+      }
+      if (!response.ok) {
+        throw new Error(
+          result?.error?.message ||
+            (response.status >= 500
+              ? "Máy chủ đăng nhập đang gặp lỗi. Hãy kiểm tra backend cổng 4000."
+              : `Đăng nhập thất bại (HTTP ${response.status}).`),
+        );
+      }
+      const data = result?.data;
+      if (
+        !data?.user?.fullName ||
+        !data.user.roles?.length ||
+        !data.accessToken ||
+        !data.refreshToken
+      ) {
+        throw new Error("Máy chủ trả dữ liệu đăng nhập không hợp lệ. Hãy khởi động lại backend ATS.");
+      }
+      const authenticatedUser = data.user;
       const roleMap: Record<string, Role> = {
         ADMIN: "Admin", HR_MANAGER: "HRManager", RECRUITER: "Recruiter",
         HIRING_MANAGER: "HiringManager", INTERVIEWER: "Interviewer", APPROVER: "Approver",
       };
-      sessionStorage.setItem("accessToken", result.data.accessToken);
-      sessionStorage.setItem("refreshToken", result.data.refreshToken);
-      setRole(roleMap[authenticatedUser.roles[0]] || "Recruiter");
-      setUserName(authenticatedUser.fullName);
+      sessionStorage.setItem("accessToken", data.accessToken);
+      sessionStorage.setItem("refreshToken", data.refreshToken);
+      setRole(roleMap[authenticatedUser.roles?.[0] || ""] || "Recruiter");
+      setUserName(authenticatedUser.fullName || "Người dùng");
       setLoggedIn(true);
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Không thể kết nối máy chủ.");
+      setError(
+        error instanceof TypeError
+          ? "Không kết nối được máy chủ đăng nhập. Hãy chạy backend ATS ở cổng 4000 rồi thử lại."
+          : error instanceof Error
+            ? error.message
+            : "Không thể kết nối máy chủ."
+      );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -343,8 +382,9 @@ function Login() {
             <button
               type="submit"
               className="login-button"
+              disabled={isSubmitting}
             >
-              Đăng nhập
+              {isSubmitting ? "Đang đăng nhập…" : "Đăng nhập"}
             </button>
 
           </form>

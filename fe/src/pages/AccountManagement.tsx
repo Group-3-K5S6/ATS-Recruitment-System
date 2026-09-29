@@ -18,6 +18,43 @@ type AccountForm = {
   department: string;
 };
 
+type ApiUser = {
+  id: string;
+  fullName: string;
+  email: string;
+  isActive: boolean;
+  department?: { name: string } | null;
+  roles: string[];
+};
+
+type ApiResult<T = unknown> = {
+  data?: T;
+  error?: { message?: string };
+};
+
+async function readApiResult<T = unknown>(response: Response): Promise<ApiResult<T>> {
+  const body = await response.text();
+  let result: ApiResult<T> | null = null;
+  try {
+    result = body ? JSON.parse(body) as ApiResult<T> : null;
+  } catch {
+    // A proxy failure or closed backend can return HTML or an empty body.
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      result?.error?.message ||
+        (response.status >= 500
+          ? `Dịch vụ tài khoản không phản hồi đúng (HTTP ${response.status}). Kiểm tra backend cổng 4000 và gateway cổng 4100.`
+          : `Thao tác thất bại (HTTP ${response.status}).`),
+    );
+  }
+  if (!result) {
+    throw new Error("Máy chủ trả phản hồi rỗng hoặc không hợp lệ. Hãy kiểm tra gateway tài khoản cổng 4100.");
+  }
+  return result;
+}
+
 const PAGE_SIZE = 20;
 
 const AccountManagement = () => {
@@ -32,9 +69,9 @@ const AccountManagement = () => {
       const response = await fetch("/api/users", {
         headers: { Authorization: `Bearer ${sessionStorage.getItem("accessToken") || ""}` },
       });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error?.message || "Không tải được danh sách tài khoản.");
-      setAccounts(result.data.map((user: any) => ({
+      const result = await readApiResult<ApiUser[]>(response);
+      if (!Array.isArray(result.data)) throw new Error("Dữ liệu danh sách tài khoản không hợp lệ.");
+      setAccounts(result.data.map((user) => ({
         id: user.id,
         name: user.fullName,
         email: user.email,
@@ -43,7 +80,9 @@ const AccountManagement = () => {
         status: (user.isActive ? "Hoạt động" : "Đã khóa") as AccountStatus,
       })));
     } catch (error) {
-      setApiError(error instanceof Error ? error.message : "Lỗi kết nối API.");
+      setApiError(error instanceof TypeError
+        ? "Không kết nối được dịch vụ tài khoản. Hãy chạy backend cổng 4000 và gateway cổng 4100."
+        : error instanceof Error ? error.message : "Lỗi kết nối API.");
     } finally {
       setLoading(false);
     }
@@ -64,11 +103,12 @@ const AccountManagement = () => {
         method: operation === "revoke-sessions" ? "POST" : "PATCH",
         headers: { Authorization: `Bearer ${sessionStorage.getItem("accessToken") || ""}` },
       });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error?.message || "Không thực hiện được thao tác.");
+      await readApiResult(response);
       await loadAccounts();
     } catch (error) {
-      setApiError(error instanceof Error ? error.message : "Lỗi kết nối API.");
+      setApiError(error instanceof TypeError
+        ? "Không kết nối được dịch vụ khóa tài khoản. Hãy chạy gateway cổng 4100 và backend cổng 4000."
+        : error instanceof Error ? error.message : "Lỗi kết nối API.");
     }
   };
 
