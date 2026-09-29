@@ -1,5 +1,7 @@
 import { useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
+import { FileSpreadsheet } from "lucide-react";
+import EmployeeImportModal from "../components/EmployeeImportModal";
 
 type AccountStatus = "Hoạt động" | "Đã khóa";
 
@@ -25,6 +27,8 @@ type AccountForm = {
 const PAGE_SIZE = 20;
 
 const AccountManagement = () => {
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+
   /* =========================
      DỮ LIỆU TÀI KHOẢN
   ========================= */
@@ -392,22 +396,47 @@ const AccountManagement = () => {
           </h2>
         </div>
 
-        <button
-          type="button"
-          onClick={openCreateForm}
-          style={{
-            padding: "10px 16px",
-            backgroundColor: "#0052CC",
-            color: "#FFFFFF",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-            fontWeight: 600,
-          }}
-        >
-          + Thêm tài khoản
-        </button>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => setIsImportModalOpen(true)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "10px 14px",
+              backgroundColor: "#FFFFFF",
+              color: "#236C54",
+              border: "1px solid #B9CFC5",
+              borderRadius: "5px",
+              cursor: "pointer",
+              fontWeight: 600,
+            }}
+          >
+            <FileSpreadsheet size={16} />
+            Nhập từ Excel
+          </button>
+          <button
+            type="button"
+            onClick={openCreateForm}
+            style={{
+              padding: "10px 16px",
+              backgroundColor: "#0052CC",
+              color: "#FFFFFF",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: 600,
+            }}
+          >
+            + Thêm tài khoản
+          </button>
+        </div>
       </div>
+
+      {isImportModalOpen && (
+        <EmployeeImportModal onClose={() => setIsImportModalOpen(false)} />
+      )}
 
       {/* SEARCH + FILTER */}
       <div
