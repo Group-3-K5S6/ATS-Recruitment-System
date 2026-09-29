@@ -31,19 +31,19 @@ function errorResponse(res, message, statusCode = 400, code, requestId) {
                     : message;
     return res.status(statusCode).json({
         success: false,
-        error: {
-            code: errorCode,
-            message: userMessage,
-            requestId: correlationId,
-            action: statusCode === 401
-                ? 'LOGIN_AGAIN'
-                : statusCode === 403
-                    ? 'BACK_TO_DASHBOARD'
-                    : statusCode === 404
-                        ? 'BACK_TO_PREVIOUS_PAGE'
-                        : statusCode >= 500
-                            ? 'RETRY_LATER'
-                            : 'REVIEW_INPUT',
-        },
+    error: {
+        code: errorCode,
+        message: userMessage,
+        requestId: correlationId,
+        action: statusCode === 401
+            ? 'LOGIN_AGAIN'
+            : statusCode === 403
+                ? 'BACK_TO_DASHBOARD'
+                : statusCode === 404
+                    ? 'BACK_TO_PREVIOUS_PAGE'
+                    : statusCode >= 500
+                        ? 'RETRY_LATER'
+                        : 'REVIEW_INPUT',
+    },
     });
 }

@@ -1,4 +1,5 @@
 export type Role =
+  | "Candidate"
   | "Recruiter"
   | "HiringManager"
   | "Interviewer"
@@ -6,11 +7,27 @@ export type Role =
   | "Approver"
   | "Admin";
 
+export const backendRoleToFrontend: Record<string, Role> = {
+  CANDIDATE: "Candidate",
+  RECRUITER: "Recruiter",
+  HIRING_MANAGER: "HiringManager",
+  INTERVIEWER: "Interviewer",
+  HR_MANAGER: "HRManager",
+  APPROVER: "Approver",
+  ADMIN: "Admin",
+};
+
 export interface MenuItem {
   label: string;
 }
 
 export const roleMenus: Record<Role, MenuItem[]> = {
+  Candidate: [
+    { label: "Hồ sơ của tôi" },
+    { label: "Tin tuyển dụng" },
+    { label: "Lịch phỏng vấn" },
+    { label: "Offer của tôi" },
+  ],
   Recruiter: [
     { label: "Tổng quan" },
     { label: "Yêu cầu tuyển dụng" },

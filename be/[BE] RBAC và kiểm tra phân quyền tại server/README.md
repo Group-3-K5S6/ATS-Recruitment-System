@@ -62,23 +62,51 @@ Hệ thống phân quyền Backend an toàn, bảo vệ dữ liệu nhân sự, 
 
 ```powershell
 # 1. Cài đặt thư viện
-npm install
+npm ci
 
-# 2. Đồng bộ database SQLite và generate Prisma Client
+# 2. Tạo file cấu hình local (SQLite dùng file, không cần cài/chạy server DB)
+Copy-Item .env.example .env
+
+# 3. Sinh Prisma Client và tạo bảng trong file SQLite
+npm run prisma:generate
 npm run prisma:push
 
-# 3. Khởi tạo dữ liệu mẫu (Seed 7 roles, permissions, users và kịch bản test)
+# 4. Khởi tạo dữ liệu mẫu (Seed 7 roles, permissions, users và kịch bản test)
 npm run prisma:seed
 
-# 4. Chạy kiểm thử tự động (57 test cases bao quát)
-npm test
-
-# 5. Build mã nguồn TypeScript
+# 5. Build backend
 npm run build
 
 # 6. Khởi động server
 npm start
 ```
+
+### Chạy cùng Frontend
+
+Backend mặc định chạy tại `http://localhost:4000`; Vite proxy chuyển tiếp `/api` tới backend. SQLite lưu dữ liệu trong `prisma/dev.db` thuộc thư mục backend. Mở hai terminal:
+
+```powershell
+# Backend (từ thư mục này)
+npm ci
+npm run prisma:generate
+Copy-Item .env.example .env
+npm run prisma:push
+npm run prisma:seed
+npm run build
+npm start
+```
+
+```powershell
+# Frontend (từ thư mục fe)
+npm install
+npm run dev
+```
+
+Source backend nằm trong `src/`; Prisma schema và seed nằm trong `prisma/`. `npm run dev` chạy trực tiếp source JavaScript, còn `npm start` chạy bản build trong `dist/`. SQLite không cần cài dịch vụ riêng; file dữ liệu được tạo tự động khi chạy `npm run prisma:push`. Giữ `.env` và file database local khỏi Git.
+
+### Hợp đồng lỗi
+
+Mọi lỗi API dùng cùng envelope `success: false` và `error: { code, message, requestId, action }`. `action` là một trong `LOGIN_AGAIN`, `BACK_TO_DASHBOARD`, `BACK_TO_PREVIOUS_PAGE`, `RETRY_LATER` hoặc `REVIEW_INPUT`. Mỗi phản hồi có header `X-Request-Id`; lỗi 500 được log cùng request id nhưng không trả stack trace cho trình duyệt. FE dùng HTTP status để điều hướng 401 về đăng nhập, 403 tới trang truy cập bị từ chối, 404 tới trang không tìm thấy và 5xx tới trang lỗi máy chủ.
 
 ---
 

@@ -1,0 +1,15 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const interview_controller_1 = require("./interview.controller");
+const authenticate_1 = require("../../middleware/authenticate");
+const authorize_1 = require("../../middleware/authorize");
+const validate_1 = require("../../middleware/validate");
+const permissions_1 = require("../../rbac/permissions");
+const router = (0, express_1.Router)();
+router.use(authenticate_1.authenticate);
+router.get('/', (0, authorize_1.requirePermission)(permissions_1.PermissionCode.INTERVIEWS_READ), interview_controller_1.InterviewController.list);
+router.get('/:id', (0, authorize_1.requirePermission)(permissions_1.PermissionCode.INTERVIEWS_READ), interview_controller_1.InterviewController.getById);
+router.post('/', (0, authorize_1.requirePermission)(permissions_1.PermissionCode.INTERVIEWS_CREATE), (0, validate_1.validateBody)(interview_controller_1.createInterviewSchema), interview_controller_1.InterviewController.create);
+router.put('/:id', (0, authorize_1.requirePermission)(permissions_1.PermissionCode.INTERVIEWS_UPDATE), (0, validate_1.validateBody)(interview_controller_1.updateInterviewSchema), interview_controller_1.InterviewController.update);
+exports.default = router;

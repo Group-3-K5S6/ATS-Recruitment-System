@@ -9,6 +9,7 @@ type SidebarProps = {
 };
 
 const roleLabel: Record<Role, string> = {
+  Candidate: "Ứng viên",
   Recruiter: "Nhân viên tuyển dụng",
   HiringManager: "Trưởng bộ phận",
   Interviewer: "Người phỏng vấn",

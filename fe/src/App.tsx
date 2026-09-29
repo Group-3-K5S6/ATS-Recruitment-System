@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import {
   BrowserRouter,
@@ -6,6 +6,7 @@ import {
   Route,
   Routes,
   Link,
+  useNavigate,
 } from "react-router-dom";
 
 import "./App.css";
@@ -22,7 +23,8 @@ import {
 import Dashboard from "./components/Dashboard";
 
 
-import type { Role } from "./data/roleMenus";
+import { backendRoleToFrontend, type Role } from "./data/roleMenus";
+import { ApiError, login, logout, navigateForApiError, apiRequest, type AuthUser } from "./services/api";
 
 import {
   consumeSessionExpired,
@@ -30,12 +32,16 @@ import {
 } from "./services/session";
 
 function Login() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
 
   const [loggedIn, setLoggedIn] = useState(false);
+  const [role, setRole] = useState<Role>("Admin");
+  const [userName, setUserName] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // S1-02:
   // Kiểm tra xem phiên trước đó có bị hết hạn hay không
@@ -43,10 +49,7 @@ function Login() {
     consumeSessionExpired()
   );
 
-  // Tạm thời test vai trò Admin
-  const [role] = useState<Role>("Admin");
-
-  const handleLogin = (
+  const handleLogin = async (
     e: FormEvent<HTMLFormElement>
   ) => {
     e.preventDefault();
@@ -61,16 +64,30 @@ function Login() {
       return;
     }
 
-    /*
-      Hiện tại đang test Frontend.
-
-      Khi Backend S1-01 hoàn thành:
-      - gửi email + password tới API đăng nhập
-      - nhận access token / refresh token
-      - lấy role thật của người dùng
-    */
-
-    setLoggedIn(true);
+    setIsSubmitting(true);
+    try {
+      const result = await login(email.trim(), password);
+      const frontendRole = result.user.roles
+        .map((backendRole) => backendRoleToFrontend[backendRole])
+        .find((candidateRole): candidateRole is Role => Boolean(candidateRole));
+      if (!frontendRole) {
+        throw new ApiError(403, { code: "UNSUPPORTED_ROLE", message: "Tài khoản chưa được cấu hình vai trò giao diện. Vui lòng liên hệ Quản trị hệ thống." });
+      }
+      sessionStorage.setItem("accessToken", result.accessToken);
+      sessionStorage.setItem("refreshToken", result.refreshToken);
+      setRole(frontendRole);
+      setUserName(result.user.fullName);
+      setLoggedIn(true);
+    } catch (requestError) {
+      if (requestError instanceof ApiError && requestError.status === 401) {
+        setError("Email hoặc mật khẩu không chính xác.");
+        return;
+      }
+      if (navigateForApiError(requestError, navigate)) return;
+      setError(requestError instanceof Error ? requestError.message : "Đăng nhập thất bại. Vui lòng thử lại.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // ==============================
@@ -78,20 +95,7 @@ function Login() {
   // ==============================
 
   const handleLogout = async () => {
-    /*
-      Khi Backend S1-02 hoàn thành:
-
-      FE sẽ gọi API logout tại đây.
-
-      Backend phải:
-      - làm mất hiệu lực phiên
-      - thu hồi refresh token
-      - không cho token cũ tiếp tục sử dụng
-
-      Hiện tại mới làm phần Frontend.
-    */
-
-    clearLocalSession();
+    await logout().catch(() => clearLocalSession());
 
     setLoggedIn(false);
 
@@ -108,7 +112,7 @@ function Login() {
   return (
     <Dashboard
       role={role}
-      userName="Nguyễn Văn An"
+      userName={userName}
       onLogout={handleLogout}
     />
   );
@@ -341,8 +345,9 @@ function Login() {
             <button
               type="submit"
               className="login-button"
+              disabled={isSubmitting}
             >
-              Đăng nhập
+              {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
             </button>
 
           </form>
@@ -362,14 +367,40 @@ function Login() {
 }
 
 function DashboardRoute() {
+  const navigate = useNavigate();
+  const [account, setAccount] = useState<{ role: Role; user: AuthUser } | null>(null);
+
+  useEffect(() => {
+    if (!sessionStorage.getItem("accessToken")) {
+      navigate("/login", { replace: true });
+      return;
+    }
+    apiRequest<AuthUser>("/auth/me")
+      .then((user) => {
+        const role = user.roles.map((item) => backendRoleToFrontend[item])
+          .find((candidateRole): candidateRole is Role => Boolean(candidateRole));
+        if (!role) {
+          navigate("/403", { replace: true });
+          return;
+        }
+        setAccount({ role, user });
+      })
+      .catch((error: unknown) => {
+        if (!navigateForApiError(error, navigate)) navigate("/500", { replace: true });
+      });
+  }, [navigate]);
+
   const handleLogout = async () => {
-    clearLocalSession();
+    await logout().catch(() => clearLocalSession());
+    navigate("/login", { replace: true });
   };
+
+  if (!account) return null;
 
   return (
     <Dashboard
-      role="Admin"
-      userName="Nguyễn Văn An"
+      role={account.role}
+      userName={account.user.fullName}
       onLogout={handleLogout}
     />
   );
