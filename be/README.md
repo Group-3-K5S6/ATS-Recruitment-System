@@ -1,5 +1,42 @@
 # ATS – Backend Role-Based Access Control (RBAC) & Server-Side Authorization
 
+### Kết nối PostgreSQL
+
+Prisma dùng PostgreSQL. Sao chép `.env.example` thành `.env`, thay `YOUR_PASSWORD` bằng mật khẩu PostgreSQL và đảm bảo database `ats_recruitment` đã tồn tại. Có thể đổi host, port, tên user/database trong `DATABASE_URL`; mã hóa các ký tự đặc biệt trong password theo URL encoding.
+
+```powershell
+Copy-Item .env.example .env
+npm run prisma:generate
+npm run prisma:push
+npm run prisma:seed
+```
+
+`prisma:push` tạo/cập nhật schema PostgreSQL, còn `prisma:seed` tạo dữ liệu mẫu. Dữ liệu đang có trong file SQLite `prisma/ats.db` không tự động được chuyển sang PostgreSQL.
+
+### Cấu hình gửi OTP đặt lại mật khẩu
+
+Backend gửi OTP qua SMTP. Tạo `be/.env` và cấu hình SMTP trước khi dùng chức năng quên mật khẩu:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-account@example.com
+SMTP_PASSWORD=your-16-character-app-password
+SMTP_FROM=ATS <your-account@example.com>
+```
+
+Với Gmail, hãy dùng App Password 16 ký tự (không phải mật khẩu đăng nhập Gmail). Có thể nhập các khoảng trắng hiển thị giữa các nhóm ký tự; backend sẽ bỏ khoảng trắng trước khi xác thực SMTP.
+
+Sau khi thêm model OTP, đồng bộ schema và Prisma Client:
+
+```powershell
+npm run prisma:generate
+npm run prisma:push
+```
+
+OTP gồm 6 chữ số, hết hạn sau 10 phút, tối đa 5 lần nhập sai và được lưu dưới dạng hash. Sau khi xác minh, backend cấp reset token dùng một lần để đổi mật khẩu.
+
 Hệ thống phân quyền Backend an toàn, bảo vệ dữ liệu nhân sự, hồ sơ ứng viên, lịch phỏng vấn và đãi ngộ trong hệ thống Quản lý Tuyển dụng Nội bộ (ATS).
 
 ---
@@ -60,25 +97,38 @@ Hệ thống phân quyền Backend an toàn, bảo vệ dữ liệu nhân sự, 
 
 ## 3. Cài Đặt & Khởi Chạy
 
+`be` là backend duy nhất của repo sau khi hợp nhất. Frontend gọi `/api` và Vite chuyển tiếp
+request sang `http://localhost:4000` trong môi trường phát triển. Có thể đổi cổng backend
+bằng `PORT`, hoặc đặt `VITE_API_BASE_URL` khi frontend gọi API từ môi trường khác.
+
 ```powershell
 # 1. Cài đặt thư viện
 npm install
 
-# 2. Đồng bộ database SQLite và generate Prisma Client
+# 2. Generate Prisma Client
+npm run prisma:generate
+
+# 3. Đồng bộ schema PostgreSQL
 npm run prisma:push
 
-# 3. Khởi tạo dữ liệu mẫu (Seed 7 roles, permissions, users và kịch bản test)
+# 4. Khởi tạo dữ liệu mẫu (Seed 7 roles, permissions, users và kịch bản test)
 npm run prisma:seed
 
-# 4. Chạy kiểm thử tự động (57 test cases bao quát)
+# 5. Chạy kiểm thử tự động
 npm test
 
-# 5. Build mã nguồn TypeScript
+# 6. Build mã nguồn TypeScript
 npm run build
 
-# 6. Khởi động server
+# 7. Khởi động server
 npm start
 ```
+
+Sau khi chạy server, `/health` trả `database: "connected"` khi Prisma truy cập được SQLite;
+nếu không kết nối được, endpoint trả HTTP 503. Vite cũng proxy `/health` để có thể kiểm tra
+backend qua cùng origin frontend.
+
+Các dòng comment `ADDED` trong source đánh dấu phần tích hợp FE–BE, kiểm tra database và cấu hình proxy được thêm khi hợp nhất.
 
 ---
 

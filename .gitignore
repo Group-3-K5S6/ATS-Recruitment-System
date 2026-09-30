@@ -25,5 +25,8 @@ replay_pid*
 # Node.js
 node_modules/
 dist/
-**/prisma/ats.db
-**/.env
+
+# Environment secrets
+.env
+.env.*
+!.env.example

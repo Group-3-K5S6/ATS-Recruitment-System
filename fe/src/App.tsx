@@ -13,6 +13,7 @@ import "./App.css";
 
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import Register from "./pages/Register";
 import ChangePassword from "./pages/ChangePassword";
 import {
   ForbiddenPage,
@@ -21,7 +22,6 @@ import {
 } from "./pages/ErrorPages";
 
 import Dashboard from "./components/Dashboard";
-import { login, logout } from "./services/roleApi";
 
 
 import type { Role } from "./data/roleMenus";
@@ -29,24 +29,60 @@ import type { Role } from "./data/roleMenus";
 import {
   consumeSessionExpired,
   clearLocalSession,
-  getLocalSession,
-  saveLocalSession,
+  getSession,
+  saveSession,
 } from "./services/session";
 
-const roleByCode: Record<string, Role> = {
-  CANDIDATE: "Candidate",
-  RECRUITER: "Recruiter",
-  HIRING_MANAGER: "HiringManager",
-  INTERVIEWER: "Interviewer",
-  HR_MANAGER: "HRManager",
-  APPROVER: "Approver",
-  ADMIN: "Admin",
-};
+// ADDED: frontend role names are presentation labels; this maps roles returned by
+// the backend while authorization remains enforced by backend middleware/policies.
+function toDashboardRole(roleNames: string[]): Role {
+  const role = roleNames[0];
+  const map: Record<string, Role> = {
+    CANDIDATE: "Candidate",
+    RECRUITER: "Recruiter",
+    HIRING_MANAGER: "HiringManager",
+    INTERVIEWER: "Interviewer",
+    HR_MANAGER: "HRManager",
+    APPROVER: "Approver",
+    ADMIN: "Admin",
+  };
+  return map[role] ?? "Candidate";
+}
 
-function resolveRole(roles: string[]): Role {
-  const priority = ["ADMIN", "HR_MANAGER", "RECRUITER", "HIRING_MANAGER", "INTERVIEWER", "APPROVER", "CANDIDATE"];
-  const roleCode = priority.find((role) => roles.includes(role));
-  return roleByCode[roleCode || "CANDIDATE"];
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
+
+async function readLoginResponse(response: Response) {
+  const body = await response.text();
+  if (!body.trim()) {
+    throw new Error(
+      `Máy chủ không trả dữ liệu đăng nhập (HTTP ${response.status}). Hãy kiểm tra backend và kết nối PostgreSQL.`,
+    );
+  }
+
+  let result: {
+    success?: boolean;
+    data?: { accessToken?: string; refreshToken?: string; user?: Parameters<typeof saveSession>[2] };
+    error?: { message?: string };
+  };
+  try {
+    result = JSON.parse(body);
+  } catch {
+    throw new Error(
+      `Máy chủ trả về dữ liệu không hợp lệ (HTTP ${response.status}). Hãy kiểm tra backend và cấu hình proxy.`,
+    );
+  }
+
+  if (!response.ok || !result.success) {
+    throw new Error(result.error?.message ?? `Đăng nhập thất bại (HTTP ${response.status}).`);
+  }
+  if (!result.data?.accessToken || !result.data.refreshToken || !result.data.user) {
+    throw new Error("Phản hồi đăng nhập thiếu thông tin phiên. Hãy kiểm tra backend.");
+  }
+  return result.data as {
+    accessToken: string;
+    refreshToken: string;
+    user: Parameters<typeof saveSession>[2];
+  };
 }
 
 function Login() {
@@ -56,17 +92,14 @@ function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
   // S1-02:
   // Kiểm tra xem phiên trước đó có bị hết hạn hay không
   const [sessionExpired] = useState(() =>
     consumeSessionExpired()
   );
 
-  const handleLogin = async (
-    e: FormEvent<HTMLFormElement>
-  ) => {
+  // ADDED: authenticate through the backend and show its error message on failure.
+  const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     setError("");
@@ -79,17 +112,28 @@ function Login() {
       return;
     }
 
-    setIsSubmitting(true);
     try {
-      const result = await login(email.trim(), password);
-      saveLocalSession(result.accessToken, result.refreshToken, result.user);
-      navigate("/dashboard");
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+      const result = await readLoginResponse(response);
+      saveSession(result.accessToken, result.refreshToken, result.user);
+      navigate("/dashboard", { replace: true });
     } catch (loginError) {
-      setError(loginError instanceof Error ? loginError.message : "Không thể đăng nhập.");
-    } finally {
-      setIsSubmitting(false);
+      const message = loginError instanceof Error ? loginError.message : "";
+      setError(
+        message === "Failed to fetch"
+          ? "Không thể kết nối máy chủ. Hãy kiểm tra backend có đang chạy không."
+          : message || "Không thể kết nối máy chủ.",
+      );
     }
   };
+
+  // ==============================
+  // SAU KHI ĐĂNG NHẬP
+  // ==============================
 
   // ==============================
   // TRANG ĐĂNG NHẬP
@@ -237,8 +281,7 @@ function Login() {
                   ✉
                 </span>
 
-              <input
-                  id="login-email"
+                <input
                   type="email"
                   placeholder="tenban@congty.vn"
                   value={email}
@@ -274,7 +317,6 @@ function Login() {
                 </span>
 
                 <input
-                  id="login-password"
                   type={
                     showPassword
                       ? "text"
@@ -320,9 +362,8 @@ function Login() {
             <button
               type="submit"
               className="login-button"
-              disabled={isSubmitting}
             >
-              {isSubmitting ? "Đang đăng nhập…" : "Đăng nhập"}
+              Đăng nhập
             </button>
 
           </form>
@@ -331,6 +372,9 @@ function Login() {
             Không đăng nhập được?
             Liên hệ Quản trị hệ thống
             để được hỗ trợ.
+          </p>
+          <p className="register-prompt">
+            Chưa có tài khoản? <Link to="/register">Tạo tài khoản mới</Link>
           </p>
 
         </div>
@@ -342,20 +386,30 @@ function Login() {
 }
 
 function DashboardRoute() {
-  const [session, setSession] = useState(() => getLocalSession());
+  const session = getSession();
+  const navigate = useNavigate();
   const handleLogout = async () => {
-    const token = sessionStorage.getItem("accessToken");
-    if (token) await logout(token).catch(() => undefined);
+    const current = getSession();
+    if (current?.accessToken) {
+      try {
+        await fetch(`${API_BASE_URL}/auth/logout`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${current.accessToken}` },
+        });
+      } catch {
+        // Local credentials are still cleared when the API is unavailable.
+      }
+    }
     clearLocalSession();
-    setSession(null);
+    navigate("/login", { replace: true });
   };
 
   if (!session) return <Navigate to="/login" replace />;
 
   return (
     <Dashboard
-      role={resolveRole(session.roles || [])}
-      userName={session.fullName}
+      role={toDashboardRole(session.user.roles)}
+      userName={session.user.fullName}
       onLogout={handleLogout}
     />
   );
@@ -385,6 +439,8 @@ function App() {
           path="/login"
           element={<Login />}
         />
+
+        <Route path="/register" element={<Register />} />
 
         <Route
           path="/dashboard"

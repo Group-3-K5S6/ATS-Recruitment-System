@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import AuthLayout from "../components/AuthLayout";
+import { readApiResponse } from "../services/api";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 const GENERIC_MESSAGE =
-  "Nếu email này tồn tại trong hệ thống, bạn sẽ nhận được mã OTP xác thực có hiệu lực trong 30 phút và chỉ sử dụng được 1 lần.";
+  "Nếu email này tồn tại trong hệ thống, bạn sẽ nhận được mã OTP xác thực có hiệu lực trong 10 phút và chỉ sử dụng được 1 lần.";
 
 function ForgotPassword() {
   const navigate = useNavigate();
@@ -12,26 +14,29 @@ function ForgotPassword() {
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState<"email" | "otp">("email");
   const [secondsRemaining, setSecondsRemaining] = useState(1800);
+  const [resendSecondsRemaining, setResendSecondsRemaining] = useState(0);
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (step !== "otp" || secondsRemaining === 0) {
+    if (step !== "otp" || (secondsRemaining === 0 && resendSecondsRemaining === 0)) {
       return;
     }
 
     const timer = window.setInterval(() => {
       setSecondsRemaining((seconds) => Math.max(seconds - 1, 0));
+      setResendSecondsRemaining((seconds) => Math.max(seconds - 1, 0));
     }, 1000);
 
     return () => window.clearInterval(timer);
-  }, [secondsRemaining, step]);
+  }, [secondsRemaining, resendSecondsRemaining, step]);
 
   const formattedTime = `${String(Math.floor(secondsRemaining / 60)).padStart(
     2,
     "0",
   )}:${String(secondsRemaining % 60).padStart(2, "0")}`;
 
-  const handleEmailSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleEmailSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
 
@@ -40,11 +45,25 @@ function ForgotPassword() {
       return;
     }
 
-    setStep("otp");
-    setSecondsRemaining(1800);
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+      });
+      await readApiResponse<{ message: string }>(response);
+      setStep("otp");
+      setSecondsRemaining(600);
+      setResendSecondsRemaining(60);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Không thể kết nối máy chủ.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleOtpSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleOtpSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
 
@@ -53,13 +72,41 @@ function ForgotPassword() {
       return;
     }
 
-    navigate("/reset-password");
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/verify-reset-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), otp }),
+      });
+      const result = await readApiResponse<{ resetToken: string }>(response);
+      sessionStorage.setItem("passwordResetToken", result.resetToken);
+      navigate("/reset-password");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Không thể xác minh OTP.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleResend = () => {
+  const handleResend = async () => {
     setOtp("");
     setError("");
-    setSecondsRemaining(1800);
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+      });
+      await readApiResponse<{ message: string }>(response);
+      setSecondsRemaining(600);
+      setResendSecondsRemaining(60);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Không thể gửi lại OTP.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -94,7 +141,7 @@ function ForgotPassword() {
             </div>
           </div>
           {error && <div className="error-message">{error}</div>}
-          <button type="submit" className="login-button">
+          <button type="submit" className="login-button" disabled={isSubmitting}>
             Gửi mã xác thực OTP
           </button>
         </form>
@@ -121,7 +168,7 @@ function ForgotPassword() {
 
           {error && <div className="error-message">{error}</div>}
 
-          <button type="submit" className="login-button">
+          <button type="submit" className="login-button" disabled={isSubmitting}>
             Xác nhận OTP
           </button>
 
@@ -131,9 +178,11 @@ function ForgotPassword() {
               type="button"
               className="text-button"
               onClick={handleResend}
-              disabled={secondsRemaining > 0}
+              disabled={resendSecondsRemaining > 0 || isSubmitting}
             >
-              Gửi lại mã
+              {resendSecondsRemaining > 0
+                ? `Gửi lại mã sau ${resendSecondsRemaining}s`
+                : "Gửi lại mã"}
             </button>
           </div>
         </form>

@@ -2,6 +2,8 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import AuthLayout from "../components/AuthLayout";
+import { readApiResponse } from "../services/api";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 function ResetPassword() {
   const [password, setPassword] = useState("");
@@ -10,8 +12,9 @@ function ResetPassword() {
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
 
@@ -25,7 +28,26 @@ function ResetPassword() {
       return;
     }
 
-    setSubmitted(true);
+    const resetToken = sessionStorage.getItem("passwordResetToken");
+    if (!resetToken) {
+      setError("Phiên xác thực không còn hợp lệ. Vui lòng yêu cầu OTP mới.");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resetToken, password }),
+      });
+      await readApiResponse<{ message: string }>(response);
+      sessionStorage.removeItem("passwordResetToken");
+      setSubmitted(true);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Không thể kết nối máy chủ.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -62,6 +84,7 @@ function ResetPassword() {
                   type={showPassword ? "text" : "password"}
                   placeholder="Tối thiểu 8 ký tự"
                   value={password}
+                  disabled={isSubmitting}
                   onChange={(event) => setPassword(event.target.value)}
                 />
                 <button
@@ -85,6 +108,7 @@ function ResetPassword() {
                   type={showConfirmation ? "text" : "password"}
                   placeholder="Nhập lại mật khẩu mới"
                   value={confirmation}
+                  disabled={isSubmitting}
                   onChange={(event) => setConfirmation(event.target.value)}
                 />
                 <button
@@ -109,13 +133,13 @@ function ResetPassword() {
 
             {error && <div className="error-message">{error}</div>}
 
-            <button type="submit" className="login-button">
+            <button type="submit" className="login-button" disabled={isSubmitting}>
               Đặt lại mật khẩu
             </button>
           </form>
       )}
 
-      <p className="support">Liên kết xác thực chỉ có hiệu lực trong 30 phút.</p>
+      <p className="support">Phiên đặt lại mật khẩu chỉ có hiệu lực trong 10 phút.</p>
     </AuthLayout>
   );
 }

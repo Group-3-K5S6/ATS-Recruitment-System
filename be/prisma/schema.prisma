@@ -1,6 +1,6 @@
 datasource db {
-  provider = "sqlite"
-  url      = "file:./ats.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 generator client {
@@ -22,6 +22,7 @@ model User {
   auditLogs    AuditLog[]
 
   candidateProfile     Candidate?
+  passwordResetOtp     PasswordResetOtp?
   managedRequisitions  Requisition[] @relation("HiringManagerRequisitions")
   approvedRequisitions Requisition[] @relation("ApproverRequisitions")
   managedJobs          Job[]         @relation("HiringManagerJobs")
@@ -216,4 +217,29 @@ model RevokedToken {
   tokenHash  String   @unique
   expiresAt  DateTime
   createdAt  DateTime @default(now())
+}
+
+model PasswordResetOtp {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  codeHash       String
+  resetTokenHash String?
+  attempts       Int      @default(0)
+  expiresAt      DateTime
+  verifiedAt     DateTime?
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RegistrationOtp {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  fullName     String
+  phone        String?
+  passwordHash String
+  codeHash     String
+  attempts     Int      @default(0)
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
 }

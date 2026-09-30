@@ -12,9 +12,9 @@ export function errorHandler(
 
   const statusCode = err?.statusCode || 500;
   const message =
-    statusCode >= 500
+    err?.publicMessage || (statusCode >= 500
       ? 'An unexpected error occurred. Please contact support.'
-      : err?.message || 'Bad Request';
+      : err?.message || 'Bad Request');
 
   errorResponse(res, message, statusCode, err?.code || 'INTERNAL_ERROR');
 }

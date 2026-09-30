@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { errorHandler } from './middleware/error-handler';
 import { errorResponse } from './utils/response';
+import { prisma } from './database/prisma';
 
 import authRoutes from './modules/auth/auth.routes';
 import candidateRoutes from './modules/candidates/candidate.routes';
@@ -25,8 +26,14 @@ export function createApp() {
   app.use(express.json());
 
   // Health check
-  app.get('/health', (_req: Request, res: Response) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  // ADDED: readiness check confirms both HTTP and Prisma/database connectivity.
+  app.get('/health', async (_req: Request, res: Response) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      res.json({ status: 'ok', database: 'connected', timestamp: new Date().toISOString() });
+    } catch {
+      res.status(503).json({ status: 'error', database: 'disconnected', timestamp: new Date().toISOString() });
+    }
   });
 
   // API Routes

@@ -1713,3 +1713,27 @@
 .logout-button:hover {
   background: #fef2f2;
 }
+
+.register-prompt {
+  margin: 16px 0 0;
+  color: #6b7280;
+  text-align: center;
+  font-size: 13px;
+}
+
+.register-prompt a,
+.optional-label {
+  color: #2563eb;
+  font-weight: bold;
+  text-decoration: none;
+}
+
+.register-prompt a:hover {
+  text-decoration: underline;
+}
+
+.optional-label {
+  color: #8a94a6;
+  font-size: 11px;
+  font-weight: normal;
+}

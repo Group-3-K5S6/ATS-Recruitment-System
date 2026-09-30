@@ -4,4 +4,11 @@ import { defineConfig } from 'vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // ADDED: route local frontend API calls to the canonical TypeScript backend on :4000.
+  server: {
+    proxy: {
+      '/api': { target: 'http://localhost:4000', changeOrigin: true },
+      '/health': { target: 'http://localhost:4000', changeOrigin: true },
+    },
+  },
 })
