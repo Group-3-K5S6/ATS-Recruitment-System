@@ -198,10 +198,17 @@ function DepartmentManagement() {
   };
 
   const handleDeleteDepartment = (department: Department) => {
+    // Không cho xóa nếu đang có yêu cầu tuyển dụng mở
     if (department.hasOpenRequisition) {
       alert(
         "Phòng ban đang có yêu cầu tuyển dụng mở nên không thể xóa. Chỉ có thể ngừng áp dụng.",
       );
+      return;
+    }
+
+    // Không cho xóa nếu còn phòng ban con
+    if (department.children && department.children.length > 0) {
+      alert("Phòng ban đang có đơn vị trực thuộc nên không thể xóa.");
       return;
     }
 
@@ -343,19 +350,39 @@ function DepartmentManagement() {
 
               <button
                 type="button"
-                disabled={department.hasOpenRequisition}
+                disabled={
+                  department.hasOpenRequisition ||
+                  Boolean(department.children && department.children.length > 0)
+                }
                 onClick={() => handleDeleteDepartment(department)}
                 style={{
                   padding: "8px 12px",
                   border: "1px solid #efb5b5",
                   borderRadius: "6px",
-                  background: department.hasOpenRequisition
-                    ? "#f3f4f4"
-                    : "#fff1f1",
-                  color: department.hasOpenRequisition ? "#9ca3a0" : "#b42318",
-                  cursor: department.hasOpenRequisition
-                    ? "not-allowed"
-                    : "pointer",
+
+                  background:
+                    department.hasOpenRequisition ||
+                    Boolean(
+                      department.children && department.children.length > 0,
+                    )
+                      ? "#f3f4f4"
+                      : "#fff1f1",
+
+                  color:
+                    department.hasOpenRequisition ||
+                    Boolean(
+                      department.children && department.children.length > 0,
+                    )
+                      ? "#9ca3a0"
+                      : "#b42318",
+
+                  cursor:
+                    department.hasOpenRequisition ||
+                    Boolean(
+                      department.children && department.children.length > 0,
+                    )
+                      ? "not-allowed"
+                      : "pointer",
                 }}
               >
                 Xóa
