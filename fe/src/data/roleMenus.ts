@@ -1,4 +1,5 @@
 export type Role =
+  | "Candidate"
   | "Recruiter"
   | "HiringManager"
   | "Interviewer"
@@ -11,6 +12,7 @@ export interface MenuItem {
 }
 
 export const roleMenus: Record<Role, MenuItem[]> = {
+  Candidate: [{ label: "Tổng quan" }],
   Recruiter: [
     { label: "Tổng quan" },
     { label: "Yêu cầu tuyển dụng" },
