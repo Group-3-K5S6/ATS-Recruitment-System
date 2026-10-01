@@ -20,11 +20,6 @@ import UserProfilePage from "./pages/UserProfilePage";
 
 import Sidebar from "./components/Sidebar";
 
-
-
-
-
-
 import {
   ForbiddenPage,
   NotFoundPage,
@@ -48,10 +43,6 @@ function Login() {
   const [sessionExpired] = useState(() => consumeSessionExpired());
 
   // Tạm thời test vai trò Admin
-<<<<<<< HEAD
-  const [role] = useState<Role>("HRManager");
-=======
->>>>>>> 6d1e3a4 (fix(fe): unify HR navigation for S2-04)
 
   const handleLogin = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -327,52 +318,6 @@ function ProfileRoute() {
     </div>
   );
 }
-function ProfileRoute() {
-  const navigate = useNavigate();
-
-  const handleLogout = async () => {
-    clearLocalSession();
-    navigate("/login");
-  };
-
-  const handleMenuSelect = (label: string) => {
-    if (label === "Tổng quan") {
-      navigate("/dashboard");
-      return;
-    }
-
-    if (label === "Phòng ban & tổ chức") {
-      navigate("/departments");
-      return;
-    }
-
-    if (label === "Chức danh & dải lương") {
-      navigate("/job-titles");
-      return;
-    }
-
-    if (label === "Hồ sơ cá nhân") {
-      navigate("/profile");
-      return;
-    }
-  };
-
-  return (
-    <div className="dashboard-layout">
-      <Sidebar
-        role="HRManager"
-        userName="HR Manager User"
-        onLogout={handleLogout}
-        selectedMenu="Hồ sơ cá nhân"
-        onMenuSelect={handleMenuSelect}
-      />
-
-      <main className="dashboard-content">
-        <UserProfilePage />
-      </main>
-    </div>
-  );
-}
 
 // ====================================
 // ROUTER
@@ -384,11 +329,8 @@ function App() {
       <Routes>
         <Route path="/departments" element={<DepartmentManagement />} />
         <Route path="/profile" element={<ProfileRoute />} />
-<<<<<<< HEAD
 
         <Route path="/job-titles" element={<JobTitleSalaryManagement />} />
-=======
->>>>>>> 6d1e3a4 (fix(fe): unify HR navigation for S2-04)
 
         <Route path="/" element={<Navigate to="/login" replace />} />
 
