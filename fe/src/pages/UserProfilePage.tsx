@@ -32,8 +32,26 @@ const INITIAL_PROFILE: EditableProfile = {
 const PHONE_PATTERN = /^(03|05|07|08|09)\d{8}$/;
 
 export default function UserProfilePage() {
-  const [savedProfile, setSavedProfile] = useState(INITIAL_PROFILE);
-  const [form, setForm] = useState(INITIAL_PROFILE);
+  const getInitialProfile = (): EditableProfile => {
+    const storedProfile = localStorage.getItem("ats-user-profile");
+
+    if (storedProfile) {
+      try {
+        return JSON.parse(storedProfile);
+      } catch {
+        return INITIAL_PROFILE;
+      }
+    }
+
+    return INITIAL_PROFILE;
+  };
+
+  const initialProfile = getInitialProfile();
+
+  const [savedProfile, setSavedProfile] =
+    useState<EditableProfile>(initialProfile);
+
+  const [form, setForm] = useState<EditableProfile>(initialProfile);
   const [errors, setErrors] = useState<ProfileErrors>({});
   const [isSaving, setIsSaving] = useState(false);
   const [toast, setToast] = useState("");
@@ -45,10 +63,15 @@ export default function UserProfilePage() {
   const saveTimeoutRef = useRef<number | null>(null);
   const toastTimeoutRef = useRef<number | null>(null);
 
-  useEffect(() => () => {
-    if (saveTimeoutRef.current !== null) window.clearTimeout(saveTimeoutRef.current);
-    if (toastTimeoutRef.current !== null) window.clearTimeout(toastTimeoutRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (saveTimeoutRef.current !== null)
+        window.clearTimeout(saveTimeoutRef.current);
+      if (toastTimeoutRef.current !== null)
+        window.clearTimeout(toastTimeoutRef.current);
+    },
+    [],
+  );
 
   const updateField = (field: keyof EditableProfile, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -56,7 +79,9 @@ export default function UserProfilePage() {
       const next = { ...current };
       if (field === "phone") {
         if (!value.trim()) next.phone = "Vui lòng nhập số điện thoại.";
-        else if (!PHONE_PATTERN.test(value.trim())) next.phone = "Nhập số di động Việt Nam gồm 10 chữ số, bắt đầu bằng 03, 05, 07, 08 hoặc 09.";
+        else if (!PHONE_PATTERN.test(value.trim()))
+          next.phone =
+            "Nhập số di động Việt Nam gồm 10 chữ số, bắt đầu bằng 03, 05, 07, 08 hoặc 09.";
         else delete next.phone;
       } else if (value.trim()) {
         delete next[field];
@@ -69,8 +94,10 @@ export default function UserProfilePage() {
     const next: ProfileErrors = {};
     if (!form.fullName.trim()) next.fullName = "Vui lòng nhập họ và tên.";
     if (!form.phone.trim()) next.phone = "Vui lòng nhập số điện thoại.";
-    else if (!PHONE_PATTERN.test(form.phone.trim())) next.phone = "Số điện thoại chưa đúng định dạng Việt Nam.";
-    if (!form.jobTitle.trim()) next.jobTitle = "Vui lòng nhập chức danh hiển thị.";
+    else if (!PHONE_PATTERN.test(form.phone.trim()))
+      next.phone = "Số điện thoại chưa đúng định dạng Việt Nam.";
+    if (!form.jobTitle.trim())
+      next.jobTitle = "Vui lòng nhập chức danh hiển thị.";
     return next;
   };
 
@@ -96,6 +123,9 @@ export default function UserProfilePage() {
         jobTitle: form.jobTitle.trim(),
       };
       setSavedProfile(updated);
+
+      localStorage.setItem("ats-user-profile", JSON.stringify(updated));
+
       setForm(updated);
       setErrors({});
       setIsSaving(false);
@@ -139,18 +169,32 @@ export default function UserProfilePage() {
         <div>
           <p className="profile-eyebrow">TÀI KHOẢN CỦA TÔI</p>
           <h1>Hồ sơ cá nhân</h1>
-          <p className="profile-heading-copy">Quản lý thông tin hiển thị và thông tin liên hệ của bạn.</p>
+          <p className="profile-heading-copy">
+            Quản lý thông tin hiển thị và thông tin liên hệ của bạn.
+          </p>
         </div>
-        <span className="profile-verified"><BadgeCheck size={16} /> Hồ sơ nội bộ</span>
+        <span className="profile-verified">
+          <BadgeCheck size={16} /> Hồ sơ nội bộ
+        </span>
       </div>
 
       <form className="profile-card" onSubmit={handleSave} noValidate>
         <section aria-label="Ảnh đại diện" className="profile-identity">
           <div className="profile-avatar-wrap">
             <div className="profile-avatar">
-              {avatar ? <img alt="Ảnh đại diện" src={avatar} /> : <span>{initials || <UserRound size={40} />}</span>}
+              {avatar ? (
+                <img alt="Ảnh đại diện" src={avatar} />
+              ) : (
+                <span>{initials || <UserRound size={40} />}</span>
+              )}
             </div>
-            <input accept="image/*" className="profile-avatar-input" onChange={handleAvatarChange} ref={avatarInputRef} type="file" />
+            <input
+              accept="image/*"
+              className="profile-avatar-input"
+              onChange={handleAvatarChange}
+              ref={avatarInputRef}
+              type="file"
+            />
             <button
               aria-label="Thay đổi ảnh đại diện"
               className="profile-avatar-edit"
@@ -164,7 +208,9 @@ export default function UserProfilePage() {
           <div className="profile-identity-copy">
             <h2>{form.fullName || "Họ và tên"}</h2>
             <p>{form.jobTitle || "Chức danh"}</p>
-            <span><span className="profile-active-dot" /> Đang hoạt động</span>
+            <span>
+              <span className="profile-active-dot" /> Đang hoạt động
+            </span>
           </div>
           <div className="profile-identity-note">
             <ShieldCheck size={17} />
@@ -178,62 +224,119 @@ export default function UserProfilePage() {
               <h2>Thông tin cá nhân</h2>
               <p>Cập nhật các thông tin bạn có thể chỉnh sửa.</p>
             </div>
-            <span className="profile-required-note"><i /> Trường bắt buộc</span>
+            <span className="profile-required-note">
+              <i /> Trường bắt buộc
+            </span>
           </div>
 
           <div className="profile-fields-grid">
             <label className="profile-field" htmlFor="profile-full-name">
-              <span className="profile-label">Họ và tên <i>*</i></span>
-              <span className={`profile-input-wrap${errors.fullName ? " has-error" : ""}`}>
+              <span className="profile-label">
+                Họ và tên <i>*</i>
+              </span>
+              <span
+                className={`profile-input-wrap${errors.fullName ? " has-error" : ""}`}
+              >
                 <UserRound size={17} />
                 <input
-                  aria-describedby={errors.fullName ? "profile-name-error" : undefined}
+                  aria-describedby={
+                    errors.fullName ? "profile-name-error" : undefined
+                  }
                   aria-invalid={Boolean(errors.fullName)}
                   id="profile-full-name"
-                  onChange={(event) => updateField("fullName", event.target.value)}
+                  onChange={(event) =>
+                    updateField("fullName", event.target.value)
+                  }
                   ref={nameInputRef}
                   type="text"
                   value={form.fullName}
                 />
               </span>
-              {errors.fullName && <span className="profile-error" id="profile-name-error" role="alert">{errors.fullName}</span>}
+              {errors.fullName && (
+                <span
+                  className="profile-error"
+                  id="profile-name-error"
+                  role="alert"
+                >
+                  {errors.fullName}
+                </span>
+              )}
             </label>
 
             <label className="profile-field" htmlFor="profile-phone">
-              <span className="profile-label">Số điện thoại <i>*</i></span>
-              <span className={`profile-input-wrap${errors.phone ? " has-error" : ""}`}>
+              <span className="profile-label">
+                Số điện thoại <i>*</i>
+              </span>
+              <span
+                className={`profile-input-wrap${errors.phone ? " has-error" : ""}`}
+              >
                 <Phone size={17} />
                 <input
-                  aria-describedby={errors.phone ? "profile-phone-error" : "profile-phone-hint"}
+                  aria-describedby={
+                    errors.phone ? "profile-phone-error" : "profile-phone-hint"
+                  }
                   aria-invalid={Boolean(errors.phone)}
                   autoComplete="tel"
                   id="profile-phone"
                   inputMode="tel"
                   maxLength={10}
-                  onChange={(event) => updateField("phone", event.target.value.replace(/\D/g, ""))}
+                  onChange={(event) =>
+                    updateField("phone", event.target.value.replace(/\D/g, ""))
+                  }
                   ref={phoneInputRef}
                   type="tel"
                   value={form.phone}
                 />
               </span>
-              {errors.phone ? <span className="profile-error" id="profile-phone-error" role="alert">{errors.phone}</span> : <span className="profile-field-hint" id="profile-phone-hint">10 chữ số, bắt đầu bằng 03, 05, 07, 08 hoặc 09.</span>}
+              {errors.phone ? (
+                <span
+                  className="profile-error"
+                  id="profile-phone-error"
+                  role="alert"
+                >
+                  {errors.phone}
+                </span>
+              ) : (
+                <span className="profile-field-hint" id="profile-phone-hint">
+                  10 chữ số, bắt đầu bằng 03, 05, 07, 08 hoặc 09.
+                </span>
+              )}
             </label>
 
-            <label className="profile-field profile-field-wide" htmlFor="profile-job-title">
-              <span className="profile-label">Chức danh hiển thị <i>*</i></span>
-              <span className={`profile-input-wrap${errors.jobTitle ? " has-error" : ""}`}>
+            <label
+              className="profile-field profile-field-wide"
+              htmlFor="profile-job-title"
+            >
+              <span className="profile-label">
+                Chức danh hiển thị <i>*</i>
+              </span>
+              <span
+                className={`profile-input-wrap${errors.jobTitle ? " has-error" : ""}`}
+              >
                 <Building2 size={17} />
                 <input
-                  aria-describedby={errors.jobTitle ? "profile-title-error" : undefined}
+                  aria-describedby={
+                    errors.jobTitle ? "profile-title-error" : undefined
+                  }
                   aria-invalid={Boolean(errors.jobTitle)}
                   id="profile-job-title"
-                  onChange={(event) => updateField("jobTitle", event.target.value)}
+                  onChange={(event) =>
+                    updateField("jobTitle", event.target.value)
+                  }
                   ref={titleInputRef}
                   type="text"
                   value={form.jobTitle}
                 />
               </span>
-              {errors.jobTitle && <span className="profile-error" id="profile-title-error" role="alert">{errors.jobTitle}</span>}
+              {errors.jobTitle && (
+                <span
+                  className="profile-error"
+                  id="profile-title-error"
+                  role="alert"
+                >
+                  {errors.jobTitle}
+                </span>
+              )}
             </label>
           </div>
 
@@ -242,28 +345,76 @@ export default function UserProfilePage() {
               <h2>Thông tin hệ thống</h2>
               <p>Các thông tin này do Quản trị viên quản lý.</p>
             </div>
-            <span className="profile-locked-label"><LockKeyhole size={13} /> Đã khóa</span>
+            <span className="profile-locked-label">
+              <LockKeyhole size={13} /> Đã khóa
+            </span>
           </div>
 
           <div className="profile-fields-grid system-fields-grid">
-            <LockedField icon={<Mail size={16} />} label="Email công ty" value="an.nguyen@ats.vn" />
-            <LockedField icon={<Building2 size={16} />} label="Phòng ban" value="Nhân sự" />
-            <LockedField icon={<ShieldCheck size={16} />} label="Vai trò / Phân quyền" value="Quản trị hệ thống" />
+            <LockedField
+              icon={<Mail size={16} />}
+              label="Email công ty"
+              value="an.nguyen@ats.vn"
+            />
+            <LockedField
+              icon={<Building2 size={16} />}
+              label="Phòng ban"
+              value="Nhân sự"
+            />
+            <LockedField
+              icon={<ShieldCheck size={16} />}
+              label="Vai trò / Phân quyền"
+              value="Quản trị hệ thống"
+            />
           </div>
 
           <div className="profile-form-footer">
-            <span className="profile-footer-message">Thay đổi chỉ được lưu trên phiên làm việc hiện tại.</span>
+            <span className="profile-footer-message">
+              Thay đổi chỉ được lưu trên phiên làm việc hiện tại.
+            </span>
             <div className="profile-actions">
-              <button className="profile-cancel-button" disabled={isSaving} onClick={handleCancel} type="button"><X size={16} /> Hủy bỏ</button>
-              <button className="profile-save-button" disabled={isSaving} type="submit">
-                {isSaving ? <><LoaderCircle className="profile-spinner" size={17} /> Đang lưu...</> : <><Save size={16} /> Lưu thay đổi</>}
+              <button
+                className="profile-cancel-button"
+                disabled={isSaving}
+                onClick={handleCancel}
+                type="button"
+              >
+                <X size={16} /> Hủy bỏ
+              </button>
+              <button
+                className="profile-save-button"
+                disabled={isSaving}
+                type="submit"
+              >
+                {isSaving ? (
+                  <>
+                    <LoaderCircle className="profile-spinner" size={17} /> Đang
+                    lưu...
+                  </>
+                ) : (
+                  <>
+                    <Save size={16} /> Lưu thay đổi
+                  </>
+                )}
               </button>
             </div>
           </div>
         </div>
       </form>
 
-      {toast && <div aria-live="polite" className="profile-toast" role="status"><CheckCircle2 size={19} /><span>{toast}</span><button aria-label="Đóng thông báo" onClick={() => setToast("")} type="button"><X size={15} /></button></div>}
+      {toast && (
+        <div aria-live="polite" className="profile-toast" role="status">
+          <CheckCircle2 size={19} />
+          <span>{toast}</span>
+          <button
+            aria-label="Đóng thông báo"
+            onClick={() => setToast("")}
+            type="button"
+          >
+            <X size={15} />
+          </button>
+        </div>
+      )}
 
       <style>{`
         .user-profile-page{--profile-ink:#24332d;--profile-muted:#76837d;--profile-line:#e3eae6;--profile-green:#247454;--profile-soft:#f4f8f5;max-width:1120px;margin:0 auto;padding:8px 0 36px;color:var(--profile-ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
@@ -287,13 +438,22 @@ type LockedFieldProps = { icon: React.ReactNode; label: string; value: string };
 function LockedField({ icon, label, value }: LockedFieldProps) {
   return (
     <div className="profile-locked-field">
-      <span className="profile-label">{icon}{label}</span>
+      <span className="profile-label">
+        {icon}
+        {label}
+      </span>
       <div aria-readonly="true" className="profile-locked-value">
         {icon}
         <span>{value}</span>
-        <LockKeyhole aria-label="Đã khóa" className="profile-lock-icon" size={14} />
+        <LockKeyhole
+          aria-label="Đã khóa"
+          className="profile-lock-icon"
+          size={14}
+        />
       </div>
-      <p className="profile-locked-help">Vui lòng liên hệ Quản trị viên để thay đổi thông tin này</p>
+      <p className="profile-locked-help">
+        Vui lòng liên hệ Quản trị viên để thay đổi thông tin này
+      </p>
     </div>
   );
 }

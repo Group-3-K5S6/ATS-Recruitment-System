@@ -1,13 +1,24 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { BrowserRouter, Navigate, Route, Routes, Link } from "react-router-dom";
-
+import {
+  BrowserRouter,
+  Navigate,
+  Route,
+  Routes,
+  Link,
+  useNavigate,
+} from "react-router-dom";
 import "./App.css";
 
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import ChangePassword from "./pages/ChangePassword";
 import DepartmentManagement from "./pages/DepartmentManagement";
+import JobTitleSalaryManagement from "./pages/JobTitleSalaryManagement";
+import UserProfilePage from "./pages/UserProfilePage";
+
+import Sidebar from "./components/Sidebar";
+
 import {
   ForbiddenPage,
   NotFoundPage,
@@ -33,7 +44,7 @@ function Login() {
   const [sessionExpired] = useState(() => consumeSessionExpired());
 
   // Tạm thời test vai trò Admin
-  const [role] = useState<Role>("Admin");
+  const [role] = useState<Role>("HRManager");
 
   const handleLogin = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -252,7 +263,57 @@ function DashboardRoute() {
   };
 
   return (
-    <Dashboard role="Admin" userName="Nguyễn Văn An" onLogout={handleLogout} />
+    <Dashboard
+      role="HRManager"
+      userName="HR Manager User"
+      onLogout={handleLogout}
+    />
+  );
+}
+function ProfileRoute() {
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    clearLocalSession();
+    navigate("/login");
+  };
+
+  const handleMenuSelect = (label: string) => {
+    if (label === "Tổng quan") {
+      navigate("/dashboard");
+      return;
+    }
+
+    if (label === "Phòng ban & tổ chức") {
+      navigate("/departments");
+      return;
+    }
+
+    if (label === "Chức danh & dải lương") {
+      navigate("/job-titles");
+      return;
+    }
+
+    if (label === "Hồ sơ cá nhân") {
+      navigate("/profile");
+      return;
+    }
+  };
+
+  return (
+    <div className="dashboard-layout">
+      <Sidebar
+        role="HRManager"
+        userName="HR Manager User"
+        onLogout={handleLogout}
+        selectedMenu="Hồ sơ cá nhân"
+        onMenuSelect={handleMenuSelect}
+      />
+
+      <main className="dashboard-content">
+        <UserProfilePage />
+      </main>
+    </div>
   );
 }
 
@@ -265,6 +326,9 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/departments" element={<DepartmentManagement />} />
+        <Route path="/profile" element={<ProfileRoute />} />
+
+        <Route path="/job-titles" element={<JobTitleSalaryManagement />} />
 
         <Route path="/" element={<Navigate to="/login" replace />} />
 
