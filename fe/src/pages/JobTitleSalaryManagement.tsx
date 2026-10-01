@@ -1,8 +1,14 @@
 import { useState } from "react";
+import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 
 import Sidebar from "../components/Sidebar";
+import type { Role } from "../data/roleMenus";
 import { clearLocalSession } from "../services/session";
+
+/* =========================================================
+   TYPE
+========================================================= */
 
 type JobTitle = {
   id: string;
@@ -12,6 +18,15 @@ type JobTitle = {
   minSalary: number;
   maxSalary: number;
 };
+
+type JobTitleSalaryManagementProps = {
+  role: Role;
+  userName: string;
+};
+
+/* =========================================================
+   DỮ LIỆU MẪU
+========================================================= */
 
 const initialJobTitles: JobTitle[] = [
   {
@@ -48,18 +63,31 @@ const initialJobTitles: JobTitle[] = [
   },
 ];
 
+/* =========================================================
+   FORMAT TIỀN
+========================================================= */
+
 function formatSalary(value: number) {
   return `${new Intl.NumberFormat("vi-VN").format(value)} đ`;
 }
 
-function JobTitleSalaryManagement() {
+/* =========================================================
+   COMPONENT
+========================================================= */
+
+function JobTitleSalaryManagement({
+  role,
+  userName,
+}: JobTitleSalaryManagementProps) {
   const navigate = useNavigate();
 
-  const [jobTitles, setJobTitles] = useState<JobTitle[]>(initialJobTitles);
+  const [jobTitles, setJobTitles] =
+    useState<JobTitle[]>(initialJobTitles);
 
   const [showModal, setShowModal] = useState(false);
 
-  const [editingJob, setEditingJob] = useState<JobTitle | null>(null);
+  const [editingJob, setEditingJob] =
+    useState<JobTitle | null>(null);
 
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -69,10 +97,25 @@ function JobTitleSalaryManagement() {
 
   const [error, setError] = useState("");
 
+  /* =======================================================
+     ĐĂNG XUẤT
+  ======================================================= */
+
   const handleLogout = async () => {
     clearLocalSession();
-    navigate("/login");
+
+    sessionStorage.removeItem("accessToken");
+    sessionStorage.removeItem("refreshToken");
+    sessionStorage.removeItem("atsUser");
+
+    navigate("/login", {
+      replace: true,
+    });
   };
+
+  /* =======================================================
+     ĐIỀU HƯỚNG MENU
+  ======================================================= */
 
   const handleMenuSelect = (label: string) => {
     if (label === "Tổng quan") {
@@ -96,16 +139,26 @@ function JobTitleSalaryManagement() {
     }
   };
 
+  /* =======================================================
+     THÊM CHỨC DANH
+  ======================================================= */
+
   const openAddModal = () => {
     setEditingJob(null);
+
     setCode("");
     setName("");
     setLevel("");
     setMinSalary("");
     setMaxSalary("");
+
     setError("");
     setShowModal(true);
   };
+
+  /* =======================================================
+     SỬA CHỨC DANH
+  ======================================================= */
 
   const openEditModal = (job: JobTitle) => {
     setEditingJob(job);
@@ -120,11 +173,19 @@ function JobTitleSalaryManagement() {
     setShowModal(true);
   };
 
+  /* =======================================================
+     ĐÓNG MODAL
+  ======================================================= */
+
   const closeModal = () => {
     setShowModal(false);
     setEditingJob(null);
     setError("");
   };
+
+  /* =======================================================
+     LƯU CHỨC DANH
+  ======================================================= */
 
   const handleSaveJob = () => {
     const min = Number(minSalary);
@@ -137,17 +198,26 @@ function JobTitleSalaryManagement() {
       !minSalary ||
       !maxSalary
     ) {
-      setError("Vui lòng nhập đầy đủ thông tin chức danh và dải lương.");
+      setError(
+        "Vui lòng nhập đầy đủ thông tin chức danh và dải lương.",
+      );
       return;
     }
 
-    if (Number.isNaN(min) || Number.isNaN(max) || min <= 0 || max <= 0) {
+    if (
+      Number.isNaN(min) ||
+      Number.isNaN(max) ||
+      min <= 0 ||
+      max <= 0
+    ) {
       setError("Mức lương phải là số lớn hơn 0.");
       return;
     }
 
     if (min > max) {
-      setError("Mức lương tối thiểu không được lớn hơn mức lương tối đa.");
+      setError(
+        "Mức lương tối thiểu không được lớn hơn mức lương tối đa.",
+      );
       return;
     }
 
@@ -194,6 +264,10 @@ function JobTitleSalaryManagement() {
     closeModal();
   };
 
+  /* =======================================================
+     XÓA CHỨC DANH
+  ======================================================= */
+
   const handleDeleteJob = (job: JobTitle) => {
     const confirmed = window.confirm(
       `Bạn có chắc muốn xóa chức danh "${job.name}" khỏi danh mục Nhân sự không?`,
@@ -203,8 +277,14 @@ function JobTitleSalaryManagement() {
       return;
     }
 
-    setJobTitles((current) => current.filter((item) => item.id !== job.id));
+    setJobTitles((current) =>
+      current.filter((item) => item.id !== job.id),
+    );
   };
+
+  /* =======================================================
+     THỐNG KÊ
+  ======================================================= */
 
   const highestSalary =
     jobTitles.length > 0
@@ -216,11 +296,17 @@ function JobTitleSalaryManagement() {
       ? Math.min(...jobTitles.map((job) => job.minSalary))
       : 0;
 
+  /* =======================================================
+     GIAO DIỆN
+  ======================================================= */
+
   return (
     <div className="dashboard-layout">
+      {/* SIDEBAR DÙNG ROLE THẬT */}
+
       <Sidebar
-        role="HRManager"
-        userName="HR Manager User"
+        role={role}
+        userName={userName}
         onLogout={handleLogout}
         selectedMenu="Chức danh & dải lương"
         onMenuSelect={handleMenuSelect}
@@ -274,17 +360,21 @@ function JobTitleSalaryManagement() {
                   fontSize: "14px",
                 }}
               >
-                Quản lý khung chức danh, cấp bậc và mức lương được công ty phê
-                duyệt.
+                Quản lý khung chức danh, cấp bậc và mức lương được
+                công ty phê duyệt.
               </p>
             </div>
 
-            <button type="button" onClick={openAddModal} style={primaryButton}>
+            <button
+              type="button"
+              onClick={openAddModal}
+              style={primaryButton}
+            >
               + Thêm chức danh
             </button>
           </div>
 
-          {/* THỐNG KÊ HR */}
+          {/* THỐNG KÊ */}
 
           <div
             style={{
@@ -321,7 +411,8 @@ function JobTitleSalaryManagement() {
               border: "1px solid #e1e7e4",
               borderRadius: "10px",
               overflow: "hidden",
-              boxShadow: "0 4px 16px rgba(34, 63, 49, 0.04)",
+              boxShadow:
+                "0 4px 16px rgba(34, 63, 49, 0.04)",
             }}
           >
             <div
@@ -347,8 +438,8 @@ function JobTitleSalaryManagement() {
                   fontSize: "12px",
                 }}
               >
-                Dải lương là dữ liệu nội bộ dùng để kiểm soát mức đề xuất và
-                duyệt offer.
+                Dải lương là dữ liệu nội bộ dùng để kiểm soát mức
+                đề xuất và duyệt offer.
               </p>
             </div>
 
@@ -369,11 +460,8 @@ function JobTitleSalaryManagement() {
                     <th style={thStyle}>Mã chức danh</th>
                     <th style={thStyle}>Tên chức danh</th>
                     <th style={thStyle}>Cấp bậc</th>
-
                     <th style={thStyle}>Lương tối thiểu</th>
-
                     <th style={thStyle}>Lương tối đa</th>
-
                     <th style={thStyle}>Thao tác</th>
                   </tr>
                 </thead>
@@ -394,12 +482,18 @@ function JobTitleSalaryManagement() {
                       <td style={tdStyle}>{job.name}</td>
 
                       <td style={tdStyle}>
-                        <span style={levelBadge}>{job.level}</span>
+                        <span style={levelBadge}>
+                          {job.level}
+                        </span>
                       </td>
 
-                      <td style={salaryCell}>{formatSalary(job.minSalary)}</td>
+                      <td style={salaryCell}>
+                        {formatSalary(job.minSalary)}
+                      </td>
 
-                      <td style={salaryCell}>{formatSalary(job.maxSalary)}</td>
+                      <td style={salaryCell}>
+                        {formatSalary(job.maxSalary)}
+                      </td>
 
                       <td style={tdStyle}>
                         <div
@@ -432,7 +526,7 @@ function JobTitleSalaryManagement() {
             </div>
           </section>
 
-          {/* CẢNH BÁO QUYỀN */}
+          {/* THÔNG TIN BẢO MẬT */}
 
           <div
             style={{
@@ -446,14 +540,16 @@ function JobTitleSalaryManagement() {
               lineHeight: 1.6,
             }}
           >
-            <strong>Thông tin bảo mật Nhân sự:</strong> Dải lương chỉ được hiển
-            thị và quản lý bởi Trưởng phòng Nhân sự. Thông tin này được sử dụng
-            làm hạn mức tham chiếu khi duyệt offer.
+            <strong>Thông tin bảo mật Nhân sự:</strong> Dải lương
+            là dữ liệu nội bộ và chỉ người dùng có quyền phù hợp
+            mới được phép truy cập và quản lý.
           </div>
         </div>
       </main>
 
-      {/* MODAL */}
+      {/* ===================================================
+          MODAL
+      =================================================== */}
 
       {showModal && (
         <div
@@ -477,7 +573,8 @@ function JobTitleSalaryManagement() {
               background: "#ffffff",
               borderRadius: "12px",
               padding: "24px",
-              boxShadow: "0 18px 45px rgba(0,0,0,0.2)",
+              boxShadow:
+                "0 18px 45px rgba(0,0,0,0.2)",
             }}
           >
             <p
@@ -497,14 +594,18 @@ function JobTitleSalaryManagement() {
                 color: "#24332d",
               }}
             >
-              {editingJob ? "Cập nhật chức danh" : "Khai báo chức danh mới"}
+              {editingJob
+                ? "Cập nhật chức danh"
+                : "Khai báo chức danh mới"}
             </h2>
 
             <Field label="Mã chức danh">
               <input
                 type="text"
                 value={code}
-                onChange={(event) => setCode(event.target.value)}
+                onChange={(event) =>
+                  setCode(event.target.value)
+                }
                 placeholder="Ví dụ: HR-REC-01"
                 style={inputStyle}
               />
@@ -514,7 +615,9 @@ function JobTitleSalaryManagement() {
               <input
                 type="text"
                 value={name}
-                onChange={(event) => setName(event.target.value)}
+                onChange={(event) =>
+                  setName(event.target.value)
+                }
                 placeholder="Nhập tên chức danh"
                 style={inputStyle}
               />
@@ -523,22 +626,38 @@ function JobTitleSalaryManagement() {
             <Field label="Cấp bậc">
               <select
                 value={level}
-                onChange={(event) => setLevel(event.target.value)}
+                onChange={(event) =>
+                  setLevel(event.target.value)
+                }
                 style={inputStyle}
               >
-                <option value="">-- Chọn cấp bậc --</option>
+                <option value="">
+                  -- Chọn cấp bậc --
+                </option>
 
-                <option value="Thực tập sinh">Thực tập sinh</option>
+                <option value="Thực tập sinh">
+                  Thực tập sinh
+                </option>
 
-                <option value="Nhân viên">Nhân viên</option>
+                <option value="Nhân viên">
+                  Nhân viên
+                </option>
 
-                <option value="Chuyên viên">Chuyên viên</option>
+                <option value="Chuyên viên">
+                  Chuyên viên
+                </option>
 
-                <option value="Chuyên viên cao cấp">Chuyên viên cao cấp</option>
+                <option value="Chuyên viên cao cấp">
+                  Chuyên viên cao cấp
+                </option>
 
-                <option value="Trưởng nhóm">Trưởng nhóm</option>
+                <option value="Trưởng nhóm">
+                  Trưởng nhóm
+                </option>
 
-                <option value="Quản lý">Quản lý</option>
+                <option value="Quản lý">
+                  Quản lý
+                </option>
               </select>
             </Field>
 
@@ -554,7 +673,9 @@ function JobTitleSalaryManagement() {
                   type="number"
                   min={0}
                   value={minSalary}
-                  onChange={(event) => setMinSalary(event.target.value)}
+                  onChange={(event) =>
+                    setMinSalary(event.target.value)
+                  }
                   placeholder="12000000"
                   style={inputStyle}
                 />
@@ -565,7 +686,9 @@ function JobTitleSalaryManagement() {
                   type="number"
                   min={0}
                   value={maxSalary}
-                  onChange={(event) => setMaxSalary(event.target.value)}
+                  onChange={(event) =>
+                    setMaxSalary(event.target.value)
+                  }
                   placeholder="18000000"
                   style={inputStyle}
                 />
@@ -598,8 +721,8 @@ function JobTitleSalaryManagement() {
                 fontSize: "11px",
               }}
             >
-              Dải lương phải nằm trong khung đã được công ty phê duyệt và sẽ
-              được dùng khi kiểm tra offer tuyển dụng.
+              Dải lương phải nằm trong khung đã được công ty phê
+              duyệt và sẽ được dùng khi kiểm tra offer tuyển dụng.
             </div>
 
             <div
@@ -610,7 +733,11 @@ function JobTitleSalaryManagement() {
                 marginTop: "22px",
               }}
             >
-              <button type="button" onClick={closeModal} style={cancelButton}>
+              <button
+                type="button"
+                onClick={closeModal}
+                style={cancelButton}
+              >
                 Hủy
               </button>
 
@@ -619,7 +746,9 @@ function JobTitleSalaryManagement() {
                 onClick={handleSaveJob}
                 style={primaryButton}
               >
-                {editingJob ? "Lưu thay đổi" : "Thêm chức danh"}
+                {editingJob
+                  ? "Lưu thay đổi"
+                  : "Thêm chức danh"}
               </button>
             </div>
           </div>
@@ -628,6 +757,10 @@ function JobTitleSalaryManagement() {
     </div>
   );
 }
+
+/* =========================================================
+   COMPONENT PHỤ
+========================================================= */
 
 function StatCard({
   title,
@@ -687,7 +820,7 @@ function Field({
   children,
 }: {
   label: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div style={{ marginTop: "16px" }}>
@@ -696,6 +829,10 @@ function Field({
     </div>
   );
 }
+
+/* =========================================================
+   STYLE
+========================================================= */
 
 const thStyle = {
   padding: "12px 14px",
