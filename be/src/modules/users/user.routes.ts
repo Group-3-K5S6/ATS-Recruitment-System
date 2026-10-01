@@ -3,6 +3,7 @@ import {
   UserController,
   createUserSchema,
   assignRolesSchema,
+  importPayloadSchema,
 } from './user.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { requirePermission } from '../../middleware/authorize';
@@ -17,6 +18,22 @@ router.get(
   '/',
   requirePermission(PermissionCode.USERS_READ),
   UserController.list
+);
+
+router.get('/import/template', UserController.downloadTemplate);
+
+router.post(
+  '/import/preview',
+  requirePermission(PermissionCode.USERS_CREATE),
+  validateBody(importPayloadSchema),
+  UserController.previewImport
+);
+
+router.post(
+  '/import',
+  requirePermission(PermissionCode.USERS_CREATE),
+  validateBody(importPayloadSchema),
+  UserController.importUsers
 );
 
 router.post(

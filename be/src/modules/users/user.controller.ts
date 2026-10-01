@@ -18,6 +18,19 @@ export const createUserSchema = z.object({
   roles: z.array(z.nativeEnum(RoleType)).min(1),
 });
 
+export const importEmployeeRowSchema = z.object({
+  HoTen: z.string().optional().default(''),
+  Email: z.string().optional().default(''),
+  PhongBan: z.string().optional().default(''),
+  ChucVu: z.string().optional().default(''),
+  SoDienThoai: z.string().optional().default(''),
+  rowNumber: z.number().optional(),
+});
+
+export const importPayloadSchema = z.object({
+  employees: z.array(importEmployeeRowSchema),
+});
+
 
 export const assignRolesSchema = z.object({
   roles: z.array(z.nativeEnum(RoleType)).min(1),
@@ -401,6 +414,274 @@ export class UserController {
       updated,
       200,
       'User account has been disabled.'
+    );
+  }
+
+
+  /*
+   * =========================================
+   * S2-01 - TẢI FILE MẪU NHẬP NHÂN SỰ
+   * =========================================
+   */
+  static async downloadTemplate(
+    _req: Request,
+    res: Response
+  ): Promise<void> {
+    const csvHeader = '\uFEFFHoTen,Email,PhongBan,ChucVu,SoDienThoai\n';
+    const sampleRows = [
+      'Nguyễn Minh Anh,minh.anh@ats.vn,Nhân sự,Chuyên viên tuyển dụng,0912345678',
+      'Trần Quốc Bảo,bao.tran@ats.vn,Công nghệ thông tin,Kỹ sư phần mềm,0987654321',
+      'Phạm Đức Long,long.pham@ats.vn,Kinh doanh,Trưởng nhóm kinh doanh,0324567890',
+    ].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="mau-nhap-nhan-su.csv"'
+    );
+    res.status(200).send(csvHeader + sampleRows);
+  }
+
+
+  /*
+   * =========================================
+   * S2-01 - XEM TRƯỚC VÀ KIỂM TRA DỮ LIỆU DÒNG
+   * =========================================
+   */
+  static async previewImport(
+    req: Request,
+    res: Response
+  ): Promise<void> {
+    const { employees } = req.body;
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    const phonePattern = /^(?:\+?84|0)(?:3|5|7|8|9)\d{8}$/;
+
+    const existingUsers = await prisma.user.findMany({
+      select: { email: true },
+    });
+    const existingEmails = new Set(
+      existingUsers.map((u) => u.email.toLowerCase())
+    );
+
+    const seenEmailsInFile = new Set<string>();
+
+    const rowsResult = (employees || []).map((emp: any, idx: number) => {
+      const rowNum = emp.rowNumber || idx + 2;
+      const errors: string[] = [];
+
+      const hoTen = (emp.HoTen || '').trim();
+      const email = (emp.Email || '').trim().toLowerCase();
+      const phongBan = (emp.PhongBan || '').trim();
+      const chucVu = (emp.ChucVu || '').trim();
+      const phone = (emp.SoDienThoai || '').replace(/[\s().-]/g, '');
+
+      if (!hoTen) errors.push('Thiếu họ tên');
+      if (!email || !emailPattern.test(email)) {
+        errors.push('Email sai định dạng');
+      } else if (existingEmails.has(email)) {
+        errors.push('Email đã tồn tại trong hệ thống');
+      } else if (seenEmailsInFile.has(email)) {
+        errors.push('Email bị trùng lặp trong tệp');
+      } else {
+        seenEmailsInFile.add(email);
+      }
+
+      if (!phongBan) errors.push('Thiếu phòng ban');
+      if (!chucVu) errors.push('Thiếu chức vụ');
+      if (!phone || !phonePattern.test(phone)) {
+        errors.push('SĐT không hợp lệ');
+      }
+
+      return {
+        rowNumber: rowNum,
+        HoTen: emp.HoTen,
+        Email: emp.Email,
+        PhongBan: emp.PhongBan,
+        ChucVu: emp.ChucVu,
+        SoDienThoai: emp.SoDienThoai,
+        errors,
+        isValid: errors.length === 0,
+      };
+    });
+
+    const validCount = rowsResult.filter((r: any) => r.isValid).length;
+    const invalidCount = rowsResult.length - validCount;
+
+    successResponse(
+      res,
+      {
+        total: rowsResult.length,
+        validCount,
+        invalidCount,
+        rows: rowsResult,
+      },
+      200
+    );
+  }
+
+
+  /*
+   * =========================================
+   * S2-01 - NHẬP DANH SÁCH NHÂN SỰ HÀNG LOẠT
+   * =========================================
+   * Lỗi dòng bị bỏ qua, hợp lệ dòng vẫn được nhập, có báo cáo tổng hợp.
+   */
+  static async importUsers(
+    req: Request,
+    res: Response
+  ): Promise<void> {
+    const user = req.user!;
+
+    if (!UserPolicy.canManageUsers(user)) {
+      errorResponse(
+        res,
+        'Access denied. Only Admins can import user accounts.',
+        403,
+        'FORBIDDEN_ROLE'
+      );
+      return;
+    }
+
+    const { employees } = req.body;
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    const phonePattern = /^(?:\+?84|0)(?:3|5|7|8|9)\d{8}$/;
+
+    const dbRoles = await prisma.role.findMany();
+    const defaultRole =
+      dbRoles.find((r) => r.name === RoleType.INTERVIEWER) || dbRoles[0];
+
+    const defaultPasswordHash = await hashPassword('123456a@');
+
+    const createdUsers: any[] = [];
+    const failedRows: any[] = [];
+
+    const existingUsers = await prisma.user.findMany({
+      select: { email: true },
+    });
+    const existingEmails = new Set(
+      existingUsers.map((u) => u.email.toLowerCase())
+    );
+
+    const empList = employees || [];
+    for (let idx = 0; idx < empList.length; idx++) {
+      const emp = empList[idx];
+      const rowNum = emp.rowNumber || idx + 2;
+      const errors: string[] = [];
+
+      const hoTen = (emp.HoTen || '').trim();
+      const email = (emp.Email || '').trim().toLowerCase();
+      const phongBan = (emp.PhongBan || '').trim();
+      const chucVu = (emp.ChucVu || '').trim();
+      const phone = (emp.SoDienThoai || '').replace(/[\s().-]/g, '');
+
+      if (!hoTen) errors.push('Thiếu họ tên');
+      if (!email || !emailPattern.test(email)) {
+        errors.push('Email sai định dạng');
+      } else if (existingEmails.has(email)) {
+        errors.push('Email đã tồn tại trong hệ thống');
+      }
+
+      if (!phongBan) errors.push('Thiếu phòng ban');
+      if (!chucVu) errors.push('Thiếu chức vụ');
+      if (!phone || !phonePattern.test(phone)) {
+        errors.push('SĐT không hợp lệ');
+      }
+
+      if (errors.length > 0) {
+        failedRows.push({
+          rowNumber: rowNum,
+          email: emp.Email || '',
+          errors,
+        });
+        continue;
+      }
+
+      try {
+        let department = await prisma.department.findFirst({
+          where: { name: phongBan },
+        });
+
+        if (!department) {
+          const deptCode = `DEPT_${Date.now()}_${Math.floor(
+            Math.random() * 1000
+          )}`;
+          department = await prisma.department.create({
+            data: {
+              name: phongBan,
+              code: deptCode,
+            },
+          });
+        }
+
+        let roleId = defaultRole?.id;
+        const matchedRole = dbRoles.find(
+          (r) =>
+            r.name.toLowerCase() === chucVu.toLowerCase() ||
+            r.description.toLowerCase().includes(chucVu.toLowerCase())
+        );
+        if (matchedRole) {
+          roleId = matchedRole.id;
+        }
+
+        const newUser = await prisma.user.create({
+          data: {
+            email,
+            passwordHash: defaultPasswordHash,
+            fullName: hoTen,
+            departmentId: department.id,
+            isActive: true,
+            roles: roleId
+              ? {
+                  create: [{ roleId }],
+                }
+              : undefined,
+          },
+          select: {
+            id: true,
+            email: true,
+            fullName: true,
+            departmentId: true,
+            isActive: true,
+            createdAt: true,
+          },
+        });
+
+        existingEmails.add(email);
+        createdUsers.push(newUser);
+      } catch (err: any) {
+        failedRows.push({
+          rowNumber: rowNum,
+          email,
+          errors: [err.message || 'Lỗi tạo tài khoản'],
+        });
+      }
+    }
+
+    if (createdUsers.length > 0) {
+      await recordRequestAudit(
+        req,
+        AuditAction.USER_BULK_IMPORTED,
+        'user',
+        undefined,
+        {
+          totalCount: empList.length,
+          createdCount: createdUsers.length,
+          skippedCount: failedRows.length,
+        }
+      );
+    }
+
+    successResponse(
+      res,
+      {
+        total: empList.length,
+        created: createdUsers.length,
+        skipped: failedRows.length,
+        errors: failedRows,
+        createdUsers,
+      },
+      200,
+      `Nhập thành công ${createdUsers.length}/${empList.length} tài khoản.`
     );
   }
 }

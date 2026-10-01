@@ -435,7 +435,25 @@ const AccountManagement = () => {
       </div>
 
       {isImportModalOpen && (
-        <EmployeeImportModal onClose={() => setIsImportModalOpen(false)} />
+        <EmployeeImportModal
+          onClose={() => setIsImportModalOpen(false)}
+          onImportSuccess={(newEmployees) => {
+            const nextId =
+              accounts.length === 0
+                ? 1
+                : Math.max(...accounts.map((a) => a.id)) + 1;
+            const formatted = newEmployees.map((emp, index) => ({
+              id: nextId + index,
+              name: emp.name,
+              email: emp.email,
+              department: emp.department,
+              role: emp.role || "Người phỏng vấn",
+              status: "Hoạt động" as const,
+              assignedPositions: 0,
+            }));
+            setAccounts((prev) => [...prev, ...formatted]);
+          }}
+        />
       )}
 
       {/* SEARCH + FILTER */}
