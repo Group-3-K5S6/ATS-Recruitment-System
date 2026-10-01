@@ -14,6 +14,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import ChangePassword from "./pages/ChangePassword";
 import DepartmentManagement from "./pages/DepartmentManagement";
+
 import JobTitleSalaryManagement from "./pages/JobTitleSalaryManagement";
 import UserProfilePage from "./pages/UserProfilePage";
 
@@ -26,8 +27,6 @@ import {
 } from "./pages/ErrorPages";
 
 import Dashboard from "./components/Dashboard";
-
-import type { Role } from "./data/roleMenus";
 
 import { consumeSessionExpired, clearLocalSession } from "./services/session";
 
@@ -44,7 +43,6 @@ function Login() {
   const [sessionExpired] = useState(() => consumeSessionExpired());
 
   // Tạm thời test vai trò Admin
-  const [role] = useState<Role>("HRManager");
 
   const handleLogin = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -102,7 +100,11 @@ function Login() {
 
   if (loggedIn) {
     return (
-      <Dashboard role={role} userName="Nguyễn Văn An" onLogout={handleLogout} />
+      <Dashboard
+        role="HRManager"
+        userName="HR Manager User"
+        onLogout={handleLogout}
+      />
     );
   }
 
