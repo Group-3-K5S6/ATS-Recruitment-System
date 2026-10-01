@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
+
 import {
   BrowserRouter,
   Navigate,
@@ -8,17 +9,18 @@ import {
   Link,
   useNavigate,
 } from "react-router-dom";
+
 import "./App.css";
 
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import ChangePassword from "./pages/ChangePassword";
 import DepartmentManagement from "./pages/DepartmentManagement";
-
 import JobTitleSalaryManagement from "./pages/JobTitleSalaryManagement";
 import UserProfilePage from "./pages/UserProfilePage";
 
 import Sidebar from "./components/Sidebar";
+import Dashboard from "./components/Dashboard";
 
 import {
   ForbiddenPage,
@@ -26,97 +28,237 @@ import {
   ServerErrorPage,
 } from "./pages/ErrorPages";
 
-import Dashboard from "./components/Dashboard";
+import type { Role } from "./data/roleMenus";
 
-import { consumeSessionExpired, clearLocalSession } from "./services/session";
+import {
+  consumeSessionExpired,
+  clearLocalSession,
+} from "./services/session";
+
+/* =========================================================
+   BACKEND
+========================================================= */
+
+const API_URL =
+  import.meta.env.VITE_ATS_API_URL || "http://localhost:4000";
+
+/* =========================================================
+   KIỂU DỮ LIỆU
+========================================================= */
+
+type SessionUser = {
+  id: string;
+  email: string;
+  fullName: string;
+  roles: string[];
+};
+
+type LoginData = {
+  accessToken: string;
+  refreshToken: string;
+  user: SessionUser;
+};
+
+type ApiResponse<T> = {
+  success: boolean;
+  data?: T;
+
+  error?: {
+    message?: string;
+  };
+};
+
+/* =========================================================
+   ROLE BACKEND -> ROLE FRONTEND
+========================================================= */
+
+const roleByCode: Record<string, Role> = {
+  CANDIDATE: "Candidate",
+  RECRUITER: "Recruiter",
+  HIRING_MANAGER: "HiringManager",
+  INTERVIEWER: "Interviewer",
+  HR_MANAGER: "HRManager",
+  APPROVER: "Approver",
+  ADMIN: "Admin",
+};
+
+function resolveRole(roles: string[]): Role {
+  const priority = [
+    "ADMIN",
+    "HR_MANAGER",
+    "RECRUITER",
+    "HIRING_MANAGER",
+    "INTERVIEWER",
+    "APPROVER",
+    "CANDIDATE",
+  ];
+
+  const roleCode =
+    priority.find((item) => roles.includes(item)) || "CANDIDATE";
+
+  return roleByCode[roleCode] || "Candidate";
+}
+
+/* =========================================================
+   SESSION
+========================================================= */
+
+function saveSession(data: LoginData) {
+  sessionStorage.setItem("accessToken", data.accessToken);
+  sessionStorage.setItem("refreshToken", data.refreshToken);
+  sessionStorage.setItem("atsUser", JSON.stringify(data.user));
+}
+
+function getSessionUser(): SessionUser | null {
+  const raw = sessionStorage.getItem("atsUser");
+
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const user = JSON.parse(raw) as SessionUser;
+
+    if (
+      !user.id ||
+      !user.email ||
+      !user.fullName ||
+      !Array.isArray(user.roles)
+    ) {
+      return null;
+    }
+
+    return user;
+  } catch {
+    return null;
+  }
+}
+
+function clearSession() {
+  clearLocalSession();
+
+  sessionStorage.removeItem("accessToken");
+  sessionStorage.removeItem("refreshToken");
+  sessionStorage.removeItem("atsUser");
+}
+
+/* =========================================================
+   LOGOUT BACKEND
+========================================================= */
+
+async function logoutFromBackend() {
+  const token = sessionStorage.getItem("accessToken");
+
+  if (!token) {
+    return;
+  }
+
+  try {
+    await fetch(`${API_URL}/api/auth/logout`, {
+      method: "POST",
+
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  } catch {
+    // Nếu backend lỗi thì vẫn xóa phiên phía frontend.
+  }
+}
+
+/* =========================================================
+   LOGIN
+========================================================= */
 
 function Login() {
+  const navigate = useNavigate();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
   const [showPassword, setShowPassword] = useState(false);
+
   const [error, setError] = useState("");
 
-  const [loggedIn, setLoggedIn] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // S1-02:
-  // Kiểm tra xem phiên trước đó có bị hết hạn hay không
   const [sessionExpired] = useState(() => consumeSessionExpired());
 
-  // Tạm thời test vai trò Admin
+  /* Nếu đã đăng nhập thì không hiện lại trang login */
 
-  const handleLogin = (e: FormEvent<HTMLFormElement>) => {
+  const currentUser = getSessionUser();
+
+  if (currentUser) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  /* =======================================================
+     ĐĂNG NHẬP
+  ======================================================= */
+
+  const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     setError("");
 
     if (!email.trim() || !password.trim()) {
       setError("Vui lòng nhập đầy đủ email công ty và mật khẩu.");
-
       return;
     }
 
-    /*
-      Hiện tại đang test Frontend.
+    setIsSubmitting(true);
 
-      Khi Backend S1-01 hoàn thành:
-      - gửi email + password tới API đăng nhập
-      - nhận access token / refresh token
-      - lấy role thật của người dùng
-    */
+    try {
+      const response = await fetch(`${API_URL}/api/auth/login`, {
+        method: "POST",
 
-    setLoggedIn(true);
+        headers: {
+          "Content-Type": "application/json",
+        },
+
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+        }),
+      });
+
+      let result: ApiResponse<LoginData>;
+
+      try {
+        result = (await response.json()) as ApiResponse<LoginData>;
+      } catch {
+        throw new Error("Phản hồi từ máy chủ không hợp lệ.");
+      }
+
+      if (!response.ok || !result.success || !result.data) {
+        throw new Error(
+          result.error?.message || "Email hoặc mật khẩu không chính xác.",
+        );
+      }
+
+      saveSession(result.data);
+
+      navigate("/dashboard", {
+        replace: true,
+      });
+    } catch (loginError) {
+      setError(
+        loginError instanceof Error
+          ? loginError.message
+          : "Không thể đăng nhập.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // ==============================
-  // S1-02 - ĐĂNG XUẤT
-  // ==============================
-
-  const handleLogout = async () => {
-    /*
-      Khi Backend S1-02 hoàn thành:
-
-      FE sẽ gọi API logout tại đây.
-
-      Backend phải:
-      - làm mất hiệu lực phiên
-      - thu hồi refresh token
-      - không cho token cũ tiếp tục sử dụng
-
-      Hiện tại mới làm phần Frontend.
-    */
-
-    clearLocalSession();
-
-    setLoggedIn(false);
-
-    setEmail("");
-    setPassword("");
-    setError("");
-  };
-
-  // ==============================
-  // SAU KHI ĐĂNG NHẬP
-  // ==============================
-
-  if (loggedIn) {
-    return (
-      <Dashboard
-        role="HRManager"
-        userName="HR Manager User"
-        onLogout={handleLogout}
-      />
-    );
-  }
-
-  // ==============================
-  // TRANG ĐĂNG NHẬP
-  // ==============================
+  /* =======================================================
+     GIAO DIỆN ĐĂNG NHẬP
+  ======================================================= */
 
   return (
     <div className="login-page">
-      {/* ======================
-          PHẦN BÊN TRÁI
-      ====================== */}
+      {/* PHẦN BÊN TRÁI */}
 
       <section className="left-panel">
         <div className="logo">
@@ -124,13 +266,14 @@ function Login() {
 
           <div>
             <h2>ATS</h2>
-
             <p>Internal Recruitment</p>
           </div>
         </div>
 
         <div className="left-content">
-          <span className="small-title">HỆ THỐNG TUYỂN DỤNG NỘI BỘ</span>
+          <span className="small-title">
+            HỆ THỐNG TUYỂN DỤNG NỘI BỘ
+          </span>
 
           <h1>
             Tuyển đúng người.
@@ -167,9 +310,7 @@ function Login() {
         <p className="copyright">© 2026 ATS Recruitment System</p>
       </section>
 
-      {/* ======================
-          PHẦN ĐĂNG NHẬP
-      ====================== */}
+      {/* PHẦN ĐĂNG NHẬP */}
 
       <section className="right-panel">
         <div className="login-card">
@@ -180,11 +321,6 @@ function Login() {
           <p className="login-note">
             Sử dụng tài khoản công ty để tiếp tục vào hệ thống.
           </p>
-
-          {/* ======================
-              S1-02:
-              THÔNG BÁO HẾT PHIÊN
-          ====================== */}
 
           {sessionExpired && (
             <div className="session-message">
@@ -202,6 +338,7 @@ function Login() {
                 <span className="input-icon">✉</span>
 
                 <input
+                  id="login-email"
                   type="email"
                   placeholder="tenban@congty.vn"
                   value={email}
@@ -210,7 +347,7 @@ function Login() {
               </div>
             </div>
 
-            {/* MẬT KHẨU */}
+            {/* PASSWORD */}
 
             <div className="form-group">
               <div className="password-header">
@@ -223,6 +360,7 @@ function Login() {
                 <span className="input-icon">🔒</span>
 
                 <input
+                  id="login-password"
                   type={showPassword ? "text" : "password"}
                   placeholder="Nhập mật khẩu"
                   value={password}
@@ -239,14 +377,14 @@ function Login() {
               </div>
             </div>
 
-            {/* THÔNG BÁO LỖI */}
-
             {error && <div className="error-message">{error}</div>}
 
-            {/* NÚT ĐĂNG NHẬP */}
-
-            <button type="submit" className="login-button">
-              Đăng nhập
+            <button
+              type="submit"
+              className="login-button"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Đang đăng nhập…" : "Đăng nhập"}
             </button>
           </form>
 
@@ -259,25 +397,63 @@ function Login() {
   );
 }
 
+/* =========================================================
+   DASHBOARD
+========================================================= */
+
 function DashboardRoute() {
+  const navigate = useNavigate();
+
+  const user = getSessionUser();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const role = resolveRole(user.roles);
+
   const handleLogout = async () => {
-    clearLocalSession();
+    await logoutFromBackend();
+
+    clearSession();
+
+    navigate("/login", {
+      replace: true,
+    });
   };
 
   return (
     <Dashboard
-      role="HRManager"
-      userName="HR Manager User"
+      role={role}
+      userName={user.fullName}
       onLogout={handleLogout}
     />
   );
 }
+
+/* =========================================================
+   PROFILE - SPRINT 2
+========================================================= */
+
 function ProfileRoute() {
   const navigate = useNavigate();
 
+  const user = getSessionUser();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const role = resolveRole(user.roles);
+
   const handleLogout = async () => {
-    clearLocalSession();
-    navigate("/login");
+    await logoutFromBackend();
+
+    clearSession();
+
+    navigate("/login", {
+      replace: true,
+    });
   };
 
   const handleMenuSelect = (label: string) => {
@@ -305,8 +481,8 @@ function ProfileRoute() {
   return (
     <div className="dashboard-layout">
       <Sidebar
-        role="HRManager"
-        userName="HR Manager User"
+        role={role}
+        userName={user.fullName}
         onLogout={handleLogout}
         selectedMenu="Hồ sơ cá nhân"
         onMenuSelect={handleMenuSelect}
@@ -319,36 +495,145 @@ function ProfileRoute() {
   );
 }
 
-// ====================================
-// ROUTER
-// ====================================
+/* =========================================================
+   DEPARTMENT - SPRINT 2
+========================================================= */
+
+function DepartmentRoute() {
+  const user = getSessionUser();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const role = resolveRole(user.roles);
+
+  return (
+    <DepartmentManagement
+      role={role}
+      userName={user.fullName}
+    />
+  );
+}
+
+/* =========================================================
+   JOB TITLE - SPRINT 2
+========================================================= */
+
+function JobTitleRoute() {
+  const user = getSessionUser();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const role = resolveRole(user.roles);
+
+  return (
+    <JobTitleSalaryManagement
+      role={role}
+      userName={user.fullName}
+    />
+  );
+}
+
+/* =========================================================
+   ROOT
+========================================================= */
+
+function RootRoute() {
+  const user = getSessionUser();
+
+  return (
+    <Navigate
+      to={user ? "/dashboard" : "/login"}
+      replace
+    />
+  );
+}
+
+/* =========================================================
+   APP
+========================================================= */
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/departments" element={<DepartmentManagement />} />
-        <Route path="/profile" element={<ProfileRoute />} />
+        {/* ROOT */}
 
-        <Route path="/job-titles" element={<JobTitleSalaryManagement />} />
+        <Route
+          path="/"
+          element={<RootRoute />}
+        />
 
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        {/* AUTH */}
 
-        <Route path="/login" element={<Login />} />
+        <Route
+          path="/login"
+          element={<Login />}
+        />
 
-        <Route path="/dashboard" element={<DashboardRoute />} />
+        <Route
+          path="/forgot-password"
+          element={<ForgotPassword />}
+        />
 
-        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route
+          path="/reset-password"
+          element={<ResetPassword />}
+        />
 
-        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route
+          path="/change-password"
+          element={<ChangePassword />}
+        />
 
-        <Route path="/change-password" element={<ChangePassword />} />
+        {/* DASHBOARD */}
 
-        <Route path="/403" element={<ForbiddenPage />} />
-        <Route path="/404" element={<NotFoundPage />} />
-        <Route path="/500" element={<ServerErrorPage />} />
+        <Route
+          path="/dashboard"
+          element={<DashboardRoute />}
+        />
 
-        <Route path="*" element={<NotFoundPage />} />
+        {/* SPRINT 2 */}
+
+        <Route
+          path="/departments"
+          element={<DepartmentRoute />}
+        />
+
+        <Route
+          path="/job-titles"
+          element={<JobTitleRoute />}
+        />
+
+        <Route
+          path="/profile"
+          element={<ProfileRoute />}
+        />
+
+        {/* ERROR */}
+
+        <Route
+          path="/403"
+          element={<ForbiddenPage />}
+        />
+
+        <Route
+          path="/404"
+          element={<NotFoundPage />}
+        />
+
+        <Route
+          path="/500"
+          element={<ServerErrorPage />}
+        />
+
+        <Route
+          path="*"
+          element={<NotFoundPage />}
+        />
       </Routes>
     </BrowserRouter>
   );
