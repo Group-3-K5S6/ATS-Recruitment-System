@@ -32,6 +32,14 @@ export const importPayloadSchema = z.object({
 });
 
 
+export const updateProfileSchema = z.object({
+  fullName: z.string().min(2, 'Họ tên phải có ít nhất 2 ký tự').optional(),
+  phone: z.string().regex(/^(?:\+?84|0)(?:3|5|7|8|9)\d{8}$/, 'Số điện thoại không hợp lệ').optional(),
+  avatarUrl: z.string().url('Đường dẫn ảnh đại diện không hợp lệ').optional(),
+  jobTitle: z.string().optional(),
+});
+
+
 export const assignRolesSchema = z.object({
   roles: z.array(z.nativeEnum(RoleType)).min(1),
 });
@@ -440,6 +448,105 @@ export class UserController {
       'attachment; filename="mau-nhap-nhan-su.csv"'
     );
     res.status(200).send(csvHeader + sampleRows);
+  }
+
+  /*
+   * =========================================
+   * S2-02 - XEM HỒ SƠ CÁ NHÂN
+   * =========================================
+   */
+  static async getProfile(
+    req: Request,
+    res: Response
+  ): Promise<void> {
+    const user = req.user!;
+    
+    const profile = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        phone: true,
+        avatarUrl: true,
+        departmentId: true,
+        department: true,
+        roles: {
+          include: {
+            role: true
+          }
+        },
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+
+    if (!profile) {
+      errorResponse(res, 'User not found', 404, 'NOT_FOUND');
+      return;
+    }
+
+    const sanitizedProfile = {
+      ...profile,
+      roles: profile.roles.map(r => r.role.name)
+    };
+
+    successResponse(res, sanitizedProfile, 200);
+  }
+
+  /*
+   * =========================================
+   * S2-02 - CẬP NHẬT HỒ SƠ CÁ NHÂN
+   * =========================================
+   */
+  static async updateProfile(
+    req: Request,
+    res: Response
+  ): Promise<void> {
+    const user = req.user!;
+    const { fullName, phone, avatarUrl, jobTitle } = req.body;
+
+    const updateData: any = {};
+    if (fullName !== undefined) updateData.fullName = fullName;
+    if (phone !== undefined) updateData.phone = phone;
+    if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
+    if (jobTitle !== undefined) updateData.jobTitle = jobTitle;
+
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: updateData,
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        phone: true,
+        avatarUrl: true,
+        departmentId: true,
+        department: true,
+        roles: {
+          include: {
+            role: true
+          }
+        },
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+
+    const sanitizedUpdated = {
+      ...updated,
+      roles: updated.roles.map(r => r.role.name)
+    };
+
+    await recordRequestAudit(
+      req,
+      AuditAction.USER_UPDATED,
+      'user',
+      user.id,
+      { updatedFields: Object.keys(updateData) }
+    );
+
+    successResponse(res, sanitizedUpdated, 200, 'Profile updated successfully');
   }
 
 

@@ -14,6 +14,8 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import { getProfile, updateProfile } from "../services/profileApi";
+import type { UserProfile } from "../services/profileApi";
 
 type EditableProfile = {
   fullName: string;
@@ -23,35 +25,22 @@ type EditableProfile = {
 
 type ProfileErrors = Partial<Record<keyof EditableProfile, string>>;
 
-const INITIAL_PROFILE: EditableProfile = {
-  fullName: "Nguyễn Văn An",
-  phone: "0912345678",
-  jobTitle: "Chuyên viên tuyển dụng",
-};
-
 const PHONE_PATTERN = /^(03|05|07|08|09)\d{8}$/;
 
 export default function UserProfilePage() {
-  const getInitialProfile = (): EditableProfile => {
-    const storedProfile = localStorage.getItem("ats-user-profile");
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [savedProfile, setSavedProfile] = useState<EditableProfile>({
+    fullName: "",
+    phone: "",
+    jobTitle: "",
+  });
 
-    if (storedProfile) {
-      try {
-        return JSON.parse(storedProfile);
-      } catch {
-        return INITIAL_PROFILE;
-      }
-    }
+  const [form, setForm] = useState<EditableProfile>({
+    fullName: "",
+    phone: "",
+    jobTitle: "",
+  });
 
-    return INITIAL_PROFILE;
-  };
-
-  const initialProfile = getInitialProfile();
-
-  const [savedProfile, setSavedProfile] =
-    useState<EditableProfile>(initialProfile);
-
-  const [form, setForm] = useState<EditableProfile>(initialProfile);
   const [errors, setErrors] = useState<ProfileErrors>({});
   const [isSaving, setIsSaving] = useState(false);
   const [toast, setToast] = useState("");
@@ -60,13 +49,32 @@ export default function UserProfilePage() {
   const nameInputRef = useRef<HTMLInputElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
-  const saveTimeoutRef = useRef<number | null>(null);
   const toastTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const data = await getProfile();
+        setProfile(data);
+        const initData = {
+          fullName: data.fullName || "",
+          phone: data.phone || "",
+          jobTitle: (data as any).jobTitle || "",
+        };
+        setSavedProfile(initData);
+        setForm(initData);
+        if (data.avatarUrl) {
+          setAvatar(data.avatarUrl);
+        }
+      } catch (err) {
+        console.error("Failed to load profile", err);
+      }
+    }
+    loadData();
+  }, []);
 
   useEffect(
     () => () => {
-      if (saveTimeoutRef.current !== null)
-        window.clearTimeout(saveTimeoutRef.current);
       if (toastTimeoutRef.current !== null)
         window.clearTimeout(toastTimeoutRef.current);
     },
@@ -101,7 +109,7 @@ export default function UserProfilePage() {
     return next;
   };
 
-  const handleSave = (event: FormEvent<HTMLFormElement>) => {
+  const handleSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isSaving) return;
 
@@ -116,22 +124,31 @@ export default function UserProfilePage() {
 
     setIsSaving(true);
     setToast("");
-    saveTimeoutRef.current = window.setTimeout(() => {
-      const updated = {
+    
+    try {
+      const updatedData = {
         fullName: form.fullName.trim(),
         phone: form.phone.trim(),
         jobTitle: form.jobTitle.trim(),
+        avatarUrl: avatar || undefined,
       };
-      setSavedProfile(updated);
 
-      localStorage.setItem("ats-user-profile", JSON.stringify(updated));
+      const result = await updateProfile(updatedData);
+      
+      setSavedProfile({
+        fullName: result.fullName || "",
+        phone: result.phone || "",
+        jobTitle: (result as any).jobTitle || "",
+      });
 
-      setForm(updated);
       setErrors({});
-      setIsSaving(false);
       setToast("Đã cập nhật thông tin cá nhân!");
       toastTimeoutRef.current = window.setTimeout(() => setToast(""), 4200);
-    }, 500);
+    } catch (err: any) {
+      setToast("Cập nhật thất bại: " + (err.message || "Lỗi không xác định"));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -155,13 +172,21 @@ export default function UserProfilePage() {
     event.target.value = "";
   };
 
-  const initials = savedProfile.fullName
+  const initials = form.fullName
     .split(/\s+/)
     .filter(Boolean)
     .slice(-2)
     .map((part) => part[0])
     .join("")
     .toUpperCase();
+
+  if (!profile) {
+    return (
+      <main className="user-profile-page" style={{display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh'}}>
+        <LoaderCircle className="profile-spinner" size={40} />
+      </main>
+    );
+  }
 
   return (
     <main className="user-profile-page">
@@ -354,23 +379,23 @@ export default function UserProfilePage() {
             <LockedField
               icon={<Mail size={16} />}
               label="Email công ty"
-              value="an.nguyen@ats.vn"
+              value={profile.email}
             />
             <LockedField
               icon={<Building2 size={16} />}
               label="Phòng ban"
-              value="Nhân sự"
+              value={profile.department?.name || "Chưa có phòng ban"}
             />
             <LockedField
               icon={<ShieldCheck size={16} />}
               label="Vai trò / Phân quyền"
-              value="Quản trị hệ thống"
+              value={profile.roles?.join(", ") || "Chưa có vai trò"}
             />
           </div>
 
           <div className="profile-form-footer">
             <span className="profile-footer-message">
-              Thay đổi chỉ được lưu trên phiên làm việc hiện tại.
+              Thay đổi sẽ được cập nhật lên hệ thống.
             </span>
             <div className="profile-actions">
               <button

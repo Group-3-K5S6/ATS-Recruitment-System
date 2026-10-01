@@ -4,6 +4,7 @@ import {
   createUserSchema,
   assignRolesSchema,
   importPayloadSchema,
+  updateProfileSchema,
 } from './user.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { requirePermission } from '../../middleware/authorize';
@@ -13,6 +14,15 @@ import { PermissionCode } from '../../rbac/permissions';
 const router = Router();
 
 router.use(authenticate);
+
+router.get('/me', UserController.getProfile);
+
+router.put(
+  '/me',
+  validateBody(updateProfileSchema),
+  UserController.updateProfile
+);
+
 
 router.get(
   '/',
