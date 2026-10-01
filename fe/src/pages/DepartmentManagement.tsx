@@ -96,13 +96,18 @@ function DepartmentManagement() {
       return;
     }
 
-    if (label === "Hồ sơ cá nhân") {
-      navigate("/profile");
+    if (label === "Phòng ban & tổ chức") {
+      navigate("/departments");
       return;
     }
 
-    if (label === "Phòng ban & tổ chức") {
-      navigate("/departments");
+    if (label === "Chức danh & dải lương") {
+      navigate("/job-titles");
+      return;
+    }
+
+    if (label === "Hồ sơ cá nhân") {
+      navigate("/profile");
       return;
     }
   };
