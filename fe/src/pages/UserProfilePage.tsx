@@ -38,6 +38,7 @@ export default function UserProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [toast, setToast] = useState("");
   const [avatar, setAvatar] = useState<string | null>(null);
+  const [avatarError, setAvatarError] = useState("");
   const phoneInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -48,6 +49,26 @@ export default function UserProfilePage() {
   useEffect(() => () => {
     if (saveTimeoutRef.current !== null) window.clearTimeout(saveTimeoutRef.current);
     if (toastTimeoutRef.current !== null) window.clearTimeout(toastTimeoutRef.current);
+  }, []);
+
+  useEffect(() => {
+    const token = sessionStorage.getItem("accessToken");
+    if (!token) return;
+    let objectUrl: string | null = null;
+    let cancelled = false;
+    fetch("http://localhost:4000/api/users/me/avatar?size=thumbnail", {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then(async (response) => {
+      if (!response.ok) return;
+      const blob = await response.blob();
+      if (cancelled) return;
+      objectUrl = URL.createObjectURL(blob);
+      setAvatar(objectUrl);
+    }).catch(() => undefined);
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
   }, []);
 
   const updateField = (field: keyof EditableProfile, value: string) => {
@@ -110,18 +131,51 @@ export default function UserProfilePage() {
     setToast("");
   };
 
-  const handleAvatarChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
+    if (!["image/jpeg", "image/png"].includes(file.type)) {
+      setAvatarError("Chỉ chấp nhận ảnh JPG hoặc PNG.");
       event.target.value = "";
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") setAvatar(reader.result);
-    };
-    reader.readAsDataURL(file);
+    if (file.size > 2 * 1024 * 1024) {
+      setAvatarError("Ảnh đại diện không được vượt quá 2MB.");
+      event.target.value = "";
+      return;
+    }
+    const token = sessionStorage.getItem("accessToken");
+    if (!token) {
+      setAvatarError("Vui lòng đăng nhập lại để tải ảnh lên.");
+      event.target.value = "";
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("avatar", file);
+    setAvatarError("");
+    try {
+      const response = await fetch("http://localhost:4000/api/users/me/avatar", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result?.error?.message || "Không thể tải ảnh lên.");
+
+      const imageResponse = await fetch("http://localhost:4000/api/users/me/avatar?size=thumbnail", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!imageResponse.ok) throw new Error("Ảnh đã lưu nhưng không tải lại được.");
+      const objectUrl = URL.createObjectURL(await imageResponse.blob());
+      setAvatar((previous) => {
+        if (previous?.startsWith("blob:")) URL.revokeObjectURL(previous);
+        return objectUrl;
+      });
+      setToast("Đã cập nhật ảnh đại diện!");
+    } catch (uploadError) {
+      setAvatarError(uploadError instanceof Error ? uploadError.message : "Không thể tải ảnh lên.");
+    }
     event.target.value = "";
   };
 
@@ -150,7 +204,7 @@ export default function UserProfilePage() {
             <div className="profile-avatar">
               {avatar ? <img alt="Ảnh đại diện" src={avatar} /> : <span>{initials || <UserRound size={40} />}</span>}
             </div>
-            <input accept="image/*" className="profile-avatar-input" onChange={handleAvatarChange} ref={avatarInputRef} type="file" />
+            <input accept="image/jpeg,image/png" className="profile-avatar-input" onChange={handleAvatarChange} ref={avatarInputRef} type="file" />
             <button
               aria-label="Thay đổi ảnh đại diện"
               className="profile-avatar-edit"
@@ -263,7 +317,7 @@ export default function UserProfilePage() {
         </div>
       </form>
 
-      {toast && <div aria-live="polite" className="profile-toast" role="status"><CheckCircle2 size={19} /><span>{toast}</span><button aria-label="Đóng thông báo" onClick={() => setToast("")} type="button"><X size={15} /></button></div>}
+      {(toast || avatarError) && <div aria-live="polite" className="profile-toast" role="status"><CheckCircle2 size={19} /><span>{avatarError || toast}</span><button aria-label="Đóng thông báo" onClick={() => { setToast(""); setAvatarError(""); }} type="button"><X size={15} /></button></div>}
 
       <style>{`
         .user-profile-page{--profile-ink:#24332d;--profile-muted:#76837d;--profile-line:#e3eae6;--profile-green:#247454;--profile-soft:#f4f8f5;max-width:1120px;margin:0 auto;padding:8px 0 36px;color:var(--profile-ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}

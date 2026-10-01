@@ -84,6 +84,7 @@ export class AuthController {
           id: user.id,
           email: user.email,
           fullName: user.fullName,
+          avatarUrl: user.avatarUrl,
           departmentId: user.departmentId,
           roles,
           permissions: Array.from(permissionSet),

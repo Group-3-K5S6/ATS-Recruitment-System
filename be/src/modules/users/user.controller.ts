@@ -7,6 +7,8 @@ import { successResponse, errorResponse } from '../../utils/response';
 import { recordRequestAudit } from '../../middleware/audit-logger';
 import { AuditAction } from '../../rbac/types';
 import { RoleType } from '../../rbac/roles';
+import sharp from 'sharp';
+import { UploadedAvatarRequest } from './avatar-upload';
 
 export const createUserSchema = z.object({
   email: z.string().email(),
@@ -21,6 +23,115 @@ export const assignRolesSchema = z.object({
 });
 
 export class UserController {
+  private static readonly avatarMaxPixels = 40_000_000;
+
+  private static canViewInternalAvatars(req: Request): boolean {
+    return Boolean(req.user?.roles.some((role) => role !== RoleType.CANDIDATE));
+  }
+
+  static async uploadOwnAvatar(req: Request, res: Response): Promise<void> {
+    if (!UserController.canViewInternalAvatars(req)) {
+      errorResponse(res, 'Only internal employees can upload an avatar.', 403, 'FORBIDDEN_ROLE');
+      return;
+    }
+
+    const file = (req as UploadedAvatarRequest).file;
+    if (!file) {
+      errorResponse(res, 'Choose a JPG or PNG image to upload.', 400, 'AVATAR_REQUIRED');
+      return;
+    }
+
+    try {
+      const metadata = await sharp(file.buffer, {
+        limitInputPixels: UserController.avatarMaxPixels,
+        failOn: 'error',
+      }).metadata();
+      const mimeMatches =
+        (metadata.format === 'jpeg' && file.mimetype === 'image/jpeg') ||
+        (metadata.format === 'png' && file.mimetype === 'image/png');
+
+      if (!mimeMatches) {
+        errorResponse(res, 'The file contents must be a valid JPG or PNG image.', 415, 'INVALID_IMAGE');
+        return;
+      }
+
+      const [squareImage, thumbnail] = await Promise.all([
+        sharp(file.buffer, { limitInputPixels: UserController.avatarMaxPixels })
+          .rotate()
+          .resize(512, 512, { fit: 'cover', position: 'attention' })
+          .webp({ quality: 84 })
+          .toBuffer(),
+        sharp(file.buffer, { limitInputPixels: UserController.avatarMaxPixels })
+          .rotate()
+          .resize(96, 96, { fit: 'cover', position: 'attention' })
+          .webp({ quality: 78 })
+          .toBuffer(),
+      ]);
+
+      const avatarUrl = `/api/users/${req.user!.id}/avatar`;
+      const updated = await prisma.user.update({
+        where: { id: req.user!.id },
+        data: {
+          avatarUrl,
+          avatarImage: squareImage,
+          avatarThumbnail: thumbnail,
+        },
+        select: { id: true, avatarUrl: true },
+      });
+
+      await recordRequestAudit(req, AuditAction.USER_UPDATED, 'user', updated.id, {
+        changedField: 'avatar',
+        sourceFormat: metadata.format,
+      });
+
+      successResponse(
+        res,
+        { ...updated, thumbnailUrl: `${avatarUrl}?size=thumbnail` },
+        200,
+        'Avatar uploaded successfully.'
+      );
+    } catch (error) {
+      console.error('[Avatar processing error]:', error instanceof Error ? error.message : error);
+      errorResponse(res, 'The image could not be processed. Choose a valid JPG or PNG.', 400, 'INVALID_IMAGE');
+    }
+  }
+
+  static async getOwnAvatar(req: Request, res: Response): Promise<void> {
+    await UserController.sendAvatar(req, res, req.user!.id);
+  }
+
+  static async getUserAvatar(req: Request, res: Response): Promise<void> {
+    if (!UserController.canViewInternalAvatars(req)) {
+      errorResponse(res, 'Only internal employees can view employee avatars.', 403, 'FORBIDDEN_ROLE');
+      return;
+    }
+    await UserController.sendAvatar(req, res, req.params.id);
+  }
+
+  private static async sendAvatar(req: Request, res: Response, userId: string): Promise<void> {
+    if (!UserController.canViewInternalAvatars(req)) {
+      errorResponse(res, 'Only internal employees can view employee avatars.', 403, 'FORBIDDEN_ROLE');
+      return;
+    }
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { avatarImage: true, avatarThumbnail: true },
+    });
+    if (!user) {
+      errorResponse(res, 'User not found.', 404, 'NOT_FOUND');
+      return;
+    }
+    const image = req.query.size === 'thumbnail' ? user.avatarThumbnail : user.avatarImage;
+    if (!image) {
+      errorResponse(res, 'Avatar not found.', 404, 'AVATAR_NOT_FOUND');
+      return;
+    }
+    res.setHeader('Content-Type', 'image/webp');
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.send(Buffer.from(image));
+  }
+
   static async list(req: Request, res: Response): Promise<void> {
     const user = req.user!;
 
@@ -34,6 +145,7 @@ export class UserController {
         id: true,
         email: true,
         fullName: true,
+        avatarUrl: true,
         departmentId: true,
         isActive: true,
         createdAt: true,
@@ -92,6 +204,7 @@ export class UserController {
         id: true,
         email: true,
         fullName: true,
+        avatarUrl: true,
         departmentId: true,
         isActive: true,
         createdAt: true,

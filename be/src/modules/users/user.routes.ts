@@ -8,10 +8,15 @@ import { authenticate } from '../../middleware/authenticate';
 import { requirePermission } from '../../middleware/authorize';
 import { validateBody } from '../../middleware/validate';
 import { PermissionCode } from '../../rbac/permissions';
+import { uploadAvatar } from './avatar-upload';
 
 const router = Router();
 
 router.use(authenticate);
+
+router.get('/me/avatar', UserController.getOwnAvatar);
+router.post('/me/avatar', uploadAvatar, UserController.uploadOwnAvatar);
+router.get('/:id/avatar', UserController.getUserAvatar);
 
 router.get(
   '/',

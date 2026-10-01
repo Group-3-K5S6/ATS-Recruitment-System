@@ -82,6 +82,16 @@ npm start
 
 ---
 
+### API ảnh đại diện nhân sự
+
+Các API bên dưới cần `Authorization: Bearer <accessToken>` và chỉ dành cho tài khoản nhân sự nội bộ.
+
+* `POST /api/users/me/avatar`: gửi `multipart/form-data` với trường file `avatar`. Chỉ nhận JPG/PNG, tối đa 2 MB. Backend xác minh nội dung ảnh, tự động xoay theo EXIF, cắt vuông, chuyển sang WebP và lưu ảnh 512×512 cùng thumbnail 96×96 trong SQLite.
+* `GET /api/users/me/avatar`: trả ảnh đại diện của người đang đăng nhập. Thêm `?size=thumbnail` để nhận thumbnail.
+* `GET /api/users/:id/avatar`: trả ảnh của nhân sự nội bộ theo ID. Thêm `?size=thumbnail` để nhận thumbnail. Chỉ nhân sự nội bộ đã xác thực mới xem được.
+
+Upload thành công trả về `data.avatarUrl` và `data.thumbnailUrl`; API danh sách người dùng cũng trả trường `avatarUrl`. Sau khi cập nhật schema, chạy `npm run prisma:push` trong thư mục `be` trước khi khởi động backend.
+
 ## 4. Tài Khoản Thử Nghiệm Mẫu
 
 Mật khẩu mặc định cho tất cả tài khoản là: `Password123!`

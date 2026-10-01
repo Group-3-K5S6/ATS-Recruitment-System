@@ -12,6 +12,9 @@ model User {
   email        String     @unique
   passwordHash String
   fullName     String
+  avatarUrl    String?
+  avatarImage  Bytes?
+  avatarThumbnail Bytes?
   departmentId String?
   isActive     Boolean    @default(true)
   createdAt    DateTime   @default(now())

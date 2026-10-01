@@ -8,11 +8,12 @@ type DashboardProps = {
   role: Role;
   userName: string;
   onLogout: () => Promise<void>;
+  initialMenu?: string;
 };
 
-function Dashboard({ role, userName, onLogout }: DashboardProps) {
+function Dashboard({ role, userName, onLogout, initialMenu = "Tổng quan" }: DashboardProps) {
   const navigate = useNavigate();
-  const [selectedMenu, setSelectedMenu] = useState("Tổng quan");
+  const [selectedMenu, setSelectedMenu] = useState(initialMenu);
   const handleMenuSelect = (label: string) => {
     if (label === "Phòng ban & tổ chức") {
       navigate("/departments");

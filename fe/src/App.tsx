@@ -25,17 +25,18 @@ function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const [loggedIn, setLoggedIn] = useState(false);
+  const [userName, setUserName] = useState("Nguyễn Văn An");
 
   // S1-02:
   // Kiểm tra xem phiên trước đó có bị hết hạn hay không
   const [sessionExpired] = useState(() => consumeSessionExpired());
 
-  // Tạm thời test vai trò Admin
-  const [role] = useState<Role>("Admin");
+  const [role, setRole] = useState<Role>("Admin");
 
-  const handleLogin = (e: FormEvent<HTMLFormElement>) => {
+  const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     setError("");
@@ -46,16 +47,41 @@ function Login() {
       return;
     }
 
-    /*
-      Hiện tại đang test Frontend.
+    setIsLoggingIn(true);
+    try {
+      const response = await fetch("http://localhost:4000/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result?.data?.accessToken) {
+        throw new Error(result?.error?.message || "Đăng nhập không thành công.");
+      }
 
-      Khi Backend S1-01 hoàn thành:
-      - gửi email + password tới API đăng nhập
-      - nhận access token / refresh token
-      - lấy role thật của người dùng
-    */
+      const roleMap: Record<string, Role> = {
+        RECRUITER: "Recruiter",
+        HIRING_MANAGER: "HiringManager",
+        INTERVIEWER: "Interviewer",
+        HR_MANAGER: "HRManager",
+        APPROVER: "Approver",
+        ADMIN: "Admin",
+      };
+      const userRole = (result.data.user?.roles as string[] | undefined)
+        ?.map((roleName) => roleMap[roleName])
+        .find(Boolean);
+      if (!userRole) throw new Error("Tài khoản này không có vai trò nhân sự nội bộ.");
 
-    setLoggedIn(true);
+      sessionStorage.setItem("accessToken", result.data.accessToken);
+      if (result.data.refreshToken) sessionStorage.setItem("refreshToken", result.data.refreshToken);
+      setUserName(result.data.user.fullName || email.trim());
+      setRole(userRole);
+      setLoggedIn(true);
+    } catch (loginError) {
+      setError(loginError instanceof Error ? loginError.message : "Không thể kết nối backend.");
+    } finally {
+      setIsLoggingIn(false);
+    }
   };
 
   // ==============================
@@ -63,18 +89,17 @@ function Login() {
   // ==============================
 
   const handleLogout = async () => {
-    /*
-      Khi Backend S1-02 hoàn thành:
-
-      FE sẽ gọi API logout tại đây.
-
-      Backend phải:
-      - làm mất hiệu lực phiên
-      - thu hồi refresh token
-      - không cho token cũ tiếp tục sử dụng
-
-      Hiện tại mới làm phần Frontend.
-    */
+    const token = sessionStorage.getItem("accessToken");
+    if (token) {
+      try {
+        await fetch("http://localhost:4000/api/auth/logout", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } catch {
+        // Local session is cleared even if the backend cannot be reached.
+      }
+    }
 
     clearLocalSession();
 
@@ -91,7 +116,7 @@ function Login() {
 
   if (loggedIn) {
     return (
-      <Dashboard role={role} userName="Nguyễn Văn An" onLogout={handleLogout} />
+      <Dashboard role={role} userName={userName} onLogout={handleLogout} />
     );
   }
 
@@ -232,8 +257,8 @@ function Login() {
 
             {/* NÚT ĐĂNG NHẬP */}
 
-            <button type="submit" className="login-button">
-              Đăng nhập
+            <button type="submit" className="login-button" disabled={isLoggingIn}>
+              {isLoggingIn ? "Đang đăng nhập..." : "Đăng nhập"}
             </button>
           </form>
 
@@ -256,6 +281,21 @@ function DashboardRoute() {
   );
 }
 
+function ProfileRoute() {
+  const handleLogout = async () => {
+    clearLocalSession();
+  };
+
+  return (
+    <Dashboard
+      role="Admin"
+      userName="Nguyễn Văn An"
+      onLogout={handleLogout}
+      initialMenu="Hồ sơ cá nhân"
+    />
+  );
+}
+
 // ====================================
 // ROUTER
 // ====================================
@@ -271,6 +311,8 @@ function App() {
         <Route path="/login" element={<Login />} />
 
         <Route path="/dashboard" element={<DashboardRoute />} />
+
+        <Route path="/profile" element={<ProfileRoute />} />
 
         <Route path="/forgot-password" element={<ForgotPassword />} />
 
