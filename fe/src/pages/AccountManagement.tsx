@@ -1,112 +1,244 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { FileSpreadsheet } from "lucide-react";
+
 import EmployeeImportModal from "../components/EmployeeImportModal";
+
+const API_URL =
+  import.meta.env.VITE_ATS_API_URL || "http://localhost:4000";
 
 type AccountStatus = "Hoạt động" | "Đã khóa";
 
 type Account = {
-  id: number;
+  id: string;
   name: string;
   email: string;
   department: string;
+  roles: string[];
   role: string;
   status: AccountStatus;
+};
 
-  // S1-10
-  lockReason?: string;
-  assignedPositions?: number;
+type BackendUser = {
+  id: string;
+  email: string;
+  fullName: string;
+  departmentId?: string | null;
+
+  department?: {
+    id?: string;
+    name?: string;
+  } | null;
+
+  isActive: boolean;
+  createdAt?: string;
+  roles: string[];
+};
+
+type ApiResponse<T> = {
+  success: boolean;
+  data?: T;
+  message?: string;
+
+  error?: {
+    message?: string;
+    code?: string;
+  };
 };
 
 type AccountForm = {
   name: string;
   email: string;
-  department: string;
+  password: string;
+  role: string;
 };
 
 const PAGE_SIZE = 20;
 
+const ROLE_OPTIONS = [
+  {
+    value: "CANDIDATE",
+    label: "Ứng viên",
+  },
+  {
+    value: "RECRUITER",
+    label: "Nhân viên tuyển dụng",
+  },
+  {
+    value: "HIRING_MANAGER",
+    label: "Trưởng bộ phận",
+  },
+  {
+    value: "INTERVIEWER",
+    label: "Người phỏng vấn",
+  },
+  {
+    value: "HR_MANAGER",
+    label: "Trưởng phòng Nhân sự",
+  },
+  {
+    value: "APPROVER",
+    label: "Người duyệt",
+  },
+  {
+    value: "ADMIN",
+    label: "Quản trị hệ thống",
+  },
+];
+
+const ROLE_LABELS: Record<string, string> = {
+  CANDIDATE: "Ứng viên",
+  RECRUITER: "Nhân viên tuyển dụng",
+  HIRING_MANAGER: "Trưởng bộ phận",
+  INTERVIEWER: "Người phỏng vấn",
+  HR_MANAGER: "Trưởng phòng Nhân sự",
+  APPROVER: "Người duyệt",
+  ADMIN: "Quản trị hệ thống",
+};
+
+function getAccessToken() {
+  return sessionStorage.getItem("accessToken");
+}
+
+function roleLabel(role: string) {
+  return ROLE_LABELS[role] || role;
+}
+
+function getApiMessage(
+  result: ApiResponse<unknown>,
+  fallback: string,
+) {
+  return result.error?.message || result.message || fallback;
+}
+
 const AccountManagement = () => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
-  /* =========================
-     DỮ LIỆU TÀI KHOẢN
-  ========================= */
-  const [accounts, setAccounts] = useState<Account[]>([
-    {
-      id: 1,
-      name: "Nguyễn Văn An",
-      email: "an.nguyen@example.com",
-      department: "Công nghệ",
-      role: "Quản trị hệ thống",
-      status: "Hoạt động",
-      assignedPositions: 0,
-    },
-    {
-      id: 2,
-      name: "Trần Thị Mai",
-      email: "mai.tran@example.com",
-      department: "Nhân sự",
-      role: "Nhân viên tuyển dụng",
-      status: "Hoạt động",
-      assignedPositions: 3,
-    },
-    {
-      id: 3,
-      name: "Lê Minh Đức",
-      email: "duc.le@example.com",
-      department: "Công nghệ",
-      role: "Người phỏng vấn",
-      status: "Đã khóa",
-      lockReason: "Nhân sự đã nghỉ việc",
-      assignedPositions: 0,
-    },
-  ]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState("");
 
-  /* =========================
-     TÌM KIẾM + LỌC
-  ========================= */
   const [searchText, setSearchText] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
 
-  /* =========================
-     FORM TẠO / SỬA
-  ========================= */
-  const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
+  const [formMode, setFormMode] = useState<
+    "create" | "edit" | null
+  >(null);
 
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [form, setForm] = useState<AccountForm>({
     name: "",
     email: "",
-    department: "",
+    password: "",
+    role: "INTERVIEWER",
   });
 
   const [formError, setFormError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  /* =========================
-     S1-10 - KHÓA / MỞ KHÓA
-  ========================= */
-  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+  const [selectedAccount, setSelectedAccount] =
+    useState<Account | null>(null);
 
-  const [accountAction, setAccountAction] = useState<"lock" | "unlock" | null>(
-    null,
-  );
-
-  const [lockReason, setLockReason] = useState("");
+  const [accountAction, setAccountAction] = useState<
+    "lock" | "unlock" | null
+  >(null);
 
   const [lockError, setLockError] = useState("");
 
-  /* =========================
-     DANH SÁCH ROLE
-  ========================= */
-  const roles = Array.from(new Set(accounts.map((account) => account.role)));
+  /* =====================================================
+     LOAD ACCOUNT
+  ===================================================== */
 
-  /* =========================
-     LỌC DANH SÁCH
-  ========================= */
+  const loadAccounts = async () => {
+    const token = getAccessToken();
+
+    if (!token) {
+      throw new Error(
+        "Không tìm thấy phiên đăng nhập. Vui lòng đăng nhập lại.",
+      );
+    }
+
+    const response = await fetch(`${API_URL}/api/users`, {
+      method: "GET",
+
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const result =
+      (await response.json()) as ApiResponse<BackendUser[]>;
+
+    if (
+      !response.ok ||
+      !result.success ||
+      !Array.isArray(result.data)
+    ) {
+      throw new Error(
+        getApiMessage(
+          result,
+          "Không tải được danh sách tài khoản.",
+        ),
+      );
+    }
+
+    const mapped: Account[] = result.data.map((user) => {
+      const roles = Array.isArray(user.roles)
+        ? user.roles
+        : [];
+
+      return {
+        id: user.id,
+        name: user.fullName,
+        email: user.email,
+
+        department:
+          user.department?.name || "Chưa gán phòng ban",
+
+        roles,
+
+        role:
+          roles.length > 0
+            ? roles.map(roleLabel).join(", ")
+            : "Chưa có vai trò",
+
+        status: user.isActive
+          ? "Hoạt động"
+          : "Đã khóa",
+      };
+    });
+
+    setAccounts(mapped);
+  };
+
+  useEffect(() => {
+    const run = async () => {
+      try {
+        setLoading(true);
+        setPageError("");
+
+        await loadAccounts();
+      } catch (error) {
+        setPageError(
+          error instanceof Error
+            ? error.message
+            : "Không tải được dữ liệu.",
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void run();
+  }, []);
+
+  /* =====================================================
+     FILTER
+  ===================================================== */
+
   const keyword = searchText.trim().toLowerCase();
 
   const filteredAccounts = accounts.filter((account) => {
@@ -116,17 +248,21 @@ const AccountManagement = () => {
       account.email.toLowerCase().includes(keyword) ||
       account.department.toLowerCase().includes(keyword);
 
-    const matchesRole = roleFilter === "" || account.role === roleFilter;
+    const matchesRole =
+      roleFilter === "" ||
+      account.roles.includes(roleFilter);
 
     const matchesStatus =
-      statusFilter === "" || account.status === statusFilter;
+      statusFilter === "" ||
+      account.status === statusFilter;
 
-    return matchesKeyword && matchesRole && matchesStatus;
+    return (
+      matchesKeyword &&
+      matchesRole &&
+      matchesStatus
+    );
   });
 
-  /* =========================
-     PHÂN TRANG
-  ========================= */
   const totalPages = Math.max(
     1,
     Math.ceil(filteredAccounts.length / PAGE_SIZE),
@@ -134,239 +270,395 @@ const AccountManagement = () => {
 
   const page = Math.min(currentPage, totalPages);
 
-  const startIndex = (page - 1) * PAGE_SIZE;
+  const startIndex =
+    (page - 1) * PAGE_SIZE;
 
-  const displayedAccounts = filteredAccounts.slice(
-    startIndex,
-    startIndex + PAGE_SIZE,
-  );
+  const displayedAccounts =
+    filteredAccounts.slice(
+      startIndex,
+      startIndex + PAGE_SIZE,
+    );
 
-  /* =========================
-     ĐÓNG FORM
-  ========================= */
+  /* =====================================================
+     FORM
+  ===================================================== */
+
+  const resetForm = () => {
+    setForm({
+      name: "",
+      email: "",
+      password: "",
+      role: "INTERVIEWER",
+    });
+  };
+
   const closeForm = () => {
     setFormMode(null);
     setEditingId(null);
 
-    setForm({
-      name: "",
-      email: "",
-      department: "",
-    });
+    resetForm();
 
     setFormError("");
   };
 
-  /* =========================
-     MỞ FORM TẠO
-  ========================= */
   const openCreateForm = () => {
     setFormMode("create");
     setEditingId(null);
 
-    setForm({
-      name: "",
-      email: "",
-      department: "",
-    });
+    resetForm();
 
     setFormError("");
   };
 
-  /* =========================
-     MỞ FORM SỬA
-  ========================= */
   const openEditForm = (account: Account) => {
     setFormMode("edit");
+
     setEditingId(account.id);
 
     setForm({
       name: account.name,
       email: account.email,
-      department: account.department,
+      password: "",
+      role: account.roles[0] || "INTERVIEWER",
     });
 
     setFormError("");
   };
 
-  /* =========================
-     SEARCH
-  ========================= */
-  const handleSearchChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleSearchChange = (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
     setSearchText(event.target.value);
     setCurrentPage(1);
   };
 
-  /* =========================
-     FILTER ROLE
-  ========================= */
-  const handleRoleChange = (event: ChangeEvent<HTMLSelectElement>) => {
+  const handleRoleChange = (
+    event: ChangeEvent<HTMLSelectElement>,
+  ) => {
     setRoleFilter(event.target.value);
     setCurrentPage(1);
   };
 
-  /* =========================
-     FILTER STATUS
-  ========================= */
-  const handleStatusChange = (event: ChangeEvent<HTMLSelectElement>) => {
+  const handleStatusChange = (
+    event: ChangeEvent<HTMLSelectElement>,
+  ) => {
     setStatusFilter(event.target.value);
     setCurrentPage(1);
   };
 
-  /* =========================
-     SUBMIT FORM TẠO / SỬA
-  ========================= */
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  /* =====================================================
+     CREATE ACCOUNT
+  ===================================================== */
+
+  const createAccount = async () => {
+    const token = getAccessToken();
+
+    if (!token) {
+      throw new Error("Phiên đăng nhập không tồn tại.");
+    }
+
+    const response = await fetch(`${API_URL}/api/users`, {
+      method: "POST",
+
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+
+      body: JSON.stringify({
+        email: form.email.trim().toLowerCase(),
+        password: form.password,
+        fullName: form.name.trim(),
+
+        roles: [
+          form.role,
+        ],
+      }),
+    });
+
+    const result =
+      (await response.json()) as ApiResponse<BackendUser>;
+
+    if (!response.ok || !result.success) {
+      throw new Error(
+        getApiMessage(
+          result,
+          "Không tạo được tài khoản.",
+        ),
+      );
+    }
+  };
+
+  /* =====================================================
+     UPDATE ACCOUNT
+  ===================================================== */
+
+  const updateAccount = async (
+    id: string,
+  ) => {
+    const token = getAccessToken();
+
+    if (!token) {
+      throw new Error("Phiên đăng nhập không tồn tại.");
+    }
+
+    const response = await fetch(
+      `${API_URL}/api/users/${id}`,
+      {
+        method: "PUT",
+
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+
+        body: JSON.stringify({
+          email: form.email.trim().toLowerCase(),
+          fullName: form.name.trim(),
+        }),
+      },
+    );
+
+    const result =
+      (await response.json()) as ApiResponse<BackendUser>;
+
+    if (!response.ok || !result.success) {
+      throw new Error(
+        getApiMessage(
+          result,
+          "Không cập nhật được tài khoản.",
+        ),
+      );
+    }
+  };
+
+  /* =====================================================
+     SUBMIT
+  ===================================================== */
+
+  const handleSubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
     event.preventDefault();
 
     setFormError("");
 
     const name = form.name.trim();
-    const email = form.email.trim().toLowerCase();
-    const department = form.department.trim();
 
-    if (!name || !email || !department) {
-      setFormError("Vui lòng nhập đầy đủ họ tên, email và phòng ban.");
+    const email =
+      form.email.trim().toLowerCase();
+
+    if (!name || !email) {
+      setFormError(
+        "Vui lòng nhập đầy đủ họ tên và email.",
+      );
+
       return;
     }
 
     const duplicateEmail = accounts.some(
       (account) =>
-        account.email.toLowerCase() === email && account.id !== editingId,
+        account.email.toLowerCase() === email &&
+        account.id !== editingId,
     );
 
     if (duplicateEmail) {
-      setFormError(`Email "${form.email.trim()}" đã tồn tại trong hệ thống.`);
-      return;
-    }
-
-    /* TẠO */
-    if (formMode === "create") {
-      const nextId =
-        accounts.length === 0
-          ? 1
-          : Math.max(...accounts.map((account) => account.id)) + 1;
-
-      setAccounts((currentAccounts) => [
-        ...currentAccounts,
-        {
-          id: nextId,
-          name,
-          email,
-          department,
-          role: "Người phỏng vấn",
-          status: "Hoạt động",
-          assignedPositions: 0,
-        },
-      ]);
-
-      closeForm();
-      return;
-    }
-
-    /* SỬA */
-    if (formMode === "edit" && editingId !== null) {
-      setAccounts((currentAccounts) =>
-        currentAccounts.map((account) =>
-          account.id === editingId
-            ? {
-                ...account,
-                name,
-                email,
-                department,
-              }
-            : account,
-        ),
+      setFormError(
+        `Email "${email}" đã tồn tại trong hệ thống.`,
       );
 
+      return;
+    }
+
+    if (formMode === "create") {
+      if (!form.password || !form.role) {
+        setFormError(
+          "Vui lòng nhập mật khẩu và chọn vai trò.",
+        );
+
+        return;
+      }
+
+      if (form.password.length < 6) {
+        setFormError(
+          "Mật khẩu phải có ít nhất 6 ký tự.",
+        );
+
+        return;
+      }
+    }
+
+    try {
+      setSubmitting(true);
+
+      if (formMode === "create") {
+        await createAccount();
+      }
+
+      if (
+        formMode === "edit" &&
+        editingId
+      ) {
+        await updateAccount(editingId);
+      }
+
+      await loadAccounts();
+
       closeForm();
+    } catch (error) {
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : "Có lỗi xảy ra.",
+      );
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  /* =========================
-     S1-10 - MỞ HỘP KHÓA
-  ========================= */
-  const openLockDialog = (account: Account) => {
+  /* =====================================================
+     LOCK
+  ===================================================== */
+
+  const openLockDialog = (
+    account: Account,
+  ) => {
     setSelectedAccount(account);
+
     setAccountAction("lock");
-    setLockReason("");
+
     setLockError("");
   };
 
-  /* =========================
-     S1-10 - MỞ HỘP MỞ KHÓA
-  ========================= */
-  const openUnlockDialog = (account: Account) => {
+  const openUnlockDialog = (
+    account: Account,
+  ) => {
     setSelectedAccount(account);
+
     setAccountAction("unlock");
-    setLockReason("");
+
     setLockError("");
   };
 
-  /* =========================
-     S1-10 - ĐÓNG HỘP
-  ========================= */
   const closeAccountAction = () => {
     setSelectedAccount(null);
     setAccountAction(null);
-    setLockReason("");
+
     setLockError("");
   };
 
-  /* =========================
-     S1-10 - XÁC NHẬN KHÓA
-  ========================= */
-  const confirmLockAccount = () => {
-    if (!selectedAccount) {
-      return;
-    }
+  const confirmLockAccount =
+    async () => {
+      if (!selectedAccount) {
+        return;
+      }
 
-    if (!lockReason.trim()) {
-      setLockError("Vui lòng nhập lý do khóa tài khoản.");
-      return;
-    }
+      const token = getAccessToken();
 
-    setAccounts((currentAccounts) =>
-      currentAccounts.map((account) =>
-        account.id === selectedAccount.id
-          ? {
-              ...account,
-              status: "Đã khóa",
-              lockReason: lockReason.trim(),
-            }
-          : account,
-      ),
-    );
+      if (!token) {
+        setLockError(
+          "Phiên đăng nhập không tồn tại.",
+        );
 
-    closeAccountAction();
-  };
+        return;
+      }
 
-  /* =========================
-     S1-10 - XÁC NHẬN MỞ KHÓA
-  ========================= */
-  const confirmUnlockAccount = () => {
-    if (!selectedAccount) {
-      return;
-    }
+      try {
+        const response = await fetch(
+          `${API_URL}/api/users/${selectedAccount.id}/disable`,
+          {
+            method: "PATCH",
 
-    setAccounts((currentAccounts) =>
-      currentAccounts.map((account) =>
-        account.id === selectedAccount.id
-          ? {
-              ...account,
-              status: "Hoạt động",
-              lockReason: undefined,
-            }
-          : account,
-      ),
-    );
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        );
 
-    closeAccountAction();
-  };
+        const result =
+          (await response.json()) as ApiResponse<unknown>;
 
-  /* =========================
-     GIAO DIỆN
-  ========================= */
+        if (!response.ok || !result.success) {
+          throw new Error(
+            getApiMessage(
+              result,
+              "Không khóa được tài khoản.",
+            ),
+          );
+        }
+
+        await loadAccounts();
+
+        closeAccountAction();
+      } catch (error) {
+        setLockError(
+          error instanceof Error
+            ? error.message
+            : "Không khóa được tài khoản.",
+        );
+      }
+    };
+
+  /* =====================================================
+     UNLOCK
+  ===================================================== */
+
+  const confirmUnlockAccount =
+    async () => {
+      if (!selectedAccount) {
+        return;
+      }
+
+      const token = getAccessToken();
+
+      if (!token) {
+        setLockError(
+          "Phiên đăng nhập không tồn tại.",
+        );
+
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `${API_URL}/api/users/${selectedAccount.id}/enable`,
+          {
+            method: "PATCH",
+
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        );
+
+        const result =
+          (await response.json()) as ApiResponse<unknown>;
+
+        if (!response.ok || !result.success) {
+          throw new Error(
+            getApiMessage(
+              result,
+              "Không mở khóa được tài khoản.",
+            ),
+          );
+        }
+
+        await loadAccounts();
+
+        closeAccountAction();
+      } catch (error) {
+        setLockError(
+          error instanceof Error
+            ? error.message
+            : "Không mở khóa được tài khoản.",
+        );
+      }
+    };
+
+  /* =====================================================
+     UI
+  ===================================================== */
+
   return (
     <div
       style={{
@@ -374,7 +666,6 @@ const AccountManagement = () => {
         fontFamily: "Arial, sans-serif",
       }}
     >
-      {/* HEADER */}
       <div
         style={{
           display: "flex",
@@ -394,12 +685,31 @@ const AccountManagement = () => {
           >
             Quản lý tài khoản nội bộ
           </h2>
+
+          <p
+            style={{
+              margin: "6px 0 0",
+              color: "#5E6C84",
+              fontSize: "13px",
+            }}
+          >
+            Quản lý thông tin và trạng thái tài khoản.
+            Phân quyền được thực hiện tại mục Vai trò & quyền.
+          </p>
         </div>
 
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: "8px",
+            flexWrap: "wrap",
+          }}
+        >
           <button
             type="button"
-            onClick={() => setIsImportModalOpen(true)}
+            onClick={() =>
+              setIsImportModalOpen(true)
+            }
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -414,8 +724,10 @@ const AccountManagement = () => {
             }}
           >
             <FileSpreadsheet size={16} />
+
             Nhập từ Excel
           </button>
+
           <button
             type="button"
             onClick={openCreateForm}
@@ -435,10 +747,27 @@ const AccountManagement = () => {
       </div>
 
       {isImportModalOpen && (
-        <EmployeeImportModal onClose={() => setIsImportModalOpen(false)} />
+        <EmployeeImportModal
+          onClose={() =>
+            setIsImportModalOpen(false)
+          }
+        />
       )}
 
-      {/* SEARCH + FILTER */}
+      {pageError && (
+        <div
+          style={{
+            padding: "12px 14px",
+            marginBottom: "16px",
+            background: "#FFEBE6",
+            color: "#BF2600",
+            borderRadius: "6px",
+          }}
+        >
+          {pageError}
+        </div>
+      )}
+
       <div
         style={{
           display: "flex",
@@ -469,11 +798,16 @@ const AccountManagement = () => {
             borderRadius: "4px",
           }}
         >
-          <option value="">Tất cả vai trò</option>
+          <option value="">
+            Tất cả vai trò
+          </option>
 
-          {roles.map((role) => (
-            <option key={role} value={role}>
-              {role}
+          {ROLE_OPTIONS.map((role) => (
+            <option
+              key={role.value}
+              value={role.value}
+            >
+              {role.label}
             </option>
           ))}
         </select>
@@ -487,15 +821,36 @@ const AccountManagement = () => {
             borderRadius: "4px",
           }}
         >
-          <option value="">Tất cả trạng thái</option>
+          <option value="">
+            Tất cả trạng thái
+          </option>
 
-          <option value="Hoạt động">Hoạt động</option>
+          <option value="Hoạt động">
+            Hoạt động
+          </option>
 
-          <option value="Đã khóa">Đã khóa</option>
+          <option value="Đã khóa">
+            Đã khóa
+          </option>
         </select>
+
+        <button
+          type="button"
+          onClick={() => {
+            void loadAccounts().catch(
+              (error) =>
+                setPageError(
+                  error instanceof Error
+                    ? error.message
+                    : "Không tải được dữ liệu.",
+                ),
+            );
+          }}
+        >
+          Làm mới
+        </button>
       </div>
 
-      {/* FORM TẠO / SỬA */}
       {formMode !== null && (
         <div
           style={{
@@ -516,7 +871,8 @@ const AccountManagement = () => {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gridTemplateColumns:
+                  "repeat(auto-fit, minmax(200px, 1fr))",
                 gap: "12px",
               }}
             >
@@ -524,7 +880,7 @@ const AccountManagement = () => {
                 type="text"
                 placeholder="Họ tên"
                 value={form.name}
-                onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                onChange={(event) =>
                   setForm({
                     ...form,
                     name: event.target.value,
@@ -536,7 +892,7 @@ const AccountManagement = () => {
                 type="email"
                 placeholder="Email"
                 value={form.email}
-                onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                onChange={(event) =>
                   setForm({
                     ...form,
                     email: event.target.value,
@@ -544,18 +900,53 @@ const AccountManagement = () => {
                 }
               />
 
-              <input
-                type="text"
-                placeholder="Phòng ban"
-                value={form.department}
-                onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                  setForm({
-                    ...form,
-                    department: event.target.value,
-                  })
-                }
-              />
+              {formMode === "create" && (
+                <>
+                  <input
+                    type="password"
+                    placeholder="Mật khẩu (ít nhất 6 ký tự)"
+                    value={form.password}
+                    onChange={(event) =>
+                      setForm({
+                        ...form,
+                        password: event.target.value,
+                      })
+                    }
+                  />
+
+                  <select
+                    value={form.role}
+                    onChange={(event) =>
+                      setForm({
+                        ...form,
+                        role: event.target.value,
+                      })
+                    }
+                  >
+                    {ROLE_OPTIONS.map((role) => (
+                      <option
+                        key={role.value}
+                        value={role.value}
+                      >
+                        {role.label}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
             </div>
+
+            {formMode === "create" && (
+              <p
+                style={{
+                  fontSize: "12px",
+                  color: "#5E6C84",
+                }}
+              >
+                Vai trò ban đầu được chọn khi tạo tài khoản.
+                Muốn thay đổi vai trò sau đó, sử dụng mục Vai trò & quyền.
+              </p>
+            )}
 
             {formError && (
               <div
@@ -575,11 +966,21 @@ const AccountManagement = () => {
                 gap: "8px",
               }}
             >
-              <button type="submit">
-                {formMode === "create" ? "Tạo tài khoản" : "Lưu thay đổi"}
+              <button
+                type="submit"
+                disabled={submitting}
+              >
+                {submitting
+                  ? "Đang lưu..."
+                  : formMode === "create"
+                    ? "Tạo tài khoản"
+                    : "Lưu thay đổi"}
               </button>
 
-              <button type="button" onClick={closeForm}>
+              <button
+                type="button"
+                onClick={closeForm}
+              >
                 Hủy
               </button>
             </div>
@@ -587,9 +988,6 @@ const AccountManagement = () => {
         </div>
       )}
 
-      {/* =========================
-          S1-10 - HỘP KHÓA
-      ========================== */}
       {accountAction === "lock" && selectedAccount && (
         <div
           style={{
@@ -600,100 +998,59 @@ const AccountManagement = () => {
             backgroundColor: "#FFFFFF",
           }}
         >
-          <h3 style={{ marginTop: 0 }}>Khóa tài khoản</h3>
+          <h3 style={{ marginTop: 0 }}>
+            Khóa tài khoản
+          </h3>
 
           <p>
-            Bạn đang khóa tài khoản:
-            <strong> {selectedAccount.name}</strong>
+            Bạn có chắc muốn khóa tài khoản{" "}
+            <strong>{selectedAccount.name}</strong>?
           </p>
 
-          <p
-            style={{
-              color: "#5E6C84",
-            }}
-          >
+          <p style={{ color: "#5E6C84" }}>
             {selectedAccount.email}
           </p>
-
-          {(selectedAccount.assignedPositions ?? 0) > 0 && (
-            <div
-              style={{
-                padding: "12px",
-                marginBottom: "14px",
-                backgroundColor: "#FFF7D6",
-                color: "#974F0C",
-                borderRadius: "6px",
-              }}
-            >
-              ⚠ Người dùng đang phụ trách{" "}
-              <strong>{selectedAccount.assignedPositions}</strong> vị trí tuyển
-              dụng. Cần thực hiện bàn giao.
-            </div>
-          )}
-
-          <label>
-            <strong>Lý do khóa *</strong>
-          </label>
-
-          <textarea
-            value={lockReason}
-            onChange={(event) => setLockReason(event.target.value)}
-            placeholder="Nhập lý do khóa tài khoản..."
-            rows={4}
-            style={{
-              width: "100%",
-              marginTop: "8px",
-              padding: "10px",
-              border: "1px solid #DFE1E6",
-              borderRadius: "4px",
-              resize: "vertical",
-              boxSizing: "border-box",
-            }}
-          />
 
           {lockError && (
             <div
               style={{
                 color: "#BF2600",
-                marginTop: "8px",
+                marginBottom: "10px",
               }}
             >
               {lockError}
             </div>
           )}
 
-          <div
+          <button
+            type="button"
+            onClick={() =>
+              void confirmLockAccount()
+            }
             style={{
-              display: "flex",
-              gap: "8px",
-              marginTop: "14px",
+              backgroundColor: "#DE350B",
+              color: "#FFFFFF",
+              border: "none",
+              padding: "9px 14px",
+              borderRadius: "4px",
+              cursor: "pointer",
             }}
           >
-            <button
-              type="button"
-              onClick={confirmLockAccount}
-              style={{
-                backgroundColor: "#DE350B",
-                color: "#FFFFFF",
-                border: "none",
-                padding: "9px 14px",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Xác nhận khóa
-            </button>
+            Xác nhận khóa
+          </button>
 
-            <button type="button" onClick={closeAccountAction}>
-              Hủy
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={closeAccountAction}
+            style={{
+              marginLeft: "8px",
+            }}
+          >
+            Hủy
+          </button>
         </div>
       )}
 
-      {/* =========================
-          S1-10 - HỘP MỞ KHÓA
-      ========================== */}
       {accountAction === "unlock" && selectedAccount && (
         <div
           style={{
@@ -704,57 +1061,55 @@ const AccountManagement = () => {
             backgroundColor: "#FFFFFF",
           }}
         >
-          <h3 style={{ marginTop: 0 }}>Mở khóa tài khoản</h3>
+          <h3 style={{ marginTop: 0 }}>
+            Mở khóa tài khoản
+          </h3>
 
           <p>
-            Bạn có chắc muốn mở khóa tài khoản:
-            <strong> {selectedAccount.name}</strong>?
+            Bạn có chắc muốn mở khóa tài khoản{" "}
+            <strong>{selectedAccount.name}</strong>?
           </p>
 
-          {selectedAccount.lockReason && (
-            <p
+          {lockError && (
+            <div
               style={{
-                padding: "10px",
-                backgroundColor: "#F4F5F7",
-                borderRadius: "4px",
+                color: "#BF2600",
+                marginBottom: "10px",
               }}
             >
-              <strong>Lý do khóa trước đó:</strong> {selectedAccount.lockReason}
-            </p>
+              {lockError}
+            </div>
           )}
 
-          <div
+          <button
+            type="button"
+            onClick={() =>
+              void confirmUnlockAccount()
+            }
             style={{
-              display: "flex",
-              gap: "8px",
-              marginTop: "14px",
+              backgroundColor: "#00875A",
+              color: "#FFFFFF",
+              border: "none",
+              padding: "9px 14px",
+              borderRadius: "4px",
+              cursor: "pointer",
             }}
           >
-            <button
-              type="button"
-              onClick={confirmUnlockAccount}
-              style={{
-                backgroundColor: "#00875A",
-                color: "#FFFFFF",
-                border: "none",
-                padding: "9px 14px",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              Xác nhận mở khóa
-            </button>
+            Xác nhận mở khóa
+          </button>
 
-            <button type="button" onClick={closeAccountAction}>
-              Hủy
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={closeAccountAction}
+            style={{
+              marginLeft: "8px",
+            }}
+          >
+            Hủy
+          </button>
         </div>
       )}
 
-      {/* =========================
-          BẢNG TÀI KHOẢN
-      ========================== */}
       <div
         style={{
           overflowX: "auto",
@@ -774,205 +1129,178 @@ const AccountManagement = () => {
                 backgroundColor: "#F4F5F7",
               }}
             >
-              <th
-                style={{
-                  padding: "12px",
-                }}
-              >
+              <th style={{ padding: "12px" }}>
                 STT
               </th>
 
-              <th
-                style={{
-                  padding: "12px",
-                }}
-              >
+              <th style={{ padding: "12px" }}>
                 Họ tên
               </th>
 
-              <th
-                style={{
-                  padding: "12px",
-                }}
-              >
+              <th style={{ padding: "12px" }}>
                 Email
               </th>
 
-              <th
-                style={{
-                  padding: "12px",
-                }}
-              >
+              <th style={{ padding: "12px" }}>
                 Phòng ban
               </th>
 
-              <th
-                style={{
-                  padding: "12px",
-                }}
-              >
+              <th style={{ padding: "12px" }}>
                 Vai trò
               </th>
 
-              <th
-                style={{
-                  padding: "12px",
-                }}
-              >
+              <th style={{ padding: "12px" }}>
                 Trạng thái
               </th>
 
-              <th
-                style={{
-                  padding: "12px",
-                }}
-              >
+              <th style={{ padding: "12px" }}>
                 Thao tác
               </th>
             </tr>
           </thead>
 
           <tbody>
-            {displayedAccounts.map((account, index) => (
-              <tr
-                key={account.id}
-                style={{
-                  borderBottom: "1px solid #DFE1E6",
-                }}
-              >
-                <td
-                  style={{
-                    padding: "12px",
-                  }}
-                >
-                  {startIndex + index + 1}
-                </td>
-
-                <td
-                  style={{
-                    padding: "12px",
-                  }}
-                >
-                  {account.name}
-                </td>
-
-                <td
-                  style={{
-                    padding: "12px",
-                  }}
-                >
-                  {account.email}
-                </td>
-
-                <td
-                  style={{
-                    padding: "12px",
-                  }}
-                >
-                  {account.department}
-                </td>
-
-                <td
-                  style={{
-                    padding: "12px",
-                  }}
-                >
-                  {account.role}
-                </td>
-
-                <td
-                  style={{
-                    padding: "12px",
-                  }}
-                >
-                  <span
-                    style={{
-                      padding: "5px 9px",
-                      borderRadius: "12px",
-
-                      backgroundColor:
-                        account.status === "Hoạt động" ? "#E3FCEF" : "#FFEBE6",
-
-                      color:
-                        account.status === "Hoạt động" ? "#006644" : "#BF2600",
-                    }}
-                  >
-                    {account.status}
-                  </span>
-                </td>
-
-                <td
-                  style={{
-                    padding: "12px",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "8px",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <button type="button" onClick={() => openEditForm(account)}>
-                      Sửa
-                    </button>
-
-                    {account.status === "Hoạt động" ? (
-                      <button
-                        type="button"
-                        onClick={() => openLockDialog(account)}
-                        style={{
-                          backgroundColor: "#DE350B",
-                          color: "#FFFFFF",
-                          border: "none",
-                          borderRadius: "4px",
-                          padding: "7px 10px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Khóa
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => openUnlockDialog(account)}
-                        style={{
-                          backgroundColor: "#00875A",
-                          color: "#FFFFFF",
-                          border: "none",
-                          borderRadius: "4px",
-                          padding: "7px 10px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Mở khóa
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-
-            {displayedAccounts.length === 0 && (
+            {loading && (
               <tr>
                 <td
                   colSpan={7}
                   style={{
-                    padding: "20px",
+                    padding: "24px",
                     textAlign: "center",
                   }}
                 >
-                  Không tìm thấy tài khoản phù hợp.
+                  Đang tải dữ liệu...
                 </td>
               </tr>
             )}
+
+            {!loading &&
+              displayedAccounts.map(
+                (account, index) => (
+                  <tr
+                    key={account.id}
+                    style={{
+                      borderBottom:
+                        "1px solid #DFE1E6",
+                    }}
+                  >
+                    <td style={{ padding: "12px" }}>
+                      {startIndex + index + 1}
+                    </td>
+
+                    <td style={{ padding: "12px" }}>
+                      {account.name}
+                    </td>
+
+                    <td style={{ padding: "12px" }}>
+                      {account.email}
+                    </td>
+
+                    <td style={{ padding: "12px" }}>
+                      {account.department}
+                    </td>
+
+                    <td style={{ padding: "12px" }}>
+                      {account.role}
+                    </td>
+
+                    <td style={{ padding: "12px" }}>
+                      <span
+                        style={{
+                          padding: "5px 9px",
+                          borderRadius: "12px",
+
+                          backgroundColor:
+                            account.status === "Hoạt động"
+                              ? "#E3FCEF"
+                              : "#FFEBE6",
+
+                          color:
+                            account.status === "Hoạt động"
+                              ? "#006644"
+                              : "#BF2600",
+                        }}
+                      >
+                        {account.status}
+                      </span>
+                    </td>
+
+                    <td style={{ padding: "12px" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "8px",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            openEditForm(account)
+                          }
+                        >
+                          Sửa
+                        </button>
+
+                        {account.status === "Hoạt động" ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openLockDialog(account)
+                            }
+                            style={{
+                              backgroundColor: "#DE350B",
+                              color: "#FFFFFF",
+                              border: "none",
+                              borderRadius: "4px",
+                              padding: "7px 10px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Khóa
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openUnlockDialog(account)
+                            }
+                            style={{
+                              backgroundColor: "#00875A",
+                              color: "#FFFFFF",
+                              border: "none",
+                              borderRadius: "4px",
+                              padding: "7px 10px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Mở khóa
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ),
+              )}
+
+            {!loading &&
+              displayedAccounts.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={7}
+                    style={{
+                      padding: "20px",
+                      textAlign: "center",
+                    }}
+                  >
+                    Không tìm thấy tài khoản phù hợp.
+                  </td>
+                </tr>
+              )}
           </tbody>
         </table>
       </div>
 
-      {/* =========================
-          PHÂN TRANG
-      ========================== */}
       <div
         style={{
           display: "flex",
@@ -984,9 +1312,16 @@ const AccountManagement = () => {
         }}
       >
         <span>
-          Hiển thị {filteredAccounts.length === 0 ? 0 : startIndex + 1} -{" "}
-          {Math.min(startIndex + PAGE_SIZE, filteredAccounts.length)} /{" "}
-          {filteredAccounts.length} tài khoản
+          Hiển thị{" "}
+          {filteredAccounts.length === 0
+            ? 0
+            : startIndex + 1}{" "}
+          -{" "}
+          {Math.min(
+            startIndex + PAGE_SIZE,
+            filteredAccounts.length,
+          )}{" "}
+          / {filteredAccounts.length} tài khoản
         </span>
 
         <div>
@@ -994,7 +1329,9 @@ const AccountManagement = () => {
             type="button"
             disabled={page === 1}
             onClick={() =>
-              setCurrentPage((current) => Math.max(1, current - 1))
+              setCurrentPage((current) =>
+                Math.max(1, current - 1),
+              )
             }
           >
             Trước
@@ -1012,7 +1349,12 @@ const AccountManagement = () => {
             type="button"
             disabled={page >= totalPages}
             onClick={() =>
-              setCurrentPage((current) => Math.min(totalPages, current + 1))
+              setCurrentPage((current) =>
+                Math.min(
+                  totalPages,
+                  current + 1,
+                ),
+              )
             }
           >
             Sau

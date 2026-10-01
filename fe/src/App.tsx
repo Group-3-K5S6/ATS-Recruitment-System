@@ -35,12 +35,15 @@ import {
   clearLocalSession,
 } from "./services/session";
 
+
 /* =========================================================
    BACKEND
 ========================================================= */
 
 const API_URL =
-  import.meta.env.VITE_ATS_API_URL || "http://localhost:4000";
+  import.meta.env.VITE_ATS_API_URL ||
+  "http://localhost:4000";
+
 
 /* =========================================================
    KIỂU DỮ LIỆU
@@ -53,20 +56,25 @@ type SessionUser = {
   roles: string[];
 };
 
+
 type LoginData = {
   accessToken: string;
   refreshToken: string;
   user: SessionUser;
 };
 
+
 type ApiResponse<T> = {
   success: boolean;
+
   data?: T;
 
   error?: {
+    code?: string;
     message?: string;
   };
 };
+
 
 /* =========================================================
    ROLE BACKEND -> ROLE FRONTEND
@@ -82,7 +90,10 @@ const roleByCode: Record<string, Role> = {
   ADMIN: "Admin",
 };
 
-function resolveRole(roles: string[]): Role {
+
+function resolveRole(
+  roles: string[]
+): Role {
   const priority = [
     "ADMIN",
     "HR_MANAGER",
@@ -94,30 +105,56 @@ function resolveRole(roles: string[]): Role {
   ];
 
   const roleCode =
-    priority.find((item) => roles.includes(item)) || "CANDIDATE";
+    priority.find(
+      (item) => roles.includes(item)
+    ) || "CANDIDATE";
 
-  return roleByCode[roleCode] || "Candidate";
+  return (
+    roleByCode[roleCode] ||
+    "Candidate"
+  );
 }
+
 
 /* =========================================================
    SESSION
 ========================================================= */
 
-function saveSession(data: LoginData) {
-  sessionStorage.setItem("accessToken", data.accessToken);
-  sessionStorage.setItem("refreshToken", data.refreshToken);
-  sessionStorage.setItem("atsUser", JSON.stringify(data.user));
+function saveSession(
+  data: LoginData
+) {
+  sessionStorage.setItem(
+    "accessToken",
+    data.accessToken
+  );
+
+  sessionStorage.setItem(
+    "refreshToken",
+    data.refreshToken
+  );
+
+  sessionStorage.setItem(
+    "atsUser",
+    JSON.stringify(data.user)
+  );
 }
 
-function getSessionUser(): SessionUser | null {
-  const raw = sessionStorage.getItem("atsUser");
+
+function getSessionUser():
+  SessionUser | null {
+
+  const raw =
+    sessionStorage.getItem(
+      "atsUser"
+    );
 
   if (!raw) {
     return null;
   }
 
   try {
-    const user = JSON.parse(raw) as SessionUser;
+    const user =
+      JSON.parse(raw) as SessionUser;
 
     if (
       !user.id ||
@@ -134,35 +171,105 @@ function getSessionUser(): SessionUser | null {
   }
 }
 
+
 function clearSession() {
+  /*
+   * Giữ tương thích với
+   * services/session hiện tại.
+   */
   clearLocalSession();
 
-  sessionStorage.removeItem("accessToken");
-  sessionStorage.removeItem("refreshToken");
-  sessionStorage.removeItem("atsUser");
+  sessionStorage.removeItem(
+    "accessToken"
+  );
+
+  sessionStorage.removeItem(
+    "refreshToken"
+  );
+
+  sessionStorage.removeItem(
+    "atsUser"
+  );
 }
 
+
 /* =========================================================
-   LOGOUT BACKEND
+   S1-02 - LOGOUT BACKEND
 ========================================================= */
 
-async function logoutFromBackend() {
-  const token = sessionStorage.getItem("accessToken");
+async function logoutFromBackend(): Promise<void> {
+  const accessToken =
+    sessionStorage.getItem("accessToken");
 
-  if (!token) {
+  const refreshToken =
+    sessionStorage.getItem("refreshToken");
+
+  if (!accessToken) {
     return;
   }
 
-  try {
-    await fetch(`${API_URL}/api/auth/logout`, {
-      method: "POST",
+  let response: Response;
 
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+  try {
+    response = await fetch(
+      `${API_URL}/api/auth/logout`,
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json",
+
+          Authorization:
+            `Bearer ${accessToken}`,
+        },
+
+        body: JSON.stringify({
+          refreshToken,
+        }),
+      }
+    );
   } catch {
-    // Nếu backend lỗi thì vẫn xóa phiên phía frontend.
+    throw new Error(
+      "Không thể kết nối đến máy chủ để đăng xuất."
+    );
+  }
+
+  let result:
+    ApiResponse<{
+      message?: string;
+    }> | null = null;
+
+  try {
+    result =
+      (await response.json()) as
+        ApiResponse<{
+          message?: string;
+        }>;
+  } catch {
+    result = null;
+  }
+
+  /*
+   * Nếu access token đã bị revoke trước đó
+   * thì phía server đã an toàn.
+   */
+  if (
+    response.status === 401 &&
+    result?.error?.code ===
+      "TOKEN_REVOKED"
+  ) {
+    return;
+  }
+
+  /*
+   * Các lỗi logout khác:
+   * không xóa session phía frontend.
+   */
+  if (!response.ok) {
+    throw new Error(
+      result?.error?.message ||
+        "Không thể đăng xuất khỏi máy chủ."
+    );
   }
 }
 
@@ -171,86 +278,155 @@ async function logoutFromBackend() {
 ========================================================= */
 
 function Login() {
-  const navigate = useNavigate();
+  const navigate =
+    useNavigate();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] =
+    useState("");
 
-  const [showPassword, setShowPassword] = useState(false);
+  const [password, setPassword] =
+    useState("");
 
-  const [error, setError] = useState("");
+  const [
+    showPassword,
+    setShowPassword,
+  ] = useState(false);
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] =
+    useState("");
 
-  const [sessionExpired] = useState(() => consumeSessionExpired());
+  const [
+    isSubmitting,
+    setIsSubmitting,
+  ] = useState(false);
 
-  /* Nếu đã đăng nhập thì không hiện lại trang login */
 
-  const currentUser = getSessionUser();
+  const [sessionExpired] =
+    useState(
+      () =>
+        consumeSessionExpired()
+    );
+
+
+  /*
+   * Nếu đã đăng nhập
+   * thì không hiện lại Login.
+   */
+  const currentUser =
+    getSessionUser();
 
   if (currentUser) {
-    return <Navigate to="/dashboard" replace />;
+    return (
+      <Navigate
+        to="/dashboard"
+        replace
+      />
+    );
   }
+
 
   /* =======================================================
      ĐĂNG NHẬP
   ======================================================= */
 
-  const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
+  const handleLogin = async (
+    e: FormEvent<HTMLFormElement>
+  ) => {
     e.preventDefault();
 
     setError("");
 
-    if (!email.trim() || !password.trim()) {
-      setError("Vui lòng nhập đầy đủ email công ty và mật khẩu.");
+
+    if (
+      !email.trim() ||
+      !password.trim()
+    ) {
+      setError(
+        "Vui lòng nhập đầy đủ email công ty và mật khẩu."
+      );
+
       return;
     }
 
+
     setIsSubmitting(true);
 
+
     try {
-      const response = await fetch(`${API_URL}/api/auth/login`, {
-        method: "POST",
+      const response =
+        await fetch(
+          `${API_URL}/api/auth/login`,
+          {
+            method: "POST",
 
-        headers: {
-          "Content-Type": "application/json",
-        },
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
 
-        body: JSON.stringify({
-          email: email.trim(),
-          password,
-        }),
-      });
+            body: JSON.stringify({
+              email:
+                email.trim(),
 
-      let result: ApiResponse<LoginData>;
+              password,
+            }),
+          }
+        );
+
+
+      let result:
+        ApiResponse<LoginData>;
+
 
       try {
-        result = (await response.json()) as ApiResponse<LoginData>;
+        result =
+          (await response.json()) as
+            ApiResponse<LoginData>;
       } catch {
-        throw new Error("Phản hồi từ máy chủ không hợp lệ.");
-      }
-
-      if (!response.ok || !result.success || !result.data) {
         throw new Error(
-          result.error?.message || "Email hoặc mật khẩu không chính xác.",
+          "Phản hồi từ máy chủ không hợp lệ."
         );
       }
 
-      saveSession(result.data);
 
-      navigate("/dashboard", {
-        replace: true,
-      });
+      if (
+        !response.ok ||
+        !result.success ||
+        !result.data
+      ) {
+        throw new Error(
+          result.error?.message ||
+            "Email hoặc mật khẩu không chính xác."
+        );
+      }
+
+
+      /*
+       * Lưu access token,
+       * refresh token và user.
+       */
+      saveSession(
+        result.data
+      );
+
+
+      navigate(
+        "/dashboard",
+        {
+          replace: true,
+        }
+      );
     } catch (loginError) {
       setError(
         loginError instanceof Error
           ? loginError.message
-          : "Không thể đăng nhập.",
+          : "Không thể đăng nhập."
       );
     } finally {
       setIsSubmitting(false);
     }
   };
+
 
   /* =======================================================
      GIAO DIỆN ĐĂNG NHẬP
@@ -258,22 +434,34 @@ function Login() {
 
   return (
     <div className="login-page">
+
       {/* PHẦN BÊN TRÁI */}
 
       <section className="left-panel">
+
         <div className="logo">
-          <div className="logo-icon">A</div>
+
+          <div className="logo-icon">
+            A
+          </div>
 
           <div>
             <h2>ATS</h2>
-            <p>Internal Recruitment</p>
+
+            <p>
+              Internal Recruitment
+            </p>
           </div>
+
         </div>
 
+
         <div className="left-content">
+
           <span className="small-title">
             HỆ THỐNG TUYỂN DỤNG NỘI BỘ
           </span>
+
 
           <h1>
             Tuyển đúng người.
@@ -281,146 +469,299 @@ function Login() {
             Theo dõi đúng quy trình.
           </h1>
 
+
           <p className="description">
-            Quản lý tập trung yêu cầu tuyển dụng, ứng viên, phỏng vấn và quyết
-            định tuyển dụng trên một hệ thống duy nhất.
+            Quản lý tập trung yêu cầu tuyển dụng,
+            ứng viên, phỏng vấn và quyết định
+            tuyển dụng trên một hệ thống duy nhất.
           </p>
 
-          <div className="feature-box">
-            <div className="feature-icon">✓</div>
-
-            <div>
-              <h3>Phân quyền theo vai trò</h3>
-
-              <p>Chỉ truy cập đúng dữ liệu thuộc phạm vi được cấp.</p>
-            </div>
-          </div>
 
           <div className="feature-box">
-            <div className="feature-icon">◎</div>
+
+            <div className="feature-icon">
+              ✓
+            </div>
 
             <div>
-              <h3>Quy trình tuyển dụng tập trung</h3>
+              <h3>
+                Phân quyền theo vai trò
+              </h3>
 
-              <p>Theo dõi xuyên suốt từ yêu cầu tuyển dụng đến nhận việc.</p>
+              <p>
+                Chỉ truy cập đúng dữ liệu
+                thuộc phạm vi được cấp.
+              </p>
             </div>
+
           </div>
+
+
+          <div className="feature-box">
+
+            <div className="feature-icon">
+              ◎
+            </div>
+
+            <div>
+              <h3>
+                Quy trình tuyển dụng tập trung
+              </h3>
+
+              <p>
+                Theo dõi xuyên suốt từ yêu cầu
+                tuyển dụng đến nhận việc.
+              </p>
+            </div>
+
+          </div>
+
         </div>
 
-        <p className="copyright">© 2026 ATS Recruitment System</p>
+
+        <p className="copyright">
+          © 2026 ATS Recruitment System
+        </p>
+
       </section>
+
 
       {/* PHẦN ĐĂNG NHẬP */}
 
       <section className="right-panel">
-        <div className="login-card">
-          <span className="welcome">CHÀO MỪNG TRỞ LẠI</span>
 
-          <h2>Đăng nhập</h2>
+        <div className="login-card">
+
+          <span className="welcome">
+            CHÀO MỪNG TRỞ LẠI
+          </span>
+
+
+          <h2>
+            Đăng nhập
+          </h2>
+
 
           <p className="login-note">
-            Sử dụng tài khoản công ty để tiếp tục vào hệ thống.
+            Sử dụng tài khoản công ty
+            để tiếp tục vào hệ thống.
           </p>
+
 
           {sessionExpired && (
             <div className="session-message">
-              Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.
+              Phiên đăng nhập đã hết hạn.
+              Vui lòng đăng nhập lại.
             </div>
           )}
 
-          <form onSubmit={handleLogin}>
+
+          <form
+            onSubmit={handleLogin}
+          >
+
             {/* EMAIL */}
 
             <div className="form-group">
-              <label>Email công ty</label>
+
+              <label>
+                Email công ty
+              </label>
+
 
               <div className="input-box">
-                <span className="input-icon">✉</span>
+
+                <span className="input-icon">
+                  ✉
+                </span>
+
 
                 <input
                   id="login-email"
                   type="email"
                   placeholder="tenban@congty.vn"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) =>
+                    setEmail(
+                      e.target.value
+                    )
+                  }
                 />
+
               </div>
+
             </div>
+
 
             {/* PASSWORD */}
 
             <div className="form-group">
-              <div className="password-header">
-                <label>Mật khẩu</label>
 
-                <Link to="/forgot-password">Quên mật khẩu?</Link>
+              <div className="password-header">
+
+                <label>
+                  Mật khẩu
+                </label>
+
+
+                <Link to="/forgot-password">
+                  Quên mật khẩu?
+                </Link>
+
               </div>
 
+
               <div className="input-box">
-                <span className="input-icon">🔒</span>
+
+                <span className="input-icon">
+                  🔒
+                </span>
+
 
                 <input
                   id="login-password"
-                  type={showPassword ? "text" : "password"}
+                  type={
+                    showPassword
+                      ? "text"
+                      : "password"
+                  }
                   placeholder="Nhập mật khẩu"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) =>
+                    setPassword(
+                      e.target.value
+                    )
+                  }
                 />
+
 
                 <button
                   type="button"
                   className="show-password"
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={() =>
+                    setShowPassword(
+                      !showPassword
+                    )
+                  }
                 >
-                  {showPassword ? "Ẩn" : "Hiện"}
+                  {showPassword
+                    ? "Ẩn"
+                    : "Hiện"}
                 </button>
+
               </div>
+
             </div>
 
-            {error && <div className="error-message">{error}</div>}
+
+            {error && (
+              <div className="error-message">
+                {error}
+              </div>
+            )}
+
 
             <button
               type="submit"
               className="login-button"
               disabled={isSubmitting}
             >
-              {isSubmitting ? "Đang đăng nhập…" : "Đăng nhập"}
+              {isSubmitting
+                ? "Đang đăng nhập…"
+                : "Đăng nhập"}
             </button>
+
           </form>
 
+
           <p className="support">
-            Không đăng nhập được? Liên hệ Quản trị hệ thống để được hỗ trợ.
+            Không đăng nhập được?
+            Liên hệ Quản trị hệ thống
+            để được hỗ trợ.
           </p>
+
         </div>
+
       </section>
+
     </div>
   );
 }
+
 
 /* =========================================================
    DASHBOARD
 ========================================================= */
 
 function DashboardRoute() {
-  const navigate = useNavigate();
 
-  const user = getSessionUser();
+  const navigate =
+    useNavigate();
+
+
+  const user =
+    getSessionUser();
+
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return (
+      <Navigate
+        to="/login"
+        replace
+      />
+    );
   }
 
-  const role = resolveRole(user.roles);
 
-  const handleLogout = async () => {
-    await logoutFromBackend();
+  const role =
+    resolveRole(
+      user.roles
+    );
 
-    clearSession();
 
-    navigate("/login", {
-      replace: true,
-    });
-  };
+  /*
+   * S1-02:
+   * Chỉ xóa session Frontend
+   * SAU KHI Backend logout thành công.
+   */
+  const handleLogout =
+    async () => {
+
+      try {
+
+        await logoutFromBackend();
+
+
+        /*
+         * Backend đã revoke token.
+         * Bây giờ mới xóa local session.
+         */
+        clearSession();
+
+
+        navigate(
+          "/login",
+          {
+            replace: true,
+          }
+        );
+
+      } catch (logoutError) {
+
+        console.error(
+          "Logout failed:",
+          logoutError
+        );
+
+
+        alert(
+          logoutError instanceof Error
+            ? logoutError.message
+            : "Không thể đăng xuất an toàn. Vui lòng thử lại."
+        );
+      }
+    };
+
 
   return (
     <Dashboard
@@ -431,82 +772,177 @@ function DashboardRoute() {
   );
 }
 
+
 /* =========================================================
    PROFILE - SPRINT 2
 ========================================================= */
 
 function ProfileRoute() {
-  const navigate = useNavigate();
 
-  const user = getSessionUser();
+  const navigate =
+    useNavigate();
+
+
+  const user =
+    getSessionUser();
+
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return (
+      <Navigate
+        to="/login"
+        replace
+      />
+    );
   }
 
-  const role = resolveRole(user.roles);
 
-  const handleLogout = async () => {
-    await logoutFromBackend();
+  const role =
+    resolveRole(
+      user.roles
+    );
 
-    clearSession();
 
-    navigate("/login", {
-      replace: true,
-    });
+  /*
+   * Dùng cùng cơ chế logout
+   * an toàn như Dashboard.
+   */
+  const handleLogout =
+    async () => {
+
+      try {
+
+        await logoutFromBackend();
+
+        clearSession();
+
+
+        navigate(
+          "/login",
+          {
+            replace: true,
+          }
+        );
+
+      } catch (logoutError) {
+
+        console.error(
+          "Logout failed:",
+          logoutError
+        );
+
+
+        alert(
+          logoutError instanceof Error
+            ? logoutError.message
+            : "Không thể đăng xuất an toàn. Vui lòng thử lại."
+        );
+      }
+    };
+
+
+  const handleMenuSelect = (
+    label: string
+  ) => {
+
+    if (
+      label === "Tổng quan"
+    ) {
+      navigate(
+        "/dashboard"
+      );
+
+      return;
+    }
+
+
+    if (
+      label ===
+      "Phòng ban & tổ chức"
+    ) {
+      navigate(
+        "/departments"
+      );
+
+      return;
+    }
+
+
+    if (
+      label ===
+      "Chức danh & dải lương"
+    ) {
+      navigate(
+        "/job-titles"
+      );
+
+      return;
+    }
+
+
+    if (
+      label ===
+      "Hồ sơ cá nhân"
+    ) {
+      navigate(
+        "/profile"
+      );
+
+      return;
+    }
   };
 
-  const handleMenuSelect = (label: string) => {
-    if (label === "Tổng quan") {
-      navigate("/dashboard");
-      return;
-    }
-
-    if (label === "Phòng ban & tổ chức") {
-      navigate("/departments");
-      return;
-    }
-
-    if (label === "Chức danh & dải lương") {
-      navigate("/job-titles");
-      return;
-    }
-
-    if (label === "Hồ sơ cá nhân") {
-      navigate("/profile");
-      return;
-    }
-  };
 
   return (
     <div className="dashboard-layout">
+
       <Sidebar
         role={role}
         userName={user.fullName}
         onLogout={handleLogout}
         selectedMenu="Hồ sơ cá nhân"
-        onMenuSelect={handleMenuSelect}
+        onMenuSelect={
+          handleMenuSelect
+        }
       />
 
+
       <main className="dashboard-content">
+
         <UserProfilePage />
+
       </main>
+
     </div>
   );
 }
+
 
 /* =========================================================
    DEPARTMENT - SPRINT 2
 ========================================================= */
 
 function DepartmentRoute() {
-  const user = getSessionUser();
+
+  const user =
+    getSessionUser();
+
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return (
+      <Navigate
+        to="/login"
+        replace
+      />
+    );
   }
 
-  const role = resolveRole(user.roles);
+
+  const role =
+    resolveRole(
+      user.roles
+    );
+
 
   return (
     <DepartmentManagement
@@ -516,18 +952,32 @@ function DepartmentRoute() {
   );
 }
 
+
 /* =========================================================
    JOB TITLE - SPRINT 2
 ========================================================= */
 
 function JobTitleRoute() {
-  const user = getSessionUser();
+
+  const user =
+    getSessionUser();
+
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return (
+      <Navigate
+        to="/login"
+        replace
+      />
+    );
   }
 
-  const role = resolveRole(user.roles);
+
+  const role =
+    resolveRole(
+      user.roles
+    );
+
 
   return (
     <JobTitleSalaryManagement
@@ -537,106 +987,159 @@ function JobTitleRoute() {
   );
 }
 
+
 /* =========================================================
    ROOT
 ========================================================= */
 
 function RootRoute() {
-  const user = getSessionUser();
+
+  const user =
+    getSessionUser();
+
 
   return (
     <Navigate
-      to={user ? "/dashboard" : "/login"}
+      to={
+        user
+          ? "/dashboard"
+          : "/login"
+      }
       replace
     />
   );
 }
+
 
 /* =========================================================
    APP
 ========================================================= */
 
 function App() {
+
   return (
     <BrowserRouter>
+
       <Routes>
+
         {/* ROOT */}
 
         <Route
           path="/"
-          element={<RootRoute />}
+          element={
+            <RootRoute />
+          }
         />
+
 
         {/* AUTH */}
 
         <Route
           path="/login"
-          element={<Login />}
+          element={
+            <Login />
+          }
         />
+
 
         <Route
           path="/forgot-password"
-          element={<ForgotPassword />}
+          element={
+            <ForgotPassword />
+          }
         />
+
 
         <Route
           path="/reset-password"
-          element={<ResetPassword />}
+          element={
+            <ResetPassword />
+          }
         />
+
 
         <Route
           path="/change-password"
-          element={<ChangePassword />}
+          element={
+            <ChangePassword />
+          }
         />
+
 
         {/* DASHBOARD */}
 
         <Route
           path="/dashboard"
-          element={<DashboardRoute />}
+          element={
+            <DashboardRoute />
+          }
         />
+
 
         {/* SPRINT 2 */}
 
         <Route
           path="/departments"
-          element={<DepartmentRoute />}
+          element={
+            <DepartmentRoute />
+          }
         />
+
 
         <Route
           path="/job-titles"
-          element={<JobTitleRoute />}
+          element={
+            <JobTitleRoute />
+          }
         />
+
 
         <Route
           path="/profile"
-          element={<ProfileRoute />}
+          element={
+            <ProfileRoute />
+          }
         />
+
 
         {/* ERROR */}
 
         <Route
           path="/403"
-          element={<ForbiddenPage />}
+          element={
+            <ForbiddenPage />
+          }
         />
+
 
         <Route
           path="/404"
-          element={<NotFoundPage />}
+          element={
+            <NotFoundPage />
+          }
         />
+
 
         <Route
           path="/500"
-          element={<ServerErrorPage />}
+          element={
+            <ServerErrorPage />
+          }
         />
+
 
         <Route
           path="*"
-          element={<NotFoundPage />}
+          element={
+            <NotFoundPage />
+          }
         />
+
       </Routes>
+
     </BrowserRouter>
   );
 }
+
 
 export default App;
