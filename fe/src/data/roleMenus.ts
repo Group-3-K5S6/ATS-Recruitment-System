@@ -1,4 +1,5 @@
 export type Role =
+  | "Candidate"
   | "Recruiter"
   | "HiringManager"
   | "Interviewer"
@@ -11,6 +12,7 @@ export interface MenuItem {
 }
 
 export const roleMenus: Record<Role, MenuItem[]> = {
+  Candidate: [{ label: "Tổng quan" }],
   Recruiter: [
     { label: "Tổng quan" },
     { label: "Yêu cầu tuyển dụng" },
@@ -42,6 +44,10 @@ export const roleMenus: Record<Role, MenuItem[]> = {
     { label: "Phân công recruiter" },
     { label: "Headcount & ngân sách" },
     { label: "Báo cáo" },
+    {
+      label: "Phòng ban & tổ chức",
+    },
+    { label: "Chức danh & dải lương" },
   ],
 
   Approver: [
@@ -59,5 +65,8 @@ export const roleMenus: Record<Role, MenuItem[]> = {
     { label: "Danh mục hệ thống" },
     { label: "Nhật ký hệ thống" },
     { label: "Cấu hình" },
+    {
+      label: "Phòng ban & tổ chức",
+    },
   ],
 };

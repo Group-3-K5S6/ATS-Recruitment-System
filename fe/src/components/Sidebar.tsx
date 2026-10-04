@@ -14,6 +14,7 @@ type SidebarProps = {
 };
 
 const roleLabel: Record<Role, string> = {
+  Candidate: "Ứng viên",
   Recruiter: "Nhân viên tuyển dụng",
   HiringManager: "Trưởng bộ phận",
   Interviewer: "Người phỏng vấn",
@@ -31,7 +32,7 @@ function Sidebar({
 }: SidebarProps) {
   const [open, setOpen] = useState(false);
 
-  const menu = roleMenus[role];
+  const menu = [...roleMenus[role], { label: "Hồ sơ cá nhân" }];
 
   const handleLogout = async () => {
     await onLogout();
