@@ -1,152 +1,83 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { ArrowLeft, LoaderCircle, Mail, ShieldCheck } from "lucide-react";
+import { Link } from "react-router-dom";
 import AuthLayout from "../components/AuthLayout";
+import { passwordRecoveryService } from "../services/passwordRecoveryService";
 
-const GENERIC_MESSAGE =
-  "Nếu email này tồn tại trong hệ thống, bạn sẽ nhận được mã OTP xác thực có hiệu lực trong 30 phút và chỉ sử dụng được 1 lần.";
+const SUCCESS_MESSAGE =
+  "Nếu email tồn tại trong hệ thống, liên kết đặt lại mật khẩu đã được gửi đến email của bạn.";
 
 function ForgotPassword() {
-  const navigate = useNavigate();
   const [email, setEmail] = useState("");
-  const [otp, setOtp] = useState("");
-  const [step, setStep] = useState<"email" | "otp">("email");
-  const [secondsRemaining, setSecondsRemaining] = useState(1800);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSuccessful, setIsSuccessful] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (step !== "otp" || secondsRemaining === 0) {
-      return;
-    }
-
-    const timer = window.setInterval(() => {
-      setSecondsRemaining((seconds) => Math.max(seconds - 1, 0));
-    }, 1000);
-
-    return () => window.clearInterval(timer);
-  }, [secondsRemaining, step]);
-
-  const formattedTime = `${String(Math.floor(secondsRemaining / 60)).padStart(
-    2,
-    "0",
-  )}:${String(secondsRemaining % 60).padStart(2, "0")}`;
-
-  const handleEmailSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setError("");
+    if (isLoading) return;
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      setError("Vui lòng nhập email công ty hợp lệ.");
-      return;
+    setError("");
+    setIsLoading(true);
+    try {
+      await passwordRecoveryService.requestResetLink(email.trim());
+      setIsSuccessful(true);
+    } catch {
+      setError("Không thể gửi yêu cầu lúc này. Vui lòng kiểm tra kết nối và thử lại.");
+    } finally {
+      setIsLoading(false);
     }
-
-    setStep("otp");
-    setSecondsRemaining(1800);
-  };
-
-  const handleOtpSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setError("");
-
-    if (!/^\d{6}$/.test(otp)) {
-      setError("Vui lòng nhập đủ 6 chữ số OTP.");
-      return;
-    }
-
-    navigate("/reset-password");
-  };
-
-  const handleResend = () => {
-    setOtp("");
-    setError("");
-    setSecondsRemaining(1800);
   };
 
   return (
     <AuthLayout>
       <Link className="back-link" to="/login">
-        ← Quay lại đăng nhập
+        <ArrowLeft size={16} aria-hidden="true" />
+        Quay lại đăng nhập
       </Link>
 
       <div className="auth-heading">
         <span className="welcome">KHÔI PHỤC QUYỀN TRUY CẬP</span>
-        <h2>{step === "email" ? "Quên mật khẩu?" : "Xác thực OTP"}</h2>
+        <h2>Quên mật khẩu</h2>
         <p className="login-note">
-          {step === "email"
-            ? "Nhập email công ty để nhận mã xác thực đặt lại mật khẩu."
-            : `Mã OTP đã được gửi đến ${email}.`}
+          Nhập email của bạn. Nếu email được đăng ký, chúng tôi sẽ gửi liên kết
+          hướng dẫn đặt lại mật khẩu.
         </p>
       </div>
 
-      {step === "email" ? (
-        <form onSubmit={handleEmailSubmit}>
+      {isSuccessful ? (
+        <div className="recovery-message recovery-success" role="status">
+          <ShieldCheck size={21} aria-hidden="true" />
+          <p>{SUCCESS_MESSAGE}</p>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label htmlFor="forgot-email">Email công ty</label>
+            <label htmlFor="forgot-email">Email</label>
             <div className="input-box">
-              <span className="input-icon">✉</span>
+              <Mail className="input-icon" size={17} aria-hidden="true" />
               <input
                 id="forgot-email"
                 type="email"
+                autoComplete="email"
+                required
                 placeholder="tenban@congty.vn"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
+                disabled={isLoading}
               />
             </div>
           </div>
-          {error && <div className="error-message">{error}</div>}
-          <button type="submit" className="login-button">
-            Gửi mã xác thực OTP
+          {error && <div className="error-message" role="alert">{error}</div>}
+          <button type="submit" className="login-button recovery-submit" disabled={isLoading}>
+            {isLoading && <LoaderCircle size={18} className="recovery-spinner" aria-hidden="true" />}
+            {isLoading ? "Đang gửi..." : "Gửi liên kết đặt lại mật khẩu"}
           </button>
-        </form>
-      ) : (
-        <form onSubmit={handleOtpSubmit}>
-          <div className="form-group">
-            <label htmlFor="otp">Mã OTP 6 số</label>
-            <div className="input-box otp-box">
-              <span className="input-icon">#</span>
-              <input
-                id="otp"
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={6}
-                placeholder="000000"
-                value={otp}
-                onChange={(event) =>
-                  setOtp(event.target.value.replace(/\D/g, ""))
-                }
-              />
-            </div>
-          </div>
-
-          {error && <div className="error-message">{error}</div>}
-
-          <button type="submit" className="login-button">
-            Xác nhận OTP
-          </button>
-
-          <div className="otp-footer">
-            <span>Thời gian còn lại: {formattedTime}</span>
-            <button
-              type="button"
-              className="text-button"
-              onClick={handleResend}
-              disabled={secondsRemaining > 0}
-            >
-              Gửi lại mã
-            </button>
-          </div>
         </form>
       )}
 
-      <div className="security-message" role="status">
-        <span className="security-icon">✓</span>
-        <span>{GENERIC_MESSAGE}</span>
-      </div>
-
-      <p className="support">
-        Không nhận được email? Kiểm tra thư mục spam hoặc thử gửi lại mã.
-      </p>
+      {!isSuccessful && <p className="support">Vui lòng kiểm tra cả thư mục thư rác.</p>}
     </AuthLayout>
   );
 }
