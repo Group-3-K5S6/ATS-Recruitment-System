@@ -8,8 +8,7 @@ const API_URL =
   import.meta.env.VITE_ATS_API_URL ||
   "http://localhost:4000";
 
-const GENERIC_MESSAGE =
-  "Nếu email tồn tại trong hệ thống, chúng tôi đã gửi một liên kết đặt lại mật khẩu. Liên kết có hiệu lực trong 30 phút.";
+ 
 
 function ForgotPassword() {
   const [email, setEmail] =
@@ -85,13 +84,12 @@ function ForgotPassword() {
         );
       }
 
-
-      setMessage(
-        result?.data?.message ||
-        result?.message ||
-        GENERIC_MESSAGE
-      );
-
+setMessage(
+  result?.data?.message ||
+  result?.message ||
+  "Đã gửi liên kết đặt lại mật khẩu đến email của bạn."
+);
+      
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -126,11 +124,7 @@ function ForgotPassword() {
           Quên mật khẩu?
         </h2>
 
-        <p className="login-note">
-          Nhập email công ty để nhận
-          liên kết đặt lại mật khẩu.
-        </p>
-
+        
       </div>
 
 

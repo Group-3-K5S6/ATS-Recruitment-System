@@ -14,9 +14,7 @@ import {
   hashToken,
 } from '../../utils/token';
 
-import {
-  sendResetPasswordEmail,
-} from '../../utils/email';
+import { sendResetPasswordEmail } from '../../utils/email';
 
 import {
   successResponse,
@@ -39,8 +37,6 @@ import { MenuService } from '../menu/menu.service';
 
 export const loginSchema = z.object({
   email: z.string().email(),
-
-  // S1-01
   password: z.string().min(1),
 });
 
@@ -57,9 +53,6 @@ export const refreshSchema = z.object({
   refreshToken: z.string().min(1),
 });
 
-/* =========================================================
-   S1-04 - CHANGE PASSWORD
-========================================================= */
 
 export const changePasswordSchema = z.object({
   currentPassword: z
@@ -85,14 +78,13 @@ export const changePasswordSchema = z.object({
     ),
 });
 
-/* =========================================================
-   S1-03 - FORGOT / RESET PASSWORD
-========================================================= */
 
 export const forgotPasswordSchema = z.object({
   email: z
     .string()
-    .email('Email không đúng định dạng.'),
+    .email(
+      'Email không đúng định dạng.'
+    ),
 });
 
 
@@ -140,77 +132,75 @@ export class AuthController {
     res: Response
   ): Promise<void> {
 
-    const email = String(req.body.email)
-      .trim()
-      .toLowerCase();
+    const email =
+      String(
+        req.body.email ?? ''
+      )
+        .trim()
+        .toLowerCase();
+
 
     const password =
-      String(req.body.password);
+      String(
+        req.body.password ?? ''
+      );
+
+
+    const rawDeviceId =
+      String(
+        req.body.deviceId ??
+        req.header('x-device-id') ??
+        ''
+      ).trim();
+
+
+    const deviceId =
+      rawDeviceId ||
+      `ip:${req.ip || 'unknown'}`;
+
 
     const now =
       new Date();
 
 
-    const user =
-      await prisma.user.findUnique({
-        where: {
-          email,
-        },
-
-        include: {
-          roles: {
-            include: {
-              role: {
-                include: {
-                  permissions: {
-                    include: {
-                      permission: true,
-                    },
-                  },
-                },
-              },
+    let loginAttempt =
+      await prisma
+        .loginAttempt
+        .findUnique({
+          where: {
+            email_deviceId: {
+              email,
+              deviceId,
             },
           },
-        },
-      });
+        });
+
+
+    let failedAttempts =
+      loginAttempt?.failedAttempts ??
+      0;
+
+
+    let deviceLockedUntil =
+      loginAttempt?.lockedUntil ??
+      null;
 
 
     /* =====================================================
-       EMAIL KHÔNG TỒN TẠI / USER KHÔNG HOẠT ĐỘNG
-    ===================================================== */
-
-    if (!user || !user.isActive) {
-      errorResponse(
-        res,
-        'Email hoặc mật khẩu không đúng.',
-        401,
-        'INVALID_CREDENTIALS'
-      );
-
-      return;
-    }
-
-
-    let failedLoginAttempts =
-      user.failedLoginAttempts;
-
-    let lockedUntil =
-      user.lockedUntil;
-
-
-    /* =====================================================
-       TÀI KHOẢN ĐANG BỊ KHÓA
+       THIẾT BỊ ĐANG BỊ KHÓA
     ===================================================== */
 
     if (
-      lockedUntil !== null &&
-      lockedUntil.getTime() > now.getTime()
+      deviceLockedUntil !== null &&
+      deviceLockedUntil.getTime() >
+        now.getTime()
     ) {
+
       errorResponse(
         res,
-        'Tài khoản tạm thời bị khóa do đăng nhập sai quá nhiều lần. Vui lòng thử lại sau 15 phút.',
+        'Thiết bị này đang tạm thời bị khóa do đăng nhập sai quá nhiều lần. Vui lòng thử lại sau 15 phút.',
         423,
-        'ACCOUNT_TEMPORARILY_LOCKED'
+        'DEVICE_TEMPORARILY_LOCKED'
       );
 
       return;
@@ -218,34 +208,87 @@ export class AuthController {
 
 
     /* =====================================================
-       ĐÃ HẾT THỜI GIAN KHÓA
+       HẾT THỜI GIAN KHÓA
     ===================================================== */
 
     if (
-      lockedUntil !== null &&
-      lockedUntil.getTime() <= now.getTime()
+      deviceLockedUntil !== null &&
+      deviceLockedUntil.getTime() <=
+        now.getTime()
     ) {
-      await prisma.user.update({
-        where: {
-          id: user.id,
-        },
 
-        data: {
-          failedLoginAttempts: 0,
-          lockedUntil: null,
-        },
-      });
+      await prisma
+        .loginAttempt
+        .update({
+          where: {
+            email_deviceId: {
+              email,
+              deviceId,
+            },
+          },
 
-      failedLoginAttempts = 0;
-      lockedUntil = null;
+          data: {
+            failedAttempts: 0,
+            lockedUntil: null,
+          },
+        });
+
+
+      failedAttempts = 0;
+
+      deviceLockedUntil = null;
+
+      loginAttempt = null;
     }
 
 
     /* =====================================================
-       KIỂM TRA PASSWORD
+       TÌM USER
     ===================================================== */
+
+    const user =
+      await prisma
+        .user
+        .findUnique({
+
+          where: {
+            email,
+          },
+
+          include: {
+
+            roles: {
+
+              include: {
+
+                role: {
+
+                  include: {
+
+                    permissions: {
+
+                      include: {
+                        permission: true,
+                      },
+
+                    },
+
+                  },
+
+                },
+
+              },
+
+            },
+
+          },
+
+        });
+
 
     const isMatch =
+      !!user &&
+      user.isActive &&
       await comparePassword(
         password,
         user.passwordHash
@@ -253,21 +296,18 @@ export class AuthController {
 
 
     /* =====================================================
-       PASSWORD SAI
+       LOGIN SAI
     ===================================================== */
 
     if (!isMatch) {
 
       const nextFailedAttempts =
-        failedLoginAttempts + 1;
+        failedAttempts + 1;
 
 
-      /*
-       * Sai lần thứ 5 trở lên:
-       * khóa tài khoản trong 15 phút.
-       */
-
-      if (nextFailedAttempts >= 5) {
+      if (
+        nextFailedAttempts >= 5
+      ) {
 
         const newLockedUntil =
           new Date(
@@ -276,47 +316,118 @@ export class AuthController {
           );
 
 
-        await prisma.user.update({
-          where: {
-            id: user.id,
-          },
+        await prisma
+          .loginAttempt
+          .upsert({
 
-          data: {
-            failedLoginAttempts:
-              nextFailedAttempts,
+            where: {
 
-            lockedUntil:
-              newLockedUntil,
-          },
-        });
+              email_deviceId: {
+                email,
+                deviceId,
+              },
+
+            },
+
+
+            update: {
+
+              failedAttempts:
+                nextFailedAttempts,
+
+              lockedUntil:
+                newLockedUntil,
+
+            },
+
+
+            create: {
+
+              email,
+
+              deviceId,
+
+              failedAttempts:
+                nextFailedAttempts,
+
+              lockedUntil:
+                newLockedUntil,
+
+            },
+
+          });
 
 
         errorResponse(
           res,
-          'Tài khoản tạm thời bị khóa do đăng nhập sai 5 lần liên tiếp. Vui lòng thử lại sau 15 phút.',
+          'Thiết bị này tạm thời bị khóa do đăng nhập sai 5 lần liên tiếp. Vui lòng thử lại sau 15 phút.',
           423,
-          'ACCOUNT_TEMPORARILY_LOCKED'
+          'DEVICE_TEMPORARILY_LOCKED'
         );
 
         return;
       }
 
 
-      /*
-       * Sai lần 1 - 4.
-       */
+      await prisma
+        .loginAttempt
+        .upsert({
 
-      await prisma.user.update({
-        where: {
-          id: user.id,
-        },
+          where: {
 
-        data: {
-          failedLoginAttempts:
-            nextFailedAttempts,
-        },
-      });
+            email_deviceId: {
+              email,
+              deviceId,
+            },
 
+          },
+
+
+          update: {
+
+            failedAttempts:
+              nextFailedAttempts,
+
+            lockedUntil:
+              null,
+
+          },
+
+
+          create: {
+
+            email,
+
+            deviceId,
+
+            failedAttempts:
+              nextFailedAttempts,
+
+          },
+
+        });
+
+
+      const remainingAttempts =
+        5 -
+        nextFailedAttempts;
+
+
+      errorResponse(
+        res,
+        `Email hoặc mật khẩu không đúng. Bạn còn ${remainingAttempts} lần thử trước khi thiết bị tạm khóa 15 phút.`,
+        401,
+        'INVALID_CREDENTIALS'
+      );
+
+      return;
+    }
+
+
+    if (
+      !user ||
+      !user.isActive
+    ) {
 
       errorResponse(
         res,
@@ -330,73 +441,70 @@ export class AuthController {
 
 
     /* =====================================================
-       LOGIN ĐÚNG → RESET BỘ ĐẾM
+       LOGIN ĐÚNG
     ===================================================== */
 
-    if (
-      failedLoginAttempts > 0 ||
-      lockedUntil !== null
-    ) {
-      await prisma.user.update({
+    await prisma
+      .loginAttempt
+      .deleteMany({
+
         where: {
-          id: user.id,
+          email,
+          deviceId,
         },
 
-        data: {
-          failedLoginAttempts: 0,
-          lockedUntil: null,
-        },
       });
-    }
 
 
     /* =====================================================
        ROLE + PERMISSION
     ===================================================== */
+const roles: RoleType[] = [];
 
-    const roles: RoleType[] = [];
+const permissionSet = new Set<PermissionCode>();
 
-    const permissionSet =
-      new Set<PermissionCode>();
+for (const userRole of user.roles) {
+  const roleName = userRole.role.name as RoleType;
 
+  roles.push(roleName);
 
-    for (const userRole of user.roles) {
+  for (const rolePermission of userRole.role.permissions) {
+    const permissionCode =
+      rolePermission.permission.code as PermissionCode;
 
-      roles.push(
-        userRole.role.name as RoleType
-      );
-
-
-      for (
-        const rolePermission
-        of userRole.role.permissions
-      ) {
-        permissionSet.add(
-          rolePermission.permission.code as PermissionCode
-        );
-      }
-    }
-
+    permissionSet.add(permissionCode);
+  }
+}
+   
 
     /* =====================================================
        TOKEN
     ===================================================== */
 
     const payload = {
-      userId: user.id,
-      email: user.email,
 
-      // S1-04
-      tokenVersion: user.tokenVersion,
+      userId:
+        user.id,
+
+      email:
+        user.email,
+
+      tokenVersion:
+        user.tokenVersion,
+
     };
 
 
     const accessToken =
-      signAccessToken(payload);
+      signAccessToken(
+        payload
+      );
 
 
     const refreshToken =
-      signRefreshToken(payload);
+      signRefreshToken(
+        payload
+      );
 
 
     /* =====================================================
@@ -409,7 +517,8 @@ export class AuthController {
       'user',
       user.id,
       {
-        email: user.email,
+        email:
+          user.email,
       }
     );
 
@@ -420,12 +529,14 @@ export class AuthController {
 
     successResponse(
       res,
+
       {
         accessToken,
 
         refreshToken,
 
         user: {
+
           id:
             user.id,
 
@@ -441,12 +552,18 @@ export class AuthController {
           roles,
 
           permissions:
-            Array.from(permissionSet),
+            Array.from(
+              permissionSet
+            ),
         },
+
       },
+
       200,
+
       'Login successful'
     );
+
   }
 
 
@@ -474,15 +591,20 @@ export class AuthController {
 
 
     const existing =
-      await prisma.user.findUnique({
-        where: {
-          email:
-            normalizedEmail,
-        },
-      });
+      await prisma
+        .user
+        .findUnique({
+
+          where: {
+            email:
+              normalizedEmail,
+          },
+
+        });
 
 
     if (existing) {
+
       errorResponse(
         res,
         'Email is already registered.',
@@ -501,15 +623,20 @@ export class AuthController {
 
 
     const candidateRole =
-      await prisma.role.findUnique({
-        where: {
-          name:
-            RoleType.CANDIDATE,
-        },
-      });
+      await prisma
+        .role
+        .findUnique({
+
+          where: {
+            name:
+              RoleType.CANDIDATE,
+          },
+
+        });
 
 
     if (!candidateRole) {
+
       errorResponse(
         res,
         'Candidate role not configured.',
@@ -522,45 +649,68 @@ export class AuthController {
 
 
     const newUser =
-      await prisma.user.create({
-        data: {
-          email:
-            normalizedEmail,
+      await prisma
+        .user
+        .create({
 
-          passwordHash,
+          data: {
 
-          fullName,
+            email:
+              normalizedEmail,
 
-          isActive:
-            true,
+            passwordHash,
 
-          roles: {
-            create: {
-              roleId:
-                candidateRole.id,
+            fullName,
+
+            isActive:
+              true,
+
+
+            roles: {
+
+              create: {
+
+                roleId:
+                  candidateRole.id,
+
+              },
+
             },
+
+
+            candidateProfile: {
+
+              create: {
+
+                fullName,
+
+                email:
+                  normalizedEmail,
+
+                phone:
+                  phone ||
+                  null,
+
+              },
+
+            },
+
           },
 
-          candidateProfile: {
-            create: {
-              fullName,
 
-              email:
-                normalizedEmail,
+          select: {
 
-              phone:
-                phone || null,
-            },
+            id: true,
+
+            email: true,
+
+            fullName: true,
+
+            createdAt: true,
+
           },
-        },
 
-        select: {
-          id: true,
-          email: true,
-          fullName: true,
-          createdAt: true,
-        },
-      });
+        });
 
 
     await recordRequestAudit(
@@ -581,6 +731,7 @@ export class AuthController {
       201,
       'Registration successful. Candidate profile created.'
     );
+
   }
 
 
@@ -598,26 +749,24 @@ export class AuthController {
 
 
     const refreshToken =
-      typeof req.body?.refreshToken ===
+      typeof req.body
+        ?.refreshToken ===
       'string'
-        ? req.body.refreshToken
+
+        ? req.body
+            .refreshToken
+
         : null;
 
 
-    /*
-     * Thu hồi Access Token.
-     */
-
     if (accessToken) {
+
       await revokeToken(
         accessToken
       );
+
     }
 
-
-    /*
-     * Thu hồi Refresh Token.
-     */
 
     if (refreshToken) {
 
@@ -628,31 +777,39 @@ export class AuthController {
 
 
       if (refreshPayload) {
+
         await revokeToken(
           refreshToken
         );
+
       }
+
     }
 
 
     if (req.user) {
+
       await recordRequestAudit(
         req,
         AuditAction.LOGOUT,
         'user',
         req.user.id
       );
+
     }
 
 
     successResponse(
       res,
+
       {
         message:
           'Logged out successfully',
       },
+
       200
     );
+
   }
 
 
@@ -670,10 +827,6 @@ export class AuthController {
     } = req.body;
 
 
-    /* =====================================================
-       REFRESH TOKEN ĐÃ BỊ REVOKE?
-    ===================================================== */
-
     const revoked =
       await isTokenRevoked(
         refreshToken
@@ -681,6 +834,7 @@ export class AuthController {
 
 
     if (revoked) {
+
       errorResponse(
         res,
         'Refresh token has been revoked. Please log in again.',
@@ -692,10 +846,6 @@ export class AuthController {
     }
 
 
-    /* =====================================================
-       XÁC MINH REFRESH TOKEN
-    ===================================================== */
-
     const payload =
       verifyRefreshToken(
         refreshToken
@@ -703,6 +853,7 @@ export class AuthController {
 
 
     if (!payload) {
+
       errorResponse(
         res,
         'Invalid or expired refresh token.',
@@ -714,33 +865,37 @@ export class AuthController {
     }
 
 
-    /* =====================================================
-       KIỂM TRA USER
-    ===================================================== */
-
     const user =
-      await prisma.user.findUnique({
-        where: {
-          id:
-            payload.userId,
-        },
+      await prisma
+        .user
+        .findUnique({
 
-        select: {
-          id: true,
-          email: true,
-          isActive: true,
-          lockedUntil: true,
+          where: {
+            id:
+              payload.userId,
+          },
 
-          // S1-04
-          tokenVersion: true,
-        },
-      });
+
+          select: {
+
+            id: true,
+
+            email: true,
+
+            isActive: true,
+
+            tokenVersion: true,
+
+          },
+
+        });
 
 
     if (
       !user ||
       !user.isActive
     ) {
+
       errorResponse(
         res,
         'Account is not available.',
@@ -752,39 +907,16 @@ export class AuthController {
     }
 
 
-    /*
-     * Không cấp access token mới
-     * khi tài khoản đang bị khóa tạm.
-     */
-
-    if (
-      user.lockedUntil !== null &&
-      user.lockedUntil.getTime() >
-      Date.now()
-    ) {
-      errorResponse(
-        res,
-        'Tài khoản đang tạm thời bị khóa.',
-        423,
-        'ACCOUNT_TEMPORARILY_LOCKED'
-      );
-
-      return;
-    }
-
-
-    /* =====================================================
-       S1-04 - KIỂM TRA VERSION CỦA REFRESH TOKEN
-    ===================================================== */
-
     const refreshTokenVersion =
-      payload.tokenVersion ?? 0;
+      payload.tokenVersion ??
+      0;
 
 
     if (
       refreshTokenVersion !==
       user.tokenVersion
     ) {
+
       errorResponse(
         res,
         'Phiên đăng nhập đã hết hiệu lực. Vui lòng đăng nhập lại.',
@@ -798,6 +930,7 @@ export class AuthController {
 
     const newAccessToken =
       signAccessToken({
+
         userId:
           user.id,
 
@@ -806,23 +939,23 @@ export class AuthController {
 
         tokenVersion:
           user.tokenVersion,
+
       });
 
 
     successResponse(
       res,
+
       {
         accessToken:
           newAccessToken,
       },
+
       200
     );
+
   }
 
-
-  /* =========================================================
-     S1-03 - FORGOT PASSWORD
-  ========================================================= */
 
   /* =========================================================
      S1-04 - CHANGE PASSWORD
@@ -833,11 +966,8 @@ export class AuthController {
     res: Response
   ): Promise<void> {
 
-    /* =====================================================
-       1. KIỂM TRA ĐÃ ĐĂNG NHẬP
-    ===================================================== */
-
     if (!req.user) {
+
       errorResponse(
         res,
         'Vui lòng đăng nhập trước khi đổi mật khẩu.',
@@ -856,21 +986,43 @@ export class AuthController {
 
 
     /* =====================================================
-       2. LẤY USER HIỆN TẠI
+       USER + 5 PASSWORD GẦN NHẤT
     ===================================================== */
 
     const user =
-      await prisma.user.findUnique({
-        where: {
-          id: req.user.id,
-        },
-      });
+      await prisma
+        .user
+        .findUnique({
+
+          where: {
+            id:
+              req.user.id,
+          },
+
+
+          include: {
+
+            passwordHistories: {
+
+              orderBy: {
+                createdAt:
+                  'desc',
+              },
+
+              take: 5,
+
+            },
+
+          },
+
+        });
 
 
     if (
       !user ||
       !user.isActive
     ) {
+
       errorResponse(
         res,
         'Tài khoản không tồn tại hoặc đã bị vô hiệu hóa.',
@@ -883,17 +1035,21 @@ export class AuthController {
 
 
     /* =====================================================
-       3. KIỂM TRA MẬT KHẨU HIỆN TẠI
+       KIỂM TRA PASSWORD HIỆN TẠI
     ===================================================== */
 
     const currentPasswordCorrect =
       await comparePassword(
+
         currentPassword,
+
         user.passwordHash
+
       );
 
 
     if (!currentPasswordCorrect) {
+
       errorResponse(
         res,
         'Mật khẩu hiện tại không đúng.',
@@ -906,432 +1062,21 @@ export class AuthController {
 
 
     /* =====================================================
-       4. HASH MẬT KHẨU MỚI
-    ===================================================== */
-
-    const newPasswordHash =
-      await hashPassword(
-        newPassword
-      );
-
-
-    /* =====================================================
-       5. ĐỔI MẬT KHẨU + TĂNG TOKEN VERSION
-
-       tokenVersion tăng 1 sẽ làm toàn bộ access/refresh
-       token cũ không còn hợp lệ.
-    ===================================================== */
-
-    const transactionResult =
-      await prisma.$transaction([
-
-        /*
-         * Lưu mật khẩu cũ vào lịch sử.
-         */
-
-        prisma.passwordHistory.create({
-          data: {
-            userId:
-              user.id,
-
-            passwordHash:
-              user.passwordHash,
-          },
-        }),
-
-
-        /*
-         * Đổi mật khẩu.
-         * Tăng tokenVersion để vô hiệu hóa phiên cũ.
-         */
-
-        prisma.user.update({
-          where: {
-            id:
-              user.id,
-          },
-
-          data: {
-            passwordHash:
-              newPasswordHash,
-
-            tokenVersion: {
-              increment: 1,
-            },
-
-            failedLoginAttempts:
-              0,
-
-            lockedUntil:
-              null,
-          },
-
-          select: {
-            id: true,
-            email: true,
-            tokenVersion: true,
-          },
-        }),
-
-      ]);
-
-
-    const updatedUser =
-      transactionResult[1];
-
-
-    /* =====================================================
-       6. TẠO TOKEN MỚI CHO PHIÊN HIỆN TẠI
-
-       Phiên khác:
-       tokenVersion cũ → bị từ chối.
-
-       Phiên hiện tại:
-       nhận tokenVersion mới → tiếp tục sử dụng.
-    ===================================================== */
-
-    const newTokenPayload = {
-      userId:
-        updatedUser.id,
-
-      email:
-        updatedUser.email,
-
-      tokenVersion:
-        updatedUser.tokenVersion,
-    };
-
-
-    const accessToken =
-      signAccessToken(
-        newTokenPayload
-      );
-
-
-    const refreshToken =
-      signRefreshToken(
-        newTokenPayload
-      );
-
-
-    /* =====================================================
-       7. AUDIT LOG
-    ===================================================== */
-
-    await recordRequestAudit(
-      req,
-      AuditAction.PASSWORD_CHANGED,
-      'user',
-      user.id,
-      {
-        email:
-          user.email,
-      }
-    );
-
-
-    /* =====================================================
-       8. RESPONSE
-    ===================================================== */
-
-    successResponse(
-      res,
-      {
-        message:
-          'Đổi mật khẩu thành công.',
-
-        accessToken,
-
-        refreshToken,
-      },
-      200,
-      'Password changed successfully.'
-    );
-  }
-
-  static async forgotPassword(
-    req: Request,
-    res: Response
-  ): Promise<void> {
-
-    const email =
-      String(req.body.email)
-        .trim()
-        .toLowerCase();
-
-
-    /*
-     * Email tồn tại và không tồn tại
-     * đều phải nhận cùng thông báo.
-     */
-
-    const genericMessage =
-      'Nếu email tồn tại trong hệ thống, chúng tôi đã gửi một liên kết đặt lại mật khẩu. Liên kết có hiệu lực trong 30 phút.';
-
-
-    const user =
-      await prisma.user.findUnique({
-        where: {
-          email,
-        },
-      });
-
-
-    if (
-      user &&
-      user.isActive
-    ) {
-
-      /*
-       * Hủy các link reset cũ
-       * chưa được sử dụng.
-       */
-
-      await prisma
-        .passwordResetToken
-        .deleteMany({
-          where: {
-            email:
-              user.email,
-
-            usedAt:
-              null,
-          },
-        });
-
-
-      /*
-       * Sinh token ngẫu nhiên.
-       */
-
-      const rawToken =
-        crypto
-          .randomBytes(32)
-          .toString('hex');
-
-
-      /*
-       * Không lưu token gốc.
-       * Chỉ lưu hash trong database.
-       */
-
-      const tokenHash =
-        hashToken(
-          rawToken
-        );
-
-
-      /*
-       * Hết hạn sau 30 phút.
-       */
-
-      const expiresAt =
-        new Date(
-          Date.now() +
-          30 * 60 * 1000
-        );
-
-
-      await prisma
-        .passwordResetToken
-        .create({
-          data: {
-            email:
-              user.email,
-
-            tokenHash,
-
-            expiresAt,
-          },
-        });
-
-
-      try {
-
-        await sendResetPasswordEmail(
-          user.email,
-          rawToken
-        );
-
-
-        await recordRequestAudit(
-          req,
-          AuditAction.PASSWORD_RESET_REQUESTED,
-          'user',
-          user.id,
-          {
-            email:
-              user.email,
-          }
-        );
-
-      } catch (error) {
-
-        /*
-         * Không trả lỗi SMTP ra client
-         * để tránh tiết lộ email có tồn tại.
-         */
-
-        console.error(
-          '[S1-03] Không gửi được email reset:',
-          error
-        );
-      }
-    }
-
-
-    successResponse(
-      res,
-      {
-        message:
-          genericMessage,
-      },
-      200,
-      genericMessage
-    );
-  }
-
-
-  /* =========================================================
-     S1-03 - RESET PASSWORD
-  ========================================================= */
-
-  static async resetPassword(
-    req: Request,
-    res: Response
-  ): Promise<void> {
-
-    const {
-      token,
-      newPassword,
-    } = req.body;
-
-
-    /* =====================================================
-       HASH TOKEN TỪ LINK
-    ===================================================== */
-
-    const tokenHash =
-      hashToken(
-        token
-      );
-
-
-    /* =====================================================
-       TÌM RESET TOKEN
-    ===================================================== */
-
-    const resetTokenRecord =
-      await prisma
-        .passwordResetToken
-        .findUnique({
-          where: {
-            tokenHash,
-          },
-        });
-
-
-    if (!resetTokenRecord) {
-      errorResponse(
-        res,
-        'Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.',
-        400,
-        'INVALID_TOKEN'
-      );
-
-      return;
-    }
-
-
-    /* =====================================================
-       LINK ĐÃ DÙNG
-    ===================================================== */
-
-    if (
-      resetTokenRecord.usedAt !==
-      null
-    ) {
-      errorResponse(
-        res,
-        'Liên kết đặt lại mật khẩu này đã được sử dụng.',
-        400,
-        'TOKEN_ALREADY_USED'
-      );
-
-      return;
-    }
-
-
-    /* =====================================================
-       LINK HẾT HẠN
-    ===================================================== */
-
-    if (
-      resetTokenRecord.expiresAt <
-      new Date()
-    ) {
-      errorResponse(
-        res,
-        'Liên kết đặt lại mật khẩu đã hết hạn. Vui lòng yêu cầu một liên kết mới.',
-        400,
-        'EXPIRED_TOKEN'
-      );
-
-      return;
-    }
-
-
-    /* =====================================================
-       TÌM USER + LỊCH SỬ PASSWORD
-    ===================================================== */
-
-    const user =
-      await prisma.user.findUnique({
-        where: {
-          email:
-            resetTokenRecord.email,
-        },
-
-        include: {
-          passwordHistories: {
-            orderBy: {
-              createdAt:
-                'desc',
-            },
-
-            take: 5,
-          },
-        },
-      });
-
-
-    if (
-      !user ||
-      !user.isActive
-    ) {
-      errorResponse(
-        res,
-        'Tài khoản không tồn tại hoặc đã bị khóa.',
-        400,
-        'USER_NOT_FOUND'
-      );
-
-      return;
-    }
-
-
-    /* =====================================================
-       KHÔNG CHO DÙNG LẠI PASSWORD HIỆN TẠI
+       KHÔNG CHO TRÙNG PASSWORD HIỆN TẠI
     ===================================================== */
 
     const sameAsCurrent =
       await comparePassword(
+
         newPassword,
+
         user.passwordHash
+
       );
 
 
     if (sameAsCurrent) {
+
       errorResponse(
         res,
         'Mật khẩu mới không được trùng với mật khẩu hiện tại.',
@@ -1354,12 +1099,16 @@ export class AuthController {
 
       const reused =
         await comparePassword(
+
           newPassword,
+
           history.passwordHash
+
         );
 
 
       if (reused) {
+
         errorResponse(
           res,
           'Mật khẩu mới không được trùng với các mật khẩu đã sử dụng gần đây.',
@@ -1369,6 +1118,7 @@ export class AuthController {
 
         return;
       }
+
     }
 
 
@@ -1383,72 +1133,632 @@ export class AuthController {
 
 
     /* =====================================================
-       UPDATE TRONG TRANSACTION
+       UPDATE DATABASE
     ===================================================== */
 
-    await prisma.$transaction([
-
-      /*
-       * Đánh dấu reset link đã sử dụng.
-       */
-
-      prisma.passwordResetToken.update({
-        where: {
-          id:
-            resetTokenRecord.id,
-        },
-
-        data: {
-          usedAt:
-            new Date(),
-        },
-      }),
+    const transactionResult =
+      await prisma
+        .$transaction([
 
 
-      /*
-       * Lưu password hiện tại vào lịch sử.
-       */
+          prisma
+            .passwordHistory
+            .create({
 
-      prisma.passwordHistory.create({
-        data: {
-          userId:
-            user.id,
+              data: {
 
-          passwordHash:
-            user.passwordHash,
-        },
-      }),
+                userId:
+                  user.id,
+
+                passwordHash:
+                  user.passwordHash,
+
+              },
+
+            }),
 
 
-      /*
-       * Cập nhật password mới.
-       * Đồng thời reset lockout của S1-01.
-       */
+          prisma
+            .user
+            .update({
 
-      prisma.user.update({
-        where: {
-          id:
-            user.id,
-        },
+              where: {
+                id:
+                  user.id,
+              },
 
-        data: {
-          passwordHash:
-            newPasswordHash,
 
-          failedLoginAttempts:
-            0,
+              data: {
 
-          lockedUntil:
-            null,
-        },
-      }),
+                passwordHash:
+                  newPasswordHash,
 
-    ]);
+
+                tokenVersion: {
+                  increment: 1,
+                },
+
+
+                failedLoginAttempts:
+                  0,
+
+
+                lockedUntil:
+                  null,
+
+              },
+
+
+              select: {
+
+                id: true,
+
+                email: true,
+
+                tokenVersion:
+                  true,
+
+              },
+
+            }),
+
+        ]);
+
+
+    const updatedUser =
+      transactionResult[1];
+
+
+    const newTokenPayload = {
+
+      userId:
+        updatedUser.id,
+
+      email:
+        updatedUser.email,
+
+      tokenVersion:
+        updatedUser
+          .tokenVersion,
+
+    };
+
+
+    const accessToken =
+      signAccessToken(
+        newTokenPayload
+      );
+
+
+    const refreshToken =
+      signRefreshToken(
+        newTokenPayload
+      );
+
+
+    await recordRequestAudit(
+      req,
+      AuditAction.PASSWORD_CHANGED,
+      'user',
+      user.id,
+      {
+        email:
+          user.email,
+      }
+    );
+
+
+    successResponse(
+      res,
+
+      {
+
+        message:
+          'Đổi mật khẩu thành công.',
+
+        accessToken,
+
+        refreshToken,
+
+      },
+
+      200,
+
+      'Password changed successfully.'
+    );
+
+  }
+
+
+  /* =========================================================
+     S1-03 - FORGOT PASSWORD
+  ========================================================= */
+
+  static async forgotPassword(
+    req: Request,
+    res: Response
+  ): Promise<void> {
+
+    const email =
+      String(
+        req.body.email ??
+        ''
+      )
+        .trim()
+        .toLowerCase();
+
+
+    const user =
+      await prisma
+        .user
+        .findUnique({
+
+          where: {
+            email,
+          },
+
+        });
 
 
     /* =====================================================
-       AUDIT
+       EMAIL KHÔNG TỒN TẠI
     ===================================================== */
+
+    if (!user) {
+
+      errorResponse(
+        res,
+        'Email này không tồn tại trong hệ thống.',
+        404,
+        'EMAIL_NOT_FOUND'
+      );
+
+      return;
+    }
+
+
+    if (!user.isActive) {
+
+      errorResponse(
+        res,
+        'Tài khoản này hiện không hoạt động.',
+        403,
+        'ACCOUNT_INACTIVE'
+      );
+
+      return;
+    }
+
+
+    /* =====================================================
+       XÓA TOKEN RESET CŨ
+    ===================================================== */
+
+    await prisma
+      .passwordResetToken
+      .deleteMany({
+
+        where: {
+
+          email:
+            user.email,
+
+          usedAt:
+            null,
+
+        },
+
+      });
+
+
+    const rawToken =
+      crypto
+        .randomBytes(32)
+        .toString('hex');
+
+
+    const tokenHash =
+      hashToken(
+        rawToken
+      );
+
+
+    const expiresAt =
+      new Date(
+
+        Date.now() +
+        30 * 60 * 1000
+
+      );
+
+
+    const createdToken =
+      await prisma
+        .passwordResetToken
+        .create({
+
+          data: {
+
+            email:
+              user.email,
+
+            tokenHash,
+
+            expiresAt,
+
+          },
+
+        });
+
+
+    /* =====================================================
+       GỬI EMAIL
+    ===================================================== */
+
+    try {
+
+      await sendResetPasswordEmail(
+
+        user.email,
+
+        rawToken
+
+      );
+
+
+      await recordRequestAudit(
+        req,
+        AuditAction.PASSWORD_RESET_REQUESTED,
+        'user',
+        user.id,
+        {
+          email:
+            user.email,
+        }
+      );
+
+
+    } catch (error) {
+
+
+      await prisma
+        .passwordResetToken
+        .delete({
+
+          where: {
+            id:
+              createdToken.id,
+          },
+
+        })
+        .catch(
+          () =>
+            undefined
+        );
+
+
+      console.error(
+        '[S1-03] Không gửi được email reset:',
+        error
+      );
+
+
+      errorResponse(
+        res,
+        'Không thể gửi email đặt lại mật khẩu. Vui lòng thử lại.',
+        500,
+        'RESET_EMAIL_FAILED'
+      );
+
+      return;
+    }
+
+
+    successResponse(
+      res,
+
+      {
+        message:
+          'Đã gửi liên kết đặt lại mật khẩu đến email của bạn. Liên kết có hiệu lực trong 30 phút.',
+      },
+
+      200,
+
+      'Reset password email sent successfully.'
+    );
+
+  }
+
+
+  /* =========================================================
+     S1-03 - RESET PASSWORD
+  ========================================================= */
+
+  static async resetPassword(
+    req: Request,
+    res: Response
+  ): Promise<void> {
+
+    const {
+      token,
+      newPassword,
+    } = req.body;
+
+
+    const tokenHash =
+      hashToken(
+        token
+      );
+
+
+    const resetTokenRecord =
+      await prisma
+        .passwordResetToken
+        .findUnique({
+
+          where: {
+            tokenHash,
+          },
+
+        });
+
+
+    if (!resetTokenRecord) {
+
+      errorResponse(
+        res,
+        'Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.',
+        400,
+        'INVALID_TOKEN'
+      );
+
+      return;
+    }
+
+
+    /* =====================================================
+       LINK ĐÃ DÙNG
+    ===================================================== */
+
+    if (
+      resetTokenRecord
+        .usedAt !==
+      null
+    ) {
+
+      errorResponse(
+        res,
+        'Liên kết đặt lại mật khẩu này đã được sử dụng.',
+        400,
+        'TOKEN_ALREADY_USED'
+      );
+
+      return;
+    }
+
+
+    /* =====================================================
+       LINK HẾT HẠN
+    ===================================================== */
+
+    if (
+      resetTokenRecord
+        .expiresAt <
+      new Date()
+    ) {
+
+      errorResponse(
+        res,
+        'Liên kết đặt lại mật khẩu đã hết hạn. Vui lòng yêu cầu một liên kết mới.',
+        400,
+        'EXPIRED_TOKEN'
+      );
+
+      return;
+    }
+
+
+    /* =====================================================
+       USER + PASSWORD HISTORY
+    ===================================================== */
+
+    const user =
+      await prisma
+        .user
+        .findUnique({
+
+          where: {
+
+            email:
+              resetTokenRecord
+                .email,
+
+          },
+
+
+          include: {
+
+            passwordHistories: {
+
+              orderBy: {
+
+                createdAt:
+                  'desc',
+
+              },
+
+              take: 5,
+
+            },
+
+          },
+
+        });
+
+
+    if (
+      !user ||
+      !user.isActive
+    ) {
+
+      errorResponse(
+        res,
+        'Tài khoản không tồn tại hoặc đã bị khóa.',
+        400,
+        'USER_NOT_FOUND'
+      );
+
+      return;
+    }
+
+
+    /* =====================================================
+       KHÔNG TRÙNG PASSWORD HIỆN TẠI
+    ===================================================== */
+
+    const sameAsCurrent =
+      await comparePassword(
+
+        newPassword,
+
+        user.passwordHash
+
+      );
+
+
+    if (sameAsCurrent) {
+
+      errorResponse(
+        res,
+        'Mật khẩu mới không được trùng với mật khẩu hiện tại.',
+        400,
+        'PASSWORD_REUSED'
+      );
+
+      return;
+    }
+
+
+    /* =====================================================
+       KHÔNG DÙNG LẠI 5 PASSWORD GẦN NHẤT
+    ===================================================== */
+
+    for (
+      const history
+      of user.passwordHistories
+    ) {
+
+      const reused =
+        await comparePassword(
+
+          newPassword,
+
+          history.passwordHash
+
+        );
+
+
+      if (reused) {
+
+        errorResponse(
+          res,
+          'Mật khẩu mới không được trùng với các mật khẩu đã sử dụng gần đây.',
+          400,
+          'PASSWORD_REUSED'
+        );
+
+        return;
+      }
+
+    }
+
+
+    const newPasswordHash =
+      await hashPassword(
+        newPassword
+      );
+
+
+    /* =====================================================
+       UPDATE TRANSACTION
+    ===================================================== */
+
+    await prisma
+      .$transaction([
+
+
+        prisma
+          .passwordResetToken
+          .update({
+
+            where: {
+
+              id:
+                resetTokenRecord.id,
+
+            },
+
+            data: {
+
+              usedAt:
+                new Date(),
+
+            },
+
+          }),
+
+
+        prisma
+          .passwordHistory
+          .create({
+
+            data: {
+
+              userId:
+                user.id,
+
+              passwordHash:
+                user.passwordHash,
+
+            },
+
+          }),
+
+
+        prisma
+          .user
+          .update({
+
+            where: {
+              id:
+                user.id,
+            },
+
+
+            data: {
+
+              passwordHash:
+                newPasswordHash,
+
+
+              failedLoginAttempts:
+                0,
+
+
+              lockedUntil:
+                null,
+
+
+              tokenVersion: {
+                increment: 1,
+              },
+
+            },
+
+          }),
+
+      ]);
+
 
     await recordRequestAudit(
       req,
@@ -1462,19 +1772,21 @@ export class AuthController {
     );
 
 
-    /* =====================================================
-       RESPONSE
-    ===================================================== */
-
     successResponse(
       res,
+
       {
+
         message:
           'Đặt lại mật khẩu thành công. Vui lòng đăng nhập với mật khẩu mới.',
+
       },
+
       200,
+
       'Password reset successfully.'
     );
+
   }
 
 
@@ -1488,6 +1800,7 @@ export class AuthController {
   ): Promise<void> {
 
     if (!req.user) {
+
       errorResponse(
         res,
         'Not authenticated',
@@ -1504,6 +1817,7 @@ export class AuthController {
       req.user,
       200
     );
+
   }
 
 
@@ -1517,6 +1831,7 @@ export class AuthController {
   ): Promise<void> {
 
     if (!req.user) {
+
       errorResponse(
         res,
         'Authentication required before accessing menu.',
@@ -1529,9 +1844,10 @@ export class AuthController {
 
 
     const menu =
-      MenuService.getMenuForUser(
-        req.user
-      );
+      MenuService
+        .getMenuForUser(
+          req.user
+        );
 
 
     successResponse(
@@ -1540,5 +1856,7 @@ export class AuthController {
       200,
       'User navigation menu retrieved successfully'
     );
+
   }
+
 }
