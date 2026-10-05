@@ -8,6 +8,7 @@ import {
   changePasswordSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  activateAccountSchema,
 } from './auth.controller';
 
 import {
@@ -78,6 +79,8 @@ router.post(
   validateBody(resetPasswordSchema),
   AuthController.resetPassword
 );
+
+router.post('/activate-account', validateBody(activateAccountSchema), AuthController.activateAccount);
 
 
 router.get(

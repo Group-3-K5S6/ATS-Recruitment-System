@@ -367,7 +367,6 @@ const AccountManagement = () => {
 
       body: JSON.stringify({
         email: form.email.trim().toLowerCase(),
-        password: form.password,
         fullName: form.name.trim(),
 
         roles: [
@@ -471,21 +470,14 @@ const AccountManagement = () => {
     }
 
     if (formMode === "create") {
-      if (!form.password || !form.role) {
+      if (!form.role) {
         setFormError(
-          "Vui lòng nhập mật khẩu và chọn vai trò.",
+          "Vui lòng chọn vai trò.",
         );
 
         return;
       }
 
-      if (form.password.length < 6) {
-        setFormError(
-          "Mật khẩu phải có ít nhất 6 ký tự.",
-        );
-
-        return;
-      }
     }
 
     try {
@@ -902,18 +894,6 @@ const AccountManagement = () => {
 
               {formMode === "create" && (
                 <>
-                  <input
-                    type="password"
-                    placeholder="Mật khẩu (ít nhất 6 ký tự)"
-                    value={form.password}
-                    onChange={(event) =>
-                      setForm({
-                        ...form,
-                        password: event.target.value,
-                      })
-                    }
-                  />
-
                   <select
                     value={form.role}
                     onChange={(event) =>

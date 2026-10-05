@@ -1,6 +1,6 @@
 datasource db {
-  provider = "sqlite"
-  url      = "file:./ats.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 generator client {
@@ -14,6 +14,9 @@ model User {
   fullName     String
   departmentId String?
   isActive     Boolean @default(true)
+  mustChangePassword Boolean @default(false)
+  activationTokenHash String?
+  activationExpiresAt DateTime?
 
   // S1-01 - khóa tạm sau 5 lần đăng nhập sai liên tiếp
   failedLoginAttempts Int       @default(0)

@@ -6,6 +6,9 @@ import { prisma } from '../../database/prisma';
 import { UserPolicy } from '../../policies/user.policy';
 
 import { hashPassword } from '../../utils/password';
+import crypto from 'crypto';
+import { hashToken } from '../../utils/token';
+import { sendEmployeeActivationEmail } from '../../utils/email';
 
 import {
   successResponse,
@@ -27,8 +30,6 @@ import { RoleType } from '../../rbac/roles';
 
 export const createUserSchema = z.object({
   email: z.string().email(),
-
-  password: z.string().min(6),
 
   fullName: z.string().min(2),
 
@@ -162,6 +163,7 @@ export class UserController {
   ): Promise<void> {
 
     const data = req.body;
+    data.email = String(data.email).trim().toLowerCase();
 
     const user = req.user!;
 
@@ -204,10 +206,10 @@ export class UserController {
     }
 
 
-    const passwordHash =
-      await hashPassword(
-        data.password
-      );
+    const temporaryPassword = crypto.randomBytes(9).toString('base64url');
+    const activationToken = crypto.randomBytes(32).toString('hex');
+    const activationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const passwordHash = await hashPassword(temporaryPassword);
 
 
     const roles =
@@ -242,7 +244,10 @@ export class UserController {
           departmentId:
             data.departmentId,
 
-          isActive: true,
+          isActive: false,
+          mustChangePassword: true,
+          activationTokenHash: hashToken(activationToken),
+          activationExpiresAt,
 
 
           roles: {
@@ -291,12 +296,19 @@ export class UserController {
       }
     );
 
+    try {
+      await sendEmployeeActivationEmail(newUser.email, temporaryPassword, activationToken, activationExpiresAt);
+    } catch (error) {
+      await prisma.user.delete({ where: { id: newUser.id } });
+      throw error;
+    }
+
 
     successResponse(
       res,
       newUser,
       201,
-      'User account created successfully.'
+      'Tài khoản đã được tạo và email kích hoạt đã gửi.'
     );
   }
 

@@ -20,56 +20,27 @@ export async function sendResetPasswordEmail(
     throw new Error('SMTP chưa được cấu hình.');
   }
 
-  const resetLink =
-    `${env.FRONTEND_URL}/reset-password` +
-    `?token=${encodeURIComponent(resetToken)}`;
-
   await transporter.sendMail({
     from: `"ATS Recruitment System" <${env.MAIL_FROM}>`,
     to: toEmail,
-    subject: 'ATS - Đặt lại mật khẩu',
+    subject: 'ATS - Mã OTP đặt lại mật khẩu',
 
     text: `
 Bạn vừa yêu cầu đặt lại mật khẩu ATS.
 
-Mở liên kết sau:
-${resetLink}
+Mã OTP của bạn: ${resetToken}
 
-Liên kết có hiệu lực trong 30 phút và chỉ sử dụng được một lần.
+Mã có hiệu lực trong 10 phút và chỉ sử dụng được một lần.
 
 Nếu bạn không thực hiện yêu cầu này, hãy bỏ qua email.
     `.trim(),
 
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto;">
-        <h2>Đặt lại mật khẩu ATS</h2>
-
-        <p>
-          Bạn vừa yêu cầu đặt lại mật khẩu cho tài khoản ATS.
-        </p>
-
-        <p>
-          <a
-            href="${resetLink}"
-            style="
-              display: inline-block;
-              padding: 12px 20px;
-              background: #1f2937;
-              color: white;
-              text-decoration: none;
-              border-radius: 6px;
-            "
-          >
-            Đặt lại mật khẩu
-          </a>
-        </p>
-
-        <p>
-          Liên kết có hiệu lực trong
-          <strong>30 phút</strong>
-          và chỉ được sử dụng
-          <strong>một lần</strong>.
-        </p>
+        <h2>Mã OTP đặt lại mật khẩu ATS</h2>
+        <p>Mã OTP của bạn:</p>
+        <p style="font-size: 28px; font-weight: bold; letter-spacing: 6px;">${resetToken}</p>
+        <p>Mã có hiệu lực trong <strong>10 phút</strong> và chỉ sử dụng được một lần.</p>
 
         <p>
           Nếu bạn không yêu cầu thao tác này,
@@ -77,5 +48,26 @@ Nếu bạn không thực hiện yêu cầu này, hãy bỏ qua email.
         </p>
       </div>
     `,
+  });
+}
+
+export async function sendEmployeeActivationEmail(
+  toEmail: string,
+  temporaryPassword: string,
+  activationToken: string,
+  expiresAt: Date
+): Promise<void> {
+  if (!env.SMTP_USER || !env.SMTP_PASS) {
+    throw new Error('SMTP chưa được cấu hình.');
+  }
+
+  const activationLink = `${env.FRONTEND_URL}/activate-account?token=${encodeURIComponent(activationToken)}`;
+  const expiry = expiresAt.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+  await transporter.sendMail({
+    from: `"ATS Recruitment System" <${env.MAIL_FROM}>`,
+    to: toEmail,
+    subject: 'ATS - Kích hoạt tài khoản nhân viên',
+    text: `Tài khoản nhân viên của bạn đã được tạo.\nEmail: ${toEmail}\nMật khẩu đăng nhập lần đầu: ${temporaryPassword}\nMã kích hoạt: ${activationToken}\nKích hoạt tại: ${activationLink}\nHạn kích hoạt: ${expiry}. Sau kích hoạt, hãy đăng nhập và đổi mật khẩu ngay.`,
+    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto"><h2>Kích hoạt tài khoản ATS</h2><p>Email đăng nhập: <strong>${toEmail}</strong></p><p>Mật khẩu đăng nhập lần đầu: <strong>${temporaryPassword}</strong></p><p>Mã kích hoạt: <strong>${activationToken}</strong></p><p><a href="${activationLink}">Kích hoạt tài khoản</a></p><p>Hạn kích hoạt: <strong>${expiry}</strong></p><p>Sau kích hoạt, đăng nhập và đổi mật khẩu ngay.</p></div>`,
   });
 }

@@ -64,19 +64,23 @@ Hệ thống phân quyền Backend an toàn, bảo vệ dữ liệu nhân sự, 
 # 1. Cài đặt thư viện
 npm install
 
-# 2. Đồng bộ database SQLite và generate Prisma Client
+# 2. Tạo be/.env từ be/.env.example và điền thông tin PostgreSQL
+# DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/ats_db?schema=public"
+# Backend API dùng PORT=4000; giao diện FE mặc định chạy ở http://localhost:5173
+
+# 3. Đồng bộ schema PostgreSQL và generate Prisma Client
 npm run prisma:push
 
-# 3. Khởi tạo dữ liệu mẫu (Seed 7 roles, permissions, users và kịch bản test)
+# 4. Khởi tạo dữ liệu mẫu (Seed 7 roles, permissions, users và kịch bản test)
 npm run prisma:seed
 
-# 4. Chạy kiểm thử tự động (57 test cases bao quát)
+# 5. Chạy kiểm thử tự động (57 test cases bao quát)
 npm test
 
-# 5. Build mã nguồn TypeScript
+# 6. Build mã nguồn TypeScript
 npm run build
 
-# 6. Khởi động server
+# 7. Khởi động server
 npm start
 ```
 

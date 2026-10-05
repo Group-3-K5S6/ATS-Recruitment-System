@@ -130,6 +130,16 @@ export async function authenticate(
     return;
   }
 
+  if (user.mustChangePassword && req.path !== '/change-password') {
+    errorResponse(
+      res,
+      'Bạn cần đổi mật khẩu trước khi tiếp tục sử dụng hệ thống.',
+      403,
+      'PASSWORD_CHANGE_REQUIRED'
+    );
+    return;
+  }
+
 
   /* =========================================================
      5. S1-04 - KIỂM TRA TOKEN VERSION

@@ -9,7 +9,7 @@ const API_URL =
   "http://localhost:4000";
 
 const GENERIC_MESSAGE =
-  "Nếu email tồn tại trong hệ thống, chúng tôi đã gửi một liên kết đặt lại mật khẩu. Liên kết có hiệu lực trong 30 phút.";
+  "Nếu email tồn tại trong hệ thống, chúng tôi đã gửi mã OTP đặt lại mật khẩu. Mã có hiệu lực trong 10 phút.";
 
 function ForgotPassword() {
   const [email, setEmail] =
@@ -128,7 +128,7 @@ function ForgotPassword() {
 
         <p className="login-note">
           Nhập email công ty để nhận
-          liên kết đặt lại mật khẩu.
+          mã OTP đặt lại mật khẩu.
         </p>
 
       </div>
@@ -183,7 +183,7 @@ function ForgotPassword() {
           >
             {submitting
               ? "Đang gửi..."
-              : "Gửi liên kết đặt lại mật khẩu"}
+              : "Gửi mã OTP"}
           </button>
 
         </form>
@@ -201,6 +201,8 @@ function ForgotPassword() {
 
           <span>
             {message}
+            <br />
+            <Link to="/reset-password">Nhập mã OTP để đặt lại mật khẩu</Link>
           </span>
 
         </div>

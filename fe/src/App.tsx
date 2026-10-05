@@ -14,6 +14,7 @@ import "./App.css";
 
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import ActivateAccount from "./pages/ActivateAccount";
 import ChangePassword from "./pages/ChangePassword";
 import DepartmentManagement from "./pages/DepartmentManagement";
 import JobTitleSalaryManagement from "./pages/JobTitleSalaryManagement";
@@ -60,7 +61,7 @@ type SessionUser = {
 type LoginData = {
   accessToken: string;
   refreshToken: string;
-  user: SessionUser;
+  user: SessionUser & { mustChangePassword?: boolean };
 };
 
 
@@ -411,7 +412,7 @@ function Login() {
 
 
       navigate(
-        "/dashboard",
+        result.data.user.mustChangePassword ? "/change-password" : "/dashboard",
         {
           replace: true,
         }
@@ -1056,6 +1057,8 @@ function App() {
             <ResetPassword />
           }
         />
+
+        <Route path="/activate-account" element={<ActivateAccount />} />
 
 
         <Route

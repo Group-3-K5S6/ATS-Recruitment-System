@@ -16,6 +16,7 @@ import {
 
 import {
   sendResetPasswordEmail,
+  sendEmployeeActivationEmail,
 } from '../../utils/email';
 
 import {
@@ -99,10 +100,7 @@ export const forgotPasswordSchema = z.object({
 export const resetPasswordSchema = z.object({
   token: z
     .string()
-    .min(
-      1,
-      'Token đặt lại mật khẩu không được để trống.'
-    ),
+    .regex(/^\d{6}$/, 'Mã OTP phải gồm 6 chữ số.'),
 
   newPassword: z
     .string()
@@ -127,6 +125,8 @@ export const resetPasswordSchema = z.object({
       'Mật khẩu mới phải có ít nhất 1 ký tự đặc biệt.'
     ),
 });
+
+export const activateAccountSchema = z.object({ token: z.string().min(32).max(128) });
 
 
 export class AuthController {
@@ -180,6 +180,10 @@ export class AuthController {
     ===================================================== */
 
     if (!user || !user.isActive) {
+      if (user?.activationTokenHash) {
+        errorResponse(res, 'Tài khoản chưa được kích hoạt. Hãy kiểm tra email kích hoạt.', 403, 'ACCOUNT_NOT_ACTIVATED');
+        return;
+      }
       errorResponse(
         res,
         'Email hoặc mật khẩu không đúng.',
@@ -442,6 +446,7 @@ export class AuthController {
 
           permissions:
             Array.from(permissionSet),
+          mustChangePassword: user.mustChangePassword,
         },
       },
       200,
@@ -955,6 +960,8 @@ export class AuthController {
             passwordHash:
               newPasswordHash,
 
+            mustChangePassword: false,
+
             tokenVersion: {
               increment: 1,
             },
@@ -1066,7 +1073,7 @@ export class AuthController {
      */
 
     const genericMessage =
-      'Nếu email tồn tại trong hệ thống, chúng tôi đã gửi một liên kết đặt lại mật khẩu. Liên kết có hiệu lực trong 30 phút.';
+      'Nếu email tồn tại trong hệ thống, chúng tôi đã gửi mã OTP đặt lại mật khẩu. Mã có hiệu lực trong 10 phút.';
 
 
     const user =
@@ -1104,10 +1111,7 @@ export class AuthController {
        * Sinh token ngẫu nhiên.
        */
 
-      const rawToken =
-        crypto
-          .randomBytes(32)
-          .toString('hex');
+      const rawToken = crypto.randomInt(100000, 1000000).toString();
 
 
       /*
@@ -1122,13 +1126,13 @@ export class AuthController {
 
 
       /*
-       * Hết hạn sau 30 phút.
+       * OTP hết hạn sau 10 phút.
        */
 
       const expiresAt =
         new Date(
           Date.now() +
-          30 * 60 * 1000
+          10 * 60 * 1000
         );
 
 
@@ -1166,16 +1170,21 @@ export class AuthController {
         );
 
       } catch (error) {
-
-        /*
-         * Không trả lỗi SMTP ra client
-         * để tránh tiết lộ email có tồn tại.
-         */
-
-        console.error(
-          '[S1-03] Không gửi được email reset:',
-          error
+        await prisma.passwordResetToken.deleteMany({
+          where: { email: user.email, tokenHash, usedAt: null },
+        });
+        const errorCode =
+          typeof error === 'object' && error !== null && 'code' in error
+            ? String((error as { code: unknown }).code)
+            : 'UNKNOWN';
+        console.error(`[AUTH_EMAIL] Password reset email delivery failed (${errorCode}).`);
+        errorResponse(
+          res,
+          'Không gửi được email OTP. Hệ thống email chưa được cấu hình hoặc đang gặp sự cố. Vui lòng liên hệ quản trị viên.',
+          503,
+          'EMAIL_DELIVERY_FAILED'
         );
+        return;
       }
     }
 
@@ -1189,6 +1198,17 @@ export class AuthController {
       200,
       genericMessage
     );
+  }
+
+  static async activateAccount(req: Request, res: Response): Promise<void> {
+    const tokenHash = hashToken(String(req.body.token));
+    const user = await prisma.user.findFirst({ where: { activationTokenHash: tokenHash } });
+    if (!user || !user.activationExpiresAt || user.activationExpiresAt <= new Date()) {
+      errorResponse(res, 'Mã kích hoạt không hợp lệ hoặc đã hết hạn.', 400, 'INVALID_ACTIVATION_TOKEN');
+      return;
+    }
+    await prisma.user.update({ where: { id: user.id }, data: { isActive: true, activationTokenHash: null, activationExpiresAt: null } });
+    successResponse(res, { message: 'Kích hoạt tài khoản thành công. Hãy đăng nhập bằng mật khẩu tạm và đổi mật khẩu.' }, 200);
   }
 
 
@@ -1434,6 +1454,9 @@ export class AuthController {
         data: {
           passwordHash:
             newPasswordHash,
+
+          mustChangePassword: false,
+          tokenVersion: { increment: 1 },
 
           failedLoginAttempts:
             0,

@@ -16,8 +16,10 @@ function ResetPassword() {
   const [searchParams] =
     useSearchParams();
 
-  const token =
-    searchParams.get("token") || "";
+  const [token, setToken] =
+    useState(
+      searchParams.get("token") || ""
+    );
 
   const [password, setPassword] =
     useState("");
@@ -61,7 +63,7 @@ function ResetPassword() {
 
     if (!token) {
       setError(
-        "Liên kết đặt lại mật khẩu không hợp lệ."
+        "Vui lòng nhập mã OTP gồm 6 chữ số."
       );
 
       return;
@@ -211,8 +213,7 @@ function ResetPassword() {
 
       {!token && (
         <div className="error-message">
-          Liên kết đặt lại mật khẩu
-          không hợp lệ hoặc thiếu token.
+          Vui lòng nhập mã OTP gồm 6 chữ số.
         </div>
       )}
 
@@ -249,9 +250,16 @@ function ResetPassword() {
 
       ) : (
 
-        token && (
+        (
 
           <form onSubmit={handleSubmit}>
+
+            <div className="form-group">
+              <label htmlFor="reset-otp">Mã OTP</label>
+              <div className="input-box">
+                <input id="reset-otp" inputMode="numeric" maxLength={6} placeholder="Nhập mã trong email" value={token} onChange={(event) => setToken(event.target.value.replace(/\D/g, ""))} />
+              </div>
+            </div>
 
             <div className="form-group">
 
