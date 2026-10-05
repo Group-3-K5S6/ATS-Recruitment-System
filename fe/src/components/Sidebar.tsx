@@ -1,13 +1,22 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+
 import type { Role } from "../data/roleMenus";
 import { roleMenus } from "../data/roleMenus";
 
 type SidebarProps = {
   role: Role;
   userName: string;
+  onLogout: () => Promise<void>;
+
+  // Dùng cho Dashboard/S1-08.
+  // Trang khác như ErrorPages không bắt buộc truyền.
+  selectedMenu?: string;
+  onMenuSelect?: (label: string) => void;
 };
 
 const roleLabel: Record<Role, string> = {
+  Candidate: "Ứng viên",
   Recruiter: "Nhân viên tuyển dụng",
   HiringManager: "Trưởng bộ phận",
   Interviewer: "Người phỏng vấn",
@@ -16,14 +25,60 @@ const roleLabel: Record<Role, string> = {
   Admin: "Quản trị hệ thống",
 };
 
-function Sidebar({ role, userName }: SidebarProps) {
+function Sidebar({
+  role,
+  userName,
+  onLogout,
+  selectedMenu,
+  onMenuSelect,
+}: SidebarProps) {
   const [open, setOpen] = useState(false);
 
-  const menu = roleMenus[role];
+  const navigate = useNavigate();
+
+  /*
+   * Menu theo vai trò
+   * + 2 chức năng chung cho mọi tài khoản
+   */
+  const menu = [
+    ...roleMenus[role],
+    { label: "Hồ sơ cá nhân" },
+    { label: "Đổi mật khẩu" },
+  ];
+
+  const handleLogout = async () => {
+    await onLogout();
+  };
+
+  const handleMenuClick = (label: string) => {
+    /*
+     * S1-04:
+     * Chuyển trực tiếp tới trang đổi mật khẩu
+     * trên cùng tab để giữ sessionStorage.
+     */
+    if (label === "Đổi mật khẩu") {
+      navigate("/change-password");
+      setOpen(false);
+      return;
+    }
+
+    /*
+     * Các menu còn lại giữ nguyên cơ chế hiện tại.
+     */
+    if (onMenuSelect) {
+      onMenuSelect(label);
+    }
+
+    setOpen(false);
+  };
 
   return (
     <>
-      <button className="mobile-menu-button" onClick={() => setOpen(!open)}>
+      <button
+        type="button"
+        className="mobile-menu-button"
+        onClick={() => setOpen(!open)}
+      >
         ☰
       </button>
 
@@ -54,17 +109,27 @@ function Sidebar({ role, userName }: SidebarProps) {
         </div>
 
         <nav className="sidebar-menu">
-          {menu.map((item, index) => (
+          {menu.map((item) => (
             <button
               key={item.label}
-              className={`sidebar-menu-item ${index === 0 ? "active" : ""}`}
+              type="button"
+              className={`sidebar-menu-item ${
+                selectedMenu === item.label ? "active" : ""
+              }`}
+              onClick={() => handleMenuClick(item.label)}
             >
               {item.label}
             </button>
           ))}
         </nav>
 
-        <button className="logout-button">Đăng xuất</button>
+        <button
+          type="button"
+          className="logout-button"
+          onClick={handleLogout}
+        >
+          Đăng xuất
+        </button>
       </aside>
     </>
   );

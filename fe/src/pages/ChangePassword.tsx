@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
+
 import {
   Check,
   Eye,
@@ -9,8 +10,27 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+
+import {
+  Link,
+  useNavigate,
+} from "react-router-dom";
+
 import "../App.css";
+
+
+/* =========================================================
+   BACKEND
+========================================================= */
+
+const API_URL =
+  import.meta.env.VITE_ATS_API_URL ||
+  "http://localhost:4000";
+
+
+/* =========================================================
+   KIỂU DỮ LIỆU
+========================================================= */
 
 type PasswordVisibility = {
   current: boolean;
@@ -18,33 +38,61 @@ type PasswordVisibility = {
   confirmation: boolean;
 };
 
+
 type PasswordRule = {
   label: string;
   test: (password: string) => boolean;
 };
 
+
+type ChangePasswordData = {
+  message?: string;
+  accessToken: string;
+  refreshToken: string;
+};
+
+
+type ApiResponse<T> = {
+  success?: boolean;
+  data?: T;
+  message?: string;
+
+  error?: {
+    message?: string;
+    code?: string;
+  };
+};
+
+
+/* =========================================================
+   S1-04 - QUY TẮC MẬT KHẨU
+
+   Yêu cầu:
+   - Tối thiểu 8 ký tự
+   - Có chữ
+   - Có số
+========================================================= */
+
 const passwordRules: PasswordRule[] = [
   {
     label: "Tối thiểu 8 ký tự",
-    test: (password) => password.length >= 8,
+    test: (password) =>
+      password.length >= 8,
   },
+
   {
-    label: "Ít nhất 1 chữ cái viết hoa (A-Z)",
-    test: (password) => /[A-Z]/.test(password),
+    label: "Có ít nhất 1 chữ cái",
+    test: (password) =>
+      /[A-Za-z]/.test(password),
   },
+
   {
-    label: "Ít nhất 1 chữ cái viết thường (a-z)",
-    test: (password) => /[a-z]/.test(password),
-  },
-  {
-    label: "Ít nhất 1 chữ số (0-9)",
-    test: (password) => /\d/.test(password),
-  },
-  {
-    label: "Ít nhất 1 ký tự đặc biệt (!@#$%^&*...)",
-    test: (password) => /[^A-Za-z0-9]/.test(password),
+    label: "Có ít nhất 1 chữ số",
+    test: (password) =>
+      /\d/.test(password),
   },
 ];
+
 
 const initialVisibility: PasswordVisibility = {
   current: false,
@@ -52,91 +100,409 @@ const initialVisibility: PasswordVisibility = {
   confirmation: false,
 };
 
-function ChangePassword() {
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmation, setConfirmation] = useState("");
-  const [visibility, setVisibility] =
-    useState<PasswordVisibility>(initialVisibility);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
 
-  const allRulesValid = passwordRules.every((rule) => rule.test(newPassword));
-  const passwordsMatch = newPassword === confirmation && confirmation.length > 0;
-  const currentPasswordConflict =
-    Boolean(newPassword) && newPassword === currentPassword;
+/* =========================================================
+   COMPONENT
+========================================================= */
+
+function ChangePassword() {
+
+  const navigate =
+    useNavigate();
+
+
+  const [
+    currentPassword,
+    setCurrentPassword,
+  ] = useState("");
+
+
+  const [
+    newPassword,
+    setNewPassword,
+  ] = useState("");
+
+
+  const [
+    confirmation,
+    setConfirmation,
+  ] = useState("");
+
+
+  const [
+    visibility,
+    setVisibility,
+  ] = useState<PasswordVisibility>(
+    initialVisibility
+  );
+
+
+  const [
+    errors,
+    setErrors,
+  ] = useState<Record<string, string>>({});
+
+
+  const [
+    apiError,
+    setApiError,
+  ] = useState("");
+
+
+  const [
+    isSubmitting,
+    setIsSubmitting,
+  ] = useState(false);
+
+
+  const [
+    isSuccess,
+    setIsSuccess,
+  ] = useState(false);
+
+
+  /* =========================================================
+     KIỂM TRA PASSWORD
+  ========================================================= */
+
+  const allRulesValid =
+    passwordRules.every(
+      (rule) =>
+        rule.test(newPassword)
+    );
+
+
+  const passwordsMatch =
+    newPassword === confirmation &&
+    confirmation.length > 0;
+
+
   const confirmationError =
-    confirmation.length > 0 && !passwordsMatch
+    confirmation.length > 0 &&
+    !passwordsMatch
       ? "Mật khẩu xác nhận không khớp."
       : errors.confirmation;
-  const newPasswordError =
-    currentPasswordConflict
-      ? "Mật khẩu mới không được trùng với mật khẩu hiện tại."
-      : errors.newPassword;
+
+
+  /* =========================================================
+     RESET FORM SAU KHI THÀNH CÔNG
+  ========================================================= */
 
   useEffect(() => {
+
     if (!isSuccess) {
       return;
     }
 
-    const resetTimer = window.setTimeout(() => {
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmation("");
-      setErrors({});
-      setIsSuccess(false);
-    }, 3500);
 
-    return () => window.clearTimeout(resetTimer);
+    const resetTimer =
+      window.setTimeout(() => {
+
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmation("");
+
+        setErrors({});
+        setApiError("");
+
+        setIsSuccess(false);
+
+      }, 3500);
+
+
+    return () =>
+      window.clearTimeout(
+        resetTimer
+      );
+
   }, [isSuccess]);
 
+
+  /* =========================================================
+     VALIDATE FORM
+  ========================================================= */
+
   const validate = () => {
-    const nextErrors: Record<string, string> = {};
+
+    const nextErrors:
+      Record<string, string> = {};
+
 
     if (!currentPassword) {
-      nextErrors.currentPassword = "Vui lòng nhập mật khẩu hiện tại.";
+
+      nextErrors.currentPassword =
+        "Vui lòng nhập mật khẩu hiện tại.";
     }
+
 
     if (!newPassword) {
-      nextErrors.newPassword = "Vui lòng nhập mật khẩu mới.";
-    } else if (!allRulesValid) {
-      nextErrors.newPassword = "Mật khẩu mới chưa đáp ứng đủ yêu cầu bảo mật.";
-    } else if (newPassword === currentPassword) {
+
       nextErrors.newPassword =
-        "Mật khẩu mới không được trùng với mật khẩu hiện tại.";
+        "Vui lòng nhập mật khẩu mới.";
+
+    } else if (!allRulesValid) {
+
+      nextErrors.newPassword =
+        "Mật khẩu mới phải tối thiểu 8 ký tự, có chữ và số.";
     }
+
 
     if (!confirmation) {
-      nextErrors.confirmation = "Vui lòng xác nhận mật khẩu mới.";
+
+      nextErrors.confirmation =
+        "Vui lòng xác nhận mật khẩu mới.";
+
     } else if (!passwordsMatch) {
-      nextErrors.confirmation = "Mật khẩu xác nhận không khớp.";
+
+      nextErrors.confirmation =
+        "Mật khẩu xác nhận không khớp.";
     }
+
 
     setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
+
+
+    return (
+      Object.keys(nextErrors).length === 0
+    );
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
 
-    if (!validate()) {
-      return;
-    }
+  /* =========================================================
+     S1-04 - GỌI API ĐỔI MẬT KHẨU
+  ========================================================= */
 
-    setIsSubmitting(true);
-    window.setTimeout(() => {
-      setIsSubmitting(false);
-      setIsSuccess(true);
-    }, 900);
+  const handleSubmit =
+    async (
+      event: FormEvent<HTMLFormElement>
+    ) => {
+
+      event.preventDefault();
+
+      setApiError("");
+      setIsSuccess(false);
+
+
+      if (!validate()) {
+        return;
+      }
+
+
+      /* =========================
+         LẤY ACCESS TOKEN HIỆN TẠI
+      ========================= */
+
+      const accessToken =
+        sessionStorage.getItem(
+          "accessToken"
+        );
+
+
+      if (!accessToken) {
+
+        setApiError(
+          "Phiên đăng nhập không tồn tại. Vui lòng đăng nhập lại."
+        );
+
+
+        window.setTimeout(() => {
+
+          navigate(
+            "/login",
+            { replace: true }
+          );
+
+        }, 1200);
+
+
+        return;
+      }
+
+
+      setIsSubmitting(true);
+
+
+      try {
+
+        const response =
+          await fetch(
+            `${API_URL}/api/auth/change-password`,
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json",
+
+                Authorization:
+                  `Bearer ${accessToken}`,
+              },
+
+              body:
+                JSON.stringify({
+                  currentPassword,
+                  newPassword,
+                }),
+            }
+          );
+
+
+        const result =
+          await response.json()
+            .catch(
+              () =>
+                ({}) as
+                  ApiResponse<ChangePasswordData>
+            );
+
+
+        const apiResult =
+          result as ApiResponse<ChangePasswordData>;
+
+
+        /* =========================
+           API BÁO LỖI
+        ========================= */
+
+        if (!response.ok) {
+
+          const message =
+            apiResult.error?.message ||
+            apiResult.message ||
+            "Không thể đổi mật khẩu.";
+
+
+          setApiError(message);
+
+
+          /*
+           * Nếu phiên đã hết hiệu lực
+           * thì xóa token và quay về login.
+           */
+
+          if (
+            response.status === 401
+          ) {
+
+            sessionStorage.removeItem(
+              "accessToken"
+            );
+
+            sessionStorage.removeItem(
+              "refreshToken"
+            );
+
+
+            window.setTimeout(() => {
+
+              navigate(
+                "/login",
+                { replace: true }
+              );
+
+            }, 1500);
+          }
+
+
+          return;
+        }
+
+
+        /* =========================
+           LẤY TOKEN MỚI
+        ========================= */
+
+        const data =
+          apiResult.data;
+
+
+        if (
+          !data?.accessToken ||
+          !data?.refreshToken
+        ) {
+
+          setApiError(
+            "Backend đã đổi mật khẩu nhưng không trả về phiên đăng nhập mới."
+          );
+
+          return;
+        }
+
+
+        /* =========================
+           THAY ACCESS TOKEN CŨ
+        ========================= */
+
+        sessionStorage.setItem(
+          "accessToken",
+          data.accessToken
+        );
+
+
+        /* =========================
+           THAY REFRESH TOKEN CŨ
+        ========================= */
+
+        sessionStorage.setItem(
+          "refreshToken",
+          data.refreshToken
+        );
+
+
+        /* =========================
+           THÀNH CÔNG
+        ========================= */
+
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmation("");
+
+        setErrors({});
+        setApiError("");
+
+        setIsSuccess(true);
+
+      } catch (error) {
+
+        console.error(
+          "[S1-04] Change password error:",
+          error
+        );
+
+
+        setApiError(
+          "Không thể kết nối đến máy chủ. Vui lòng kiểm tra Backend."
+        );
+
+      } finally {
+
+        setIsSubmitting(false);
+      }
+    };
+
+
+  /* =========================================================
+     HIỆN / ẨN MẬT KHẨU
+  ========================================================= */
+
+  const toggleVisibility = (
+    field: keyof PasswordVisibility
+  ) => {
+
+    setVisibility(
+      (current) => ({
+        ...current,
+
+        [field]:
+          !current[field],
+      })
+    );
   };
 
-  const toggleVisibility = (field: keyof PasswordVisibility) => {
-    setVisibility((current) => ({
-      ...current,
-      [field]: !current[field],
-    }));
-  };
+
+  /* =========================================================
+     FIELD PASSWORD
+  ========================================================= */
 
   const renderPasswordField = (
     field: keyof PasswordVisibility,
@@ -144,137 +510,384 @@ function ChangePassword() {
     label: string,
     value: string,
     onChange: (value: string) => void,
-    error?: string,
+    error?: string
   ) => (
+
     <div className="change-password-field">
-      <label htmlFor={id}>{label}</label>
-      <div className={`change-password-input ${error ? "has-error" : ""}`}>
-        <Lock size={18} aria-hidden="true" />
+
+      <label htmlFor={id}>
+        {label}
+      </label>
+
+
+      <div
+        className={
+          `change-password-input ${
+            error
+              ? "has-error"
+              : ""
+          }`
+        }
+      >
+
+        <Lock
+          size={18}
+          aria-hidden="true"
+        />
+
+
         <input
           id={id}
-          type={visibility[field] ? "text" : "password"}
+
+          type={
+            visibility[field]
+              ? "text"
+              : "password"
+          }
+
           value={value}
-          disabled={isSubmitting}
-          onChange={(event) => onChange(event.target.value)}
-          aria-invalid={Boolean(error)}
-          aria-describedby={error ? `${id}-error` : undefined}
+
+          disabled={
+            isSubmitting
+          }
+
+          onChange={
+            (event) =>
+              onChange(
+                event.target.value
+              )
+          }
+
+          aria-invalid={
+            Boolean(error)
+          }
+
+          aria-describedby={
+            error
+              ? `${id}-error`
+              : undefined
+          }
         />
+
+
         <button
           type="button"
+
           className="password-visibility-button"
-          onClick={() => toggleVisibility(field)}
-          aria-label={visibility[field] ? `Ẩn ${label}` : `Hiện ${label}`}
-          title={visibility[field] ? `Ẩn ${label}` : `Hiện ${label}`}
-          disabled={isSubmitting}
+
+          onClick={
+            () =>
+              toggleVisibility(
+                field
+              )
+          }
+
+          aria-label={
+            visibility[field]
+              ? `Ẩn ${label}`
+              : `Hiện ${label}`
+          }
+
+          title={
+            visibility[field]
+              ? `Ẩn ${label}`
+              : `Hiện ${label}`
+          }
+
+          disabled={
+            isSubmitting
+          }
         >
-          {visibility[field] ? <EyeOff size={18} /> : <Eye size={18} />}
+
+          {
+            visibility[field]
+              ? (
+                <EyeOff
+                  size={18}
+                />
+              )
+              : (
+                <Eye
+                  size={18}
+                />
+              )
+          }
+
         </button>
+
       </div>
-      {error && (
-        <p id={`${id}-error`} className="change-password-error" role="alert">
-          {error}
-        </p>
-      )}
+
+
+      {
+        error && (
+
+          <p
+            id={`${id}-error`}
+            className="change-password-error"
+            role="alert"
+          >
+
+            {error}
+
+          </p>
+        )
+      }
+
     </div>
   );
 
+
+  /* =========================================================
+     GIAO DIỆN
+  ========================================================= */
+
   return (
+
     <main className="change-password-page">
-      <section className="change-password-card" aria-labelledby="change-password-title">
+
+      <section
+        className="change-password-card"
+        aria-labelledby="change-password-title"
+      >
+
         <div className="change-password-header">
+
           <div className="change-password-header-icon">
-            <ShieldCheck size={26} aria-hidden="true" />
+
+            <ShieldCheck
+              size={26}
+              aria-hidden="true"
+            />
+
           </div>
+
+
           <div>
-            <span className="change-password-eyebrow">BẢO MẬT TÀI KHOẢN</span>
-            <h1 id="change-password-title">Đổi mật khẩu</h1>
-            <p>Giữ tài khoản nội bộ của bạn luôn an toàn.</p>
+
+            <span className="change-password-eyebrow">
+              BẢO MẬT TÀI KHOẢN
+            </span>
+
+
+            <h1 id="change-password-title">
+              Đổi mật khẩu
+            </h1>
+
+
+            <p>
+              Giữ tài khoản nội bộ của bạn luôn an toàn.
+            </p>
+
           </div>
+
         </div>
 
-        <form onSubmit={handleSubmit} noValidate>
-          {renderPasswordField(
-            "current",
-            "current-password",
-            "Mật khẩu hiện tại",
-            currentPassword,
-            setCurrentPassword,
-            errors.currentPassword,
-          )}
+
+        <form
+          onSubmit={handleSubmit}
+          noValidate
+        >
+
+          {
+            renderPasswordField(
+              "current",
+              "current-password",
+              "Mật khẩu hiện tại",
+              currentPassword,
+              setCurrentPassword,
+              errors.currentPassword
+            )
+          }
+
 
           <div className="change-password-field">
-            {renderPasswordField(
-              "next",
-              "new-password",
-              "Mật khẩu mới",
-              newPassword,
-              setNewPassword,
-              newPasswordError,
-            )}
-            <div className="password-rules" aria-label="Yêu cầu mật khẩu">
-              {passwordRules.map((rule) => {
-                const valid = rule.test(newPassword);
-                return (
-                  <div
-                    className={`password-rule ${valid ? "is-valid" : ""}`}
-                    key={rule.label}
-                  >
-                    <span className="password-rule-icon">
-                      {valid ? <Check size={13} /> : <X size={13} />}
-                    </span>
-                    <span>{rule.label}</span>
-                  </div>
-                );
-              })}
+
+            {
+              renderPasswordField(
+                "next",
+                "new-password",
+                "Mật khẩu mới",
+                newPassword,
+                setNewPassword,
+                errors.newPassword
+              )
+            }
+
+
+            <div
+              className="password-rules"
+              aria-label="Yêu cầu mật khẩu"
+            >
+
+              {
+                passwordRules.map(
+                  (rule) => {
+
+                    const valid =
+                      rule.test(
+                        newPassword
+                      );
+
+
+                    return (
+
+                      <div
+                        className={
+                          `password-rule ${
+                            valid
+                              ? "is-valid"
+                              : ""
+                          }`
+                        }
+
+                        key={
+                          rule.label
+                        }
+                      >
+
+                        <span className="password-rule-icon">
+
+                          {
+                            valid
+                              ? (
+                                <Check
+                                  size={13}
+                                />
+                              )
+                              : (
+                                <X
+                                  size={13}
+                                />
+                              )
+                          }
+
+                        </span>
+
+
+                        <span>
+                          {rule.label}
+                        </span>
+
+                      </div>
+                    );
+                  }
+                )
+              }
+
             </div>
+
           </div>
 
-          {renderPasswordField(
-            "confirmation",
-            "confirm-password",
-            "Xác nhận mật khẩu mới",
-            confirmation,
-            setConfirmation,
-            confirmationError,
-          )}
+
+          {
+            renderPasswordField(
+              "confirmation",
+              "confirm-password",
+              "Xác nhận mật khẩu mới",
+              confirmation,
+              setConfirmation,
+              confirmationError
+            )
+          }
+
+
+          {
+            apiError && (
+
+              <p
+                className="change-password-error"
+                role="alert"
+              >
+
+                {apiError}
+
+              </p>
+            )
+          }
+
 
           <button
             className="change-password-submit"
             type="submit"
             disabled={isSubmitting}
           >
-            {isSubmitting ? (
-              <>
-                <span className="change-password-spinner" aria-hidden="true" />
-                Đang cập nhật...
-              </>
-            ) : (
-              <>
-                <KeyRound size={18} aria-hidden="true" />
-                Đổi mật khẩu
-              </>
-            )}
+
+            {
+              isSubmitting
+                ? (
+                  <>
+                    <span
+                      className="change-password-spinner"
+                      aria-hidden="true"
+                    />
+
+                    Đang cập nhật...
+                  </>
+                )
+                : (
+                  <>
+                    <KeyRound
+                      size={18}
+                      aria-hidden="true"
+                    />
+
+                    Đổi mật khẩu
+                  </>
+                )
+            }
+
           </button>
+
         </form>
 
-        <Link className="change-password-back" to="/login">
-          ← Quay lại đăng nhập
+
+        <Link
+          className="change-password-back"
+          to="/dashboard"
+        >
+          ← Quay lại trang chính
         </Link>
+
       </section>
 
-      {isSuccess && (
-        <div className="change-password-toast" role="status">
-          <div className="change-password-toast-icon">
-            <Check size={18} />
+
+      {
+        isSuccess && (
+
+          <div
+            className="change-password-toast"
+            role="status"
+          >
+
+            <div className="change-password-toast-icon">
+
+              <Check
+                size={18}
+              />
+
+            </div>
+
+
+            <div>
+
+              <strong>
+                Đổi mật khẩu thành công!
+              </strong>
+
+
+              <p>
+                Các phiên đăng nhập cũ đã bị thu hồi.
+              </p>
+
+            </div>
+
           </div>
-          <div>
-            <strong>Đổi mật khẩu thành công!</strong>
-            <p>Tài khoản của bạn đã được cập nhật bảo mật.</p>
-          </div>
-        </div>
-      )}
+        )
+      }
+
     </main>
   );
 }
+
 
 export default ChangePassword;
