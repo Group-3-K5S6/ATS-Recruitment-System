@@ -43,7 +43,7 @@ router.post(
  */
 router.put(
   '/:id',
-  requirePermission(PermissionCode.USERS_CREATE),
+  requirePermission(PermissionCode.USERS_UPDATE),
   validateBody(updateUserSchema),
   UserController.update
 );
