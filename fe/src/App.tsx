@@ -31,6 +31,28 @@ import type { Role } from "./data/roleMenus";
 
 import { consumeSessionExpired, clearLocalSession } from "./services/session";
 
+const API_URL = import.meta.env.VITE_ATS_API_URL || "http://localhost:4000";
+
+const ROLE_MAP: Record<string, Role> = {
+  CANDIDATE: "Candidate",
+  RECRUITER: "Recruiter",
+  HIRING_MANAGER: "HiringManager",
+  INTERVIEWER: "Interviewer",
+  HR_MANAGER: "HRManager",
+  APPROVER: "Approver",
+  ADMIN: "Admin",
+};
+
+type LoginResponse = {
+  success: boolean;
+  data?: {
+    accessToken: string;
+    refreshToken: string;
+    user: { fullName: string; roles: string[] };
+  };
+  error?: { message?: string };
+};
+
 function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -38,15 +60,16 @@ function Login() {
   const [error, setError] = useState("");
 
   const [loggedIn, setLoggedIn] = useState(false);
+  const [userName, setUserName] = useState("HR Manager User");
 
   // S1-02:
   // Kiểm tra xem phiên trước đó có bị hết hạn hay không
   const [sessionExpired] = useState(() => consumeSessionExpired());
 
   // Tạm thời test vai trò Admin
-  const [role] = useState<Role>("HRManager");
+  const [role, setRole] = useState<Role>("HRManager");
 
-  const handleLogin = (e: FormEvent<HTMLFormElement>) => {
+  const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     setError("");
@@ -57,16 +80,34 @@ function Login() {
       return;
     }
 
-    /*
-      Hiện tại đang test Frontend.
+    try {
+      const response = await fetch(`${API_URL}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+      const result = (await response.json()) as LoginResponse;
+      if (!response.ok || !result.success || !result.data) {
+        throw new Error(result.error?.message || "Đăng nhập không thành công.");
+      }
 
-      Khi Backend S1-01 hoàn thành:
-      - gửi email + password tới API đăng nhập
-      - nhận access token / refresh token
-      - lấy role thật của người dùng
-    */
-
-    setLoggedIn(true);
+      sessionStorage.setItem("accessToken", result.data.accessToken);
+      sessionStorage.setItem("refreshToken", result.data.refreshToken);
+      setUserName(result.data.user.fullName);
+      const userRole = result.data.user.roles
+        .map((item) => ROLE_MAP[item])
+        .find((item): item is Role => Boolean(item));
+      if (!userRole) throw new Error("Tài khoản chưa được gán vai trò hợp lệ.");
+      setRole(userRole);
+      setLoggedIn(true);
+    } catch (loginError) {
+      clearLocalSession();
+      setError(
+        loginError instanceof Error
+          ? loginError.message
+          : "Không thể kết nối máy chủ đăng nhập.",
+      );
+    }
   };
 
   // ==============================
@@ -102,7 +143,7 @@ function Login() {
 
   if (loggedIn) {
     return (
-      <Dashboard role={role} userName="Nguyễn Văn An" onLogout={handleLogout} />
+      <Dashboard role={role} userName={userName} onLogout={handleLogout} />
     );
   }
 

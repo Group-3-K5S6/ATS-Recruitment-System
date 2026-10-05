@@ -12,14 +12,12 @@ export const createRequisitionSchema = z.object({
   departmentId: z.string().uuid(),
   headcount: z.number().int().positive().default(1),
   budget: z.number().positive().optional(),
-  approverId: z.string().uuid().optional(),
 });
 
 export const updateRequisitionSchema = z.object({
   title: z.string().min(3).optional(),
   headcount: z.number().int().positive().optional(),
   budget: z.number().positive().optional(),
-  approverId: z.string().uuid().optional(),
 });
 
 export const approveRequisitionSchema = z.object({
@@ -91,6 +89,27 @@ export class RequisitionController {
     const data = req.body;
     const user = req.user!;
 
+    const department = await prisma.department.findUnique({
+      where: { id: data.departmentId },
+      select: { id: true, isActive: true, managerId: true, approverId: true },
+    });
+    if (!department) {
+      errorResponse(res, 'Phòng ban không tồn tại.', 404, 'DEPARTMENT_NOT_FOUND');
+      return;
+    }
+    if (!department.isActive) {
+      errorResponse(res, 'Không thể tạo yêu cầu tuyển dụng cho phòng ban đã ngừng áp dụng.', 409, 'DEPARTMENT_INACTIVE');
+      return;
+    }
+    if (!department.managerId) {
+      errorResponse(res, 'Phòng ban chưa được cấu hình người phụ trách.', 409, 'DEPARTMENT_MANAGER_NOT_CONFIGURED');
+      return;
+    }
+    if (!department.approverId) {
+      errorResponse(res, 'Phòng ban chưa được cấu hình người duyệt.', 409, 'DEPARTMENT_APPROVER_NOT_CONFIGURED');
+      return;
+    }
+
     const canCreate = await RequisitionPolicy.canCreate(user, data.departmentId);
     if (!canCreate) {
       errorResponse(
@@ -109,7 +128,7 @@ export class RequisitionController {
         hiringManagerId: user.id,
         headcount: data.headcount,
         budget: data.budget,
-        approverId: data.approverId,
+        approverId: department.approverId,
         status: 'PENDING_APPROVAL',
       },
     });

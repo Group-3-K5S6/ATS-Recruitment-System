@@ -12,9 +12,12 @@ describe('3. Resource Scope & Ownership Authorization', () => {
   let candidate2Token: string;
   let mktDeptId: string;
   let engDeptId: string;
+  let hmEngId: string;
 
   beforeAll(async () => {
-    hmEngToken = (await loginAndGetToken('hiring_manager_eng@ats.local')).token;
+    const hmEng = await loginAndGetToken('hiring_manager_eng@ats.local');
+    hmEngToken = hmEng.token;
+    hmEngId = hmEng.user.id;
     hmMktToken = (await loginAndGetToken('hiring_manager_mkt@ats.local')).token;
     interviewer1Token = (await loginAndGetToken('interviewer1@ats.local')).token;
     candidate1Token = (await loginAndGetToken('candidate1@ats.local')).token;
@@ -67,6 +70,37 @@ describe('3. Resource Scope & Ownership Authorization', () => {
         });
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('FORBIDDEN_SCOPE');
+    });
+
+    it('CAN create requisition for a department where explicitly assigned as manager', async () => {
+      const engDepartment = await prisma.department.findUniqueOrThrow({ where: { id: engDeptId } });
+      const department = await prisma.department.create({
+        data: {
+          name: 'Temporary Managed Department',
+          code: `TEST-${Date.now()}`,
+          managerId: hmEngId,
+          approverId: engDepartment.approverId,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post('/api/requisitions')
+          .set(authHeader(hmEngToken))
+          .send({
+            title: 'Temporary managed department requisition',
+            departmentId: department.id,
+            headcount: 1,
+          });
+
+        expect(res.status).toBe(201);
+        expect(res.body.data.departmentId).toBe(department.id);
+        expect(res.body.data.approverId).toBe(department.approverId);
+        expect(res.body.data.status).toBe('PENDING_APPROVAL');
+      } finally {
+        await prisma.requisition.deleteMany({ where: { departmentId: department.id } });
+        await prisma.department.delete({ where: { id: department.id } });
+      }
     });
   });
 

@@ -1,79 +1,45 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import Sidebar from "../components/Sidebar";
 import { clearLocalSession } from "../services/session";
+import {
+  createDepartment,
+  deleteDepartment,
+  loadDepartmentUsers,
+  loadDepartments,
+  setDepartmentActive,
+  updateDepartment,
+} from "../services/departmentApi";
+import type {
+  Department,
+  DepartmentInput,
+  DepartmentUser,
+} from "../services/departmentApi";
 
-type Department = {
-  id: string;
-  name: string;
-  manager: string;
-  active: boolean;
-  hasOpenRequisition: boolean;
-  children?: Department[];
-};
+function flattenDepartments(
+  items: Department[],
+  depth = 0,
+): Array<{ department: Department; depth: number }> {
+  return items.flatMap((department) => [
+    { department, depth },
+    ...flattenDepartments(department.children || [], depth + 1),
+  ]);
+}
 
-const initialDepartments: Department[] = [
-  {
-    id: "hr",
-    name: "Phòng Nhân sự",
-    manager: "Nguyễn Thị Lan",
-    active: true,
-    hasOpenRequisition: true,
-    children: [
-      {
-        id: "recruitment",
-        name: "Bộ phận Tuyển dụng",
-        manager: "Trần Văn Minh",
-        active: true,
-        hasOpenRequisition: false,
-      },
-      {
-        id: "cnb",
-        name: "Bộ phận C&B",
-        manager: "Lê Thị Hoa",
-        active: true,
-        hasOpenRequisition: false,
-      },
-    ],
-  },
-  {
-    id: "tech",
-    name: "Phòng Công nghệ",
-    manager: "Phạm Văn Nam",
-    active: true,
-    hasOpenRequisition: true,
-    children: [
-      {
-        id: "backend",
-        name: "Backend",
-        manager: "Nguyễn Đức Anh",
-        active: true,
-        hasOpenRequisition: false,
-      },
-      {
-        id: "frontend",
-        name: "Frontend",
-        manager: "Trần Minh Đức",
-        active: true,
-        hasOpenRequisition: false,
-      },
-    ],
-  },
-  {
-    id: "marketing",
-    name: "Phòng Marketing",
-    manager: "Nguyễn Thu Hà",
-    active: true,
-    hasOpenRequisition: false,
-  },
-];
+function collectDepartmentIds(department: Department, ids: Set<string>) {
+  ids.add(department.id);
+  department.children?.forEach((child) => collectDepartmentIds(child, ids));
+}
 
 function DepartmentManagement() {
   const navigate = useNavigate();
 
-  const [departments, setDepartments] =
-    useState<Department[]>(initialDepartments);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [users, setUsers] = useState<DepartmentUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState("");
+  const [busyDepartmentId, setBusyDepartmentId] = useState<string | null>(null);
 
   const [showModal, setShowModal] = useState(false);
 
@@ -83,7 +49,72 @@ function DepartmentManagement() {
 
   const [departmentName, setDepartmentName] = useState("");
 
-  const [managerName, setManagerName] = useState("");
+  const [departmentCode, setDepartmentCode] = useState("");
+  const [managerId, setManagerId] = useState("");
+  const [approverId, setApproverId] = useState("");
+  const [parentId, setParentId] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const flattenedDepartments = flattenDepartments(departments);
+  const approvers = users.filter((user) =>
+    user.roles.some((role) => ["APPROVER", "HR_MANAGER", "ADMIN"].includes(role)),
+  );
+  const blockedParentIds = new Set<string>();
+  if (editingDepartment) {
+    const editingNode = flattenedDepartments.find(
+      ({ department }) => department.id === editingDepartment.id,
+    )?.department;
+    if (editingNode) collectDepartmentIds(editingNode, blockedParentIds);
+  }
+
+  const fetchData = useCallback(async () => {
+    const [departmentData, userData] = await Promise.all([
+      loadDepartments(),
+      loadDepartmentUsers(),
+    ]);
+    setDepartments(departmentData);
+    setUsers(
+      userData.filter(
+        (user) => user.isActive && !user.roles.includes("CANDIDATE"),
+      ),
+    );
+  }, []);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setPageError("");
+    try {
+      await fetchData();
+    } catch (error) {
+      setPageError(
+        error instanceof Error
+          ? error.message
+          : "Không tải được dữ liệu phòng ban.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchData]);
+
+  useEffect(() => {
+    void Promise.all([loadDepartments(), loadDepartmentUsers()])
+      .then(([departmentData, userData]) => {
+        setDepartments(departmentData);
+        setUsers(
+          userData.filter(
+            (user) => user.isActive && !user.roles.includes("CANDIDATE"),
+          ),
+        );
+      })
+      .catch((error: unknown) => {
+        setPageError(
+          error instanceof Error
+            ? error.message
+            : "Không tải được dữ liệu phòng ban.",
+        );
+      })
+      .finally(() => setLoading(false));
+  }, [fetchData]);
 
   const handleLogout = async () => {
     clearLocalSession();
@@ -112,17 +143,23 @@ function DepartmentManagement() {
     }
   };
 
-  const openAddModal = () => {
+  const openAddModal = (nextParentId = "") => {
     setEditingDepartment(null);
     setDepartmentName("");
-    setManagerName("");
+    setDepartmentCode("");
+    setManagerId("");
+    setApproverId("");
+    setParentId(nextParentId);
     setShowModal(true);
   };
 
   const openEditModal = (department: Department) => {
     setEditingDepartment(department);
     setDepartmentName(department.name);
-    setManagerName(department.manager);
+    setDepartmentCode(department.code);
+    setManagerId(department.managerId || "");
+    setApproverId(department.approverId || "");
+    setParentId(department.parentId || "");
     setShowModal(true);
   };
 
@@ -130,79 +167,68 @@ function DepartmentManagement() {
     setShowModal(false);
     setEditingDepartment(null);
     setDepartmentName("");
-    setManagerName("");
+    setDepartmentCode("");
+    setManagerId("");
+    setApproverId("");
+    setParentId("");
   };
 
-  const handleSaveDepartment = () => {
-    if (!departmentName.trim() || !managerName.trim()) {
-      alert("Vui lòng nhập đầy đủ tên phòng ban và người phụ trách.");
+  const handleSaveDepartment = async () => {
+    if (
+      departmentName.trim().length < 2 ||
+      !/^[A-Z0-9_-]{2,30}$/.test(departmentCode.trim()) ||
+      !managerId ||
+      !approverId
+    ) {
+      alert(
+        "Vui lòng nhập tên từ 2 ký tự, mã hợp lệ, người phụ trách và người duyệt.",
+      );
       return;
     }
 
-    if (editingDepartment) {
-      setDepartments((current) =>
-        current.map((department) =>
-          department.id === editingDepartment.id
-            ? {
-                ...department,
-                name: departmentName.trim(),
-                manager: managerName.trim(),
-              }
-            : {
-                ...department,
-                children: department.children?.map((child) =>
-                  child.id === editingDepartment.id
-                    ? {
-                        ...child,
-                        name: departmentName.trim(),
-                        manager: managerName.trim(),
-                      }
-                    : child,
-                ),
-              },
-        ),
+    const input: DepartmentInput = {
+      name: departmentName.trim(),
+      code: departmentCode.trim(),
+      managerId,
+      approverId,
+      parentId: parentId || null,
+    };
+
+    setSaving(true);
+    try {
+      if (editingDepartment) {
+        await updateDepartment(editingDepartment.id, input);
+      } else {
+        await createDepartment(input);
+      }
+      closeModal();
+      await loadData();
+    } catch (error) {
+      alert(
+        error instanceof Error ? error.message : "Không lưu được phòng ban.",
       );
-    } else {
-      const newDepartment: Department = {
-        id: `department-${Date.now()}`,
-        name: departmentName.trim(),
-        manager: managerName.trim(),
-        active: true,
-        hasOpenRequisition: false,
-      };
-
-      setDepartments((current) => [...current, newDepartment]);
+    } finally {
+      setSaving(false);
     }
-
-    closeModal();
   };
 
-  const handleDisableDepartment = (id: string) => {
-    setDepartments((current) =>
-      current.map((department) => {
-        if (department.id === id) {
-          return {
-            ...department,
-            active: false,
-          };
-        }
-
-        return {
-          ...department,
-          children: department.children?.map((child) =>
-            child.id === id
-              ? {
-                  ...child,
-                  active: false,
-                }
-              : child,
-          ),
-        };
-      }),
-    );
+  const handleDisableDepartment = async (id: string) => {
+    setBusyDepartmentId(id);
+    try {
+      await setDepartmentActive(id, false);
+      await loadData();
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Không thể ngừng áp dụng phòng ban.",
+      );
+    } finally {
+      setBusyDepartmentId(null);
+    }
   };
 
-  const handleDeleteDepartment = (department: Department) => {
+  const handleDeleteDepartment = async (department: Department) => {
     // Không cho xóa nếu đang có yêu cầu tuyển dụng mở
     if (department.hasOpenRequisition) {
       alert(
@@ -225,16 +251,17 @@ function DepartmentManagement() {
       return;
     }
 
-    setDepartments((current) =>
-      current
-        .filter((item) => item.id !== department.id)
-        .map((item) => ({
-          ...item,
-          children: item.children?.filter(
-            (child) => child.id !== department.id,
-          ),
-        })),
-    );
+    setBusyDepartmentId(department.id);
+    try {
+      await deleteDepartment(department.id);
+      await loadData();
+    } catch (error) {
+      alert(
+        error instanceof Error ? error.message : "Không thể xóa phòng ban.",
+      );
+    } finally {
+      setBusyDepartmentId(null);
+    }
   };
 
   const renderDepartment = (department: Department, level = 0) => {
@@ -282,7 +309,17 @@ function DepartmentManagement() {
                   fontSize: "14px",
                 }}
               >
-                Người phụ trách: <strong>{department.manager}</strong>
+                Người phụ trách: <strong>{department.manager || "Chưa gán"}</strong>
+              </p>
+
+              <p
+                style={{
+                  margin: "5px 0 0",
+                  color: "#66756e",
+                  fontSize: "14px",
+                }}
+              >
+                Người duyệt: <strong>{department.approverName || "Chưa cấu hình"}</strong>
               </p>
 
               <p
@@ -339,7 +376,8 @@ function DepartmentManagement() {
               {department.active && (
                 <button
                   type="button"
-                  onClick={() => handleDisableDepartment(department.id)}
+                  disabled={busyDepartmentId === department.id}
+                  onClick={() => void handleDisableDepartment(department.id)}
                   style={{
                     padding: "8px 12px",
                     border: "1px solid #e5c07b",
@@ -349,7 +387,7 @@ function DepartmentManagement() {
                     cursor: "pointer",
                   }}
                 >
-                  Ngừng áp dụng
+                  {busyDepartmentId === department.id ? "Đang xử lý…" : "Ngừng áp dụng"}
                 </button>
               )}
 
@@ -357,9 +395,10 @@ function DepartmentManagement() {
                 type="button"
                 disabled={
                   department.hasOpenRequisition ||
-                  Boolean(department.children && department.children.length > 0)
+                  Boolean(department.children && department.children.length > 0) ||
+                  busyDepartmentId === department.id
                 }
-                onClick={() => handleDeleteDepartment(department)}
+                onClick={() => void handleDeleteDepartment(department)}
                 style={{
                   padding: "8px 12px",
                   border: "1px solid #efb5b5",
@@ -464,7 +503,7 @@ function DepartmentManagement() {
 
             <button
               type="button"
-              onClick={openAddModal}
+              onClick={() => openAddModal()}
               style={{
                 padding: "10px 16px",
                 border: "none",
@@ -478,6 +517,25 @@ function DepartmentManagement() {
               + Thêm phòng ban
             </button>
           </div>
+
+          {pageError && (
+            <div
+              role="alert"
+              style={{
+                marginBottom: "18px",
+                padding: "12px 14px",
+                border: "1px solid #f0b7b7",
+                borderRadius: "8px",
+                background: "#fff4f4",
+                color: "#a32828",
+              }}
+            >
+              {pageError}{" "}
+              <button type="button" onClick={() => void loadData()}>
+                Thử lại
+              </button>
+            </div>
+          )}
 
           <section
             style={{
@@ -514,7 +572,17 @@ function DepartmentManagement() {
               </p>
             </div>
 
-            {departments.map((department) => renderDepartment(department))}
+            {loading ? (
+              <p role="status" style={{ color: "#66756e" }}>
+                Đang tải dữ liệu phòng ban…
+              </p>
+            ) : departments.length > 0 ? (
+              departments.map((department) => renderDepartment(department))
+            ) : (
+              <p style={{ color: "#66756e" }}>
+                Chưa có phòng ban. Hãy thêm phòng ban đầu tiên.
+              </p>
+            )}
           </section>
         </div>
       </main>
@@ -529,12 +597,16 @@ function DepartmentManagement() {
             alignItems: "center",
             justifyContent: "center",
             zIndex: 2000,
+            overflowY: "auto",
+            padding: "16px",
           }}
         >
           <div
             style={{
               width: "420px",
               maxWidth: "calc(100vw - 32px)",
+              maxHeight: "calc(100vh - 32px)",
+              overflowY: "auto",
               background: "#ffffff",
               borderRadius: "12px",
               padding: "24px",
@@ -593,13 +665,16 @@ function DepartmentManagement() {
                   fontWeight: 600,
                 }}
               >
-                Người phụ trách
+                Mã phòng ban
               </label>
 
               <input
                 type="text"
-                value={managerName}
-                onChange={(event) => setManagerName(event.target.value)}
+                value={departmentCode}
+                onChange={(event) => setDepartmentCode(event.target.value.toUpperCase())}
+                maxLength={30}
+                pattern="[A-Z0-9_-]+"
+                placeholder="Ví dụ: HR, ENG"
                 style={{
                   width: "100%",
                   boxSizing: "border-box",
@@ -608,6 +683,107 @@ function DepartmentManagement() {
                   borderRadius: "6px",
                 }}
               />
+            </div>
+
+            <div style={{ marginTop: "16px" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "6px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                }}
+              >
+                Đơn vị cấp trên
+              </label>
+              <select
+                value={parentId}
+                onChange={(event) => setParentId(event.target.value)}
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: "10px 12px",
+                  border: "1px solid #ccd7d1",
+                  borderRadius: "6px",
+                  background: "#ffffff",
+                }}
+              >
+                <option value="">Không có (cấp gốc)</option>
+                {flattenedDepartments
+                  .filter(
+                    ({ department }) =>
+                      department.active && !blockedParentIds.has(department.id),
+                  )
+                  .map(({ department, depth }) => (
+                    <option key={department.id} value={department.id}>
+                      {"　".repeat(depth)}{department.name} ({department.code})
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div style={{ marginTop: "16px" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "6px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                }}
+              >
+                Người phụ trách
+              </label>
+              <select
+                value={managerId}
+                onChange={(event) => setManagerId(event.target.value)}
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: "10px 12px",
+                  border: "1px solid #ccd7d1",
+                  borderRadius: "6px",
+                  background: "#ffffff",
+                }}
+              >
+                <option value="">Chọn nhân sự</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.fullName} — {user.email}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ marginTop: "16px" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "6px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                }}
+              >
+                Người duyệt yêu cầu tuyển dụng
+              </label>
+              <select
+                value={approverId}
+                onChange={(event) => setApproverId(event.target.value)}
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  padding: "10px 12px",
+                  border: "1px solid #ccd7d1",
+                  borderRadius: "6px",
+                  background: "#ffffff",
+                }}
+              >
+                <option value="">Chọn người duyệt</option>
+                {approvers.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.fullName} — {user.email}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div
@@ -621,6 +797,7 @@ function DepartmentManagement() {
               <button
                 type="button"
                 onClick={closeModal}
+                disabled={saving}
                 style={{
                   padding: "9px 14px",
                   border: "1px solid #ccd7d1",
@@ -634,7 +811,8 @@ function DepartmentManagement() {
 
               <button
                 type="button"
-                onClick={handleSaveDepartment}
+                onClick={() => void handleSaveDepartment()}
+                disabled={saving}
                 style={{
                   padding: "9px 14px",
                   border: "none",
@@ -645,7 +823,11 @@ function DepartmentManagement() {
                   fontWeight: 600,
                 }}
               >
-                {editingDepartment ? "Lưu thay đổi" : "Thêm phòng ban"}
+                {saving
+                  ? "Đang lưu…"
+                  : editingDepartment
+                    ? "Lưu thay đổi"
+                    : "Thêm phòng ban"}
               </button>
             </div>
           </div>

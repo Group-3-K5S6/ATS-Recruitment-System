@@ -18,6 +18,8 @@ model User {
   updatedAt    DateTime   @updatedAt
 
   department   Department? @relation(fields: [departmentId], references: [id])
+  managedDepartments Department[] @relation("DepartmentManager")
+  approvedDepartments Department[] @relation("DepartmentApprover")
   roles        UserRole[]
   auditLogs    AuditLog[]
 
@@ -73,6 +75,14 @@ model Department {
   id           String        @id @default(uuid())
   name         String
   code         String        @unique
+  parentId     String?
+  managerId    String?
+  approverId   String?
+  isActive     Boolean       @default(true)
+  parent       Department?   @relation("DepartmentHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children     Department[]  @relation("DepartmentHierarchy")
+  manager      User?         @relation("DepartmentManager", fields: [managerId], references: [id], onDelete: Restrict)
+  approver     User?         @relation("DepartmentApprover", fields: [approverId], references: [id], onDelete: Restrict)
   users        User[]
   requisitions Requisition[]
   jobs         Job[]

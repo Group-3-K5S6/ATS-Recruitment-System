@@ -19,7 +19,7 @@ export class RequisitionPolicy {
     if (!req) return false;
 
     if (user.roles.includes(RoleType.APPROVER)) {
-      return req.approverId === user.id || true; // Approver can view requisitions to review
+      return req.approverId === user.id;
     }
 
     if (user.roles.includes(RoleType.HIRING_MANAGER)) {
@@ -39,8 +39,14 @@ export class RequisitionPolicy {
     }
 
     if (user.roles.includes(RoleType.HIRING_MANAGER)) {
-      // Must be within their own department
-      return !!user.departmentId && user.departmentId === departmentId;
+      const department = await prisma.department.findUnique({
+        where: { id: departmentId },
+        select: { isActive: true, managerId: true },
+      });
+      // Department.managerId is the authoritative assignment for the department.
+      // A hiring manager may be responsible for a newly created department even
+      // when their profile's primary department is different.
+      return !!department && department.isActive && department.managerId === user.id;
     }
 
     return false;
@@ -78,7 +84,7 @@ export class RequisitionPolicy {
         where: { id: requisitionId },
       });
       if (!req) return false;
-      return !req.approverId || req.approverId === user.id;
+      return req.approverId === user.id;
     }
 
     return false;

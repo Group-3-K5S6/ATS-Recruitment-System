@@ -15,6 +15,7 @@ import reportRoutes from './modules/reports/report.routes';
 import userRoutes from './modules/users/user.routes';
 import auditLogRoutes from './modules/audit-logs/audit-log.routes';
 import menuRoutes from './modules/menu/menu.routes';
+import departmentRoutes from './modules/departments/department.routes';
 
 export function createApp() {
   const app = express();
@@ -40,9 +41,8 @@ export function createApp() {
   app.use('/api/reports', reportRoutes);
   app.use('/api/users', userRoutes);
   app.use('/api/audit-logs', auditLogRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/menu', menuRoutes);
-app.use('/api/candidates', candidateRoutes);
+  app.use('/api/departments', departmentRoutes);
+  app.use('/api/menu', menuRoutes);
   // Catch-all 404
   app.use((_req: Request, res: Response) => {
     errorResponse(res, 'Route not found.', 404, 'NOT_FOUND');

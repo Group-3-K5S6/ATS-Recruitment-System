@@ -141,6 +141,20 @@ export async function runSeed() {
   const candidateUser1 = await seedUser('candidate1@ats.local', 'Nguyễn Văn Ứng Viên 1', RoleType.CANDIDATE);
   const candidateUser2 = await seedUser('candidate2@ats.local', 'Trần Thị Ứng Viên 2', RoleType.CANDIDATE);
 
+  // Keep the sample organization usable with the department approval workflow.
+  await prisma.department.update({
+    where: { id: engDept.id },
+    data: { managerId: hmEng.id, approverId: approver.id },
+  });
+  await prisma.department.update({
+    where: { id: hrDept.id },
+    data: { managerId: hrManager.id, approverId: approver.id },
+  });
+  await prisma.department.update({
+    where: { id: mktDept.id },
+    data: { managerId: hmMkt.id, approverId: approver.id },
+  });
+
   // 6. Seed Sample Requisitions
   console.log('Seeding Sample Requisitions & Jobs...');
   const reqEng = await prisma.requisition.upsert({
