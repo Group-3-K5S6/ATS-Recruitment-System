@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import {
   Link,
+  useNavigate,
   useSearchParams,
 } from "react-router-dom";
 
@@ -11,8 +12,9 @@ const API_URL =
   import.meta.env.VITE_ATS_API_URL ||
   "http://localhost:4000";
 
-
 function ResetPassword() {
+  const navigate = useNavigate();
+
   const [searchParams] =
     useSearchParams();
 
@@ -38,18 +40,12 @@ function ResetPassword() {
   ] = useState(false);
 
   const [
-    submitted,
-    setSubmitted,
-  ] = useState(false);
-
-  const [
     submitting,
     setSubmitting,
   ] = useState(false);
 
   const [error, setError] =
     useState("");
-
 
   const handleSubmit = async (
     event: FormEvent<HTMLFormElement>
@@ -58,76 +54,56 @@ function ResetPassword() {
 
     setError("");
 
-
     if (!token) {
       setError(
         "Liên kết đặt lại mật khẩu không hợp lệ."
       );
-
       return;
     }
-
 
     if (password.length < 8) {
       setError(
         "Mật khẩu mới phải có ít nhất 8 ký tự."
       );
-
       return;
     }
-
 
     if (!/[A-Z]/.test(password)) {
       setError(
         "Mật khẩu phải có ít nhất 1 chữ hoa."
       );
-
       return;
     }
-
 
     if (!/[a-z]/.test(password)) {
       setError(
         "Mật khẩu phải có ít nhất 1 chữ thường."
       );
-
       return;
     }
-
 
     if (!/\d/.test(password)) {
       setError(
         "Mật khẩu phải có ít nhất 1 chữ số."
       );
-
       return;
     }
 
-
-    if (
-      !/[^A-Za-z0-9]/.test(password)
-    ) {
+    if (!/[^A-Za-z0-9]/.test(password)) {
       setError(
         "Mật khẩu phải có ít nhất 1 ký tự đặc biệt."
       );
-
       return;
     }
 
-
-    if (
-      password !== confirmation
-    ) {
+    if (password !== confirmation) {
       setError(
         "Mật khẩu xác nhận không khớp."
       );
-
       return;
     }
 
-
     setSubmitting(true);
-
 
     try {
       const response =
@@ -143,29 +119,71 @@ function ResetPassword() {
 
             body: JSON.stringify({
               token,
-
-              newPassword:
-                password,
+              newPassword: password,
             }),
           }
         );
-
 
       const result =
         await response
           .json()
           .catch(() => null);
 
-
       if (!response.ok) {
+        const errorCode =
+          result?.error?.code;
+
+        if (
+          errorCode ===
+          "TOKEN_ALREADY_USED"
+        ) {
+          setError(
+            "Liên kết đặt lại mật khẩu này đã được sử dụng."
+          );
+          return;
+        }
+
+        if (
+          errorCode ===
+          "EXPIRED_TOKEN"
+        ) {
+          setError(
+            "Liên kết đặt lại mật khẩu đã hết hạn. Vui lòng yêu cầu liên kết mới."
+          );
+          return;
+        }
+
+        if (
+          errorCode ===
+          "INVALID_TOKEN"
+        ) {
+          setError(
+            "Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn."
+          );
+          return;
+        }
+
         throw new Error(
           result?.error?.message ||
           "Không thể đặt lại mật khẩu."
         );
       }
 
-
-      setSubmitted(true);
+      /*
+       * S1-03
+       * Backend đã cập nhật mật khẩu thành công.
+       * Chuyển ngay về màn hình đăng nhập.
+       */
+      navigate(
+        "/login",
+        {
+          replace: true,
+          state: {
+            message:
+              "Đặt lại mật khẩu thành công. Vui lòng đăng nhập bằng mật khẩu mới.",
+          },
+        }
+      );
 
     } catch (requestError) {
       setError(
@@ -179,7 +197,6 @@ function ResetPassword() {
     }
   };
 
-
   return (
     <AuthLayout>
 
@@ -189,7 +206,6 @@ function ResetPassword() {
       >
         ← Quay lại đăng nhập
       </Link>
-
 
       <div className="auth-heading">
 
@@ -208,7 +224,6 @@ function ResetPassword() {
 
       </div>
 
-
       {!token && (
         <div className="error-message">
           Liên kết đặt lại mật khẩu
@@ -216,164 +231,119 @@ function ResetPassword() {
         </div>
       )}
 
+      {token && (
+        <form onSubmit={handleSubmit}>
 
-      {submitted ? (
+          <div className="form-group">
 
-        <div
-          className="reset-success"
-          role="status"
-        >
+            <label htmlFor="new-password">
+              Mật khẩu mới
+            </label>
 
-          <div className="success-check">
-            ✓
+            <div className="input-box">
+
+              <span className="input-icon">
+                🔒
+              </span>
+
+              <input
+                id="new-password"
+                type={
+                  showPassword
+                    ? "text"
+                    : "password"
+                }
+                placeholder="Tối thiểu 8 ký tự"
+                value={password}
+                onChange={(event) =>
+                  setPassword(
+                    event.target.value
+                  )
+                }
+              />
+
+              <button
+                type="button"
+                className="show-password"
+                onClick={() =>
+                  setShowPassword(
+                    (value) => !value
+                  )
+                }
+              >
+                {showPassword
+                  ? "Ẩn"
+                  : "Hiện"}
+              </button>
+
+            </div>
+
           </div>
 
-          <h3>
-            Đặt lại mật khẩu thành công
-          </h3>
+          <div className="form-group">
 
-          <p>
-            Mật khẩu mới đã được cập nhật
-            vào hệ thống.
-          </p>
+            <label htmlFor="confirm-password">
+              Xác nhận mật khẩu mới
+            </label>
 
-          <Link
-            className=
-              "login-button success-button"
-            to="/login"
+            <div className="input-box">
+
+              <span className="input-icon">
+                🔒
+              </span>
+
+              <input
+                id="confirm-password"
+                type={
+                  showConfirmation
+                    ? "text"
+                    : "password"
+                }
+                placeholder="Nhập lại mật khẩu mới"
+                value={confirmation}
+                onChange={(event) =>
+                  setConfirmation(
+                    event.target.value
+                  )
+                }
+              />
+
+              <button
+                type="button"
+                className="show-password"
+                onClick={() =>
+                  setShowConfirmation(
+                    (value) => !value
+                  )
+                }
+              >
+                {showConfirmation
+                  ? "Ẩn"
+                  : "Hiện"}
+              </button>
+
+            </div>
+
+          </div>
+
+          {error && (
+            <div className="error-message">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            className="login-button"
+            disabled={submitting}
           >
-            Quay lại Đăng nhập
-          </Link>
+            {submitting
+              ? "Đang cập nhật..."
+              : "Đặt lại mật khẩu"}
+          </button>
 
-        </div>
-
-      ) : (
-
-        token && (
-
-          <form onSubmit={handleSubmit}>
-
-            <div className="form-group">
-
-              <label htmlFor="new-password">
-                Mật khẩu mới
-              </label>
-
-
-              <div className="input-box">
-
-                <span className="input-icon">
-                  🔒
-                </span>
-
-
-                <input
-                  id="new-password"
-                  type={
-                    showPassword
-                      ? "text"
-                      : "password"
-                  }
-                  placeholder="Tối thiểu 8 ký tự"
-                  value={password}
-                  onChange={(event) =>
-                    setPassword(
-                      event.target.value
-                    )
-                  }
-                />
-
-
-                <button
-                  type="button"
-                  className="show-password"
-                  onClick={() =>
-                    setShowPassword(
-                      (value) => !value
-                    )
-                  }
-                >
-                  {showPassword
-                    ? "Ẩn"
-                    : "Hiện"}
-                </button>
-
-              </div>
-
-            </div>
-
-
-            <div className="form-group">
-
-              <label htmlFor="confirm-password">
-                Xác nhận mật khẩu mới
-              </label>
-
-
-              <div className="input-box">
-
-                <span className="input-icon">
-                  🔒
-                </span>
-
-
-                <input
-                  id="confirm-password"
-                  type={
-                    showConfirmation
-                      ? "text"
-                      : "password"
-                  }
-                  placeholder="Nhập lại mật khẩu mới"
-                  value={confirmation}
-                  onChange={(event) =>
-                    setConfirmation(
-                      event.target.value
-                    )
-                  }
-                />
-
-
-                <button
-                  type="button"
-                  className="show-password"
-                  onClick={() =>
-                    setShowConfirmation(
-                      (value) => !value
-                    )
-                  }
-                >
-                  {showConfirmation
-                    ? "Ẩn"
-                    : "Hiện"}
-                </button>
-
-              </div>
-
-            </div>
-
-
-            {error && (
-              <div className="error-message">
-                {error}
-              </div>
-            )}
-
-
-            <button
-              type="submit"
-              className="login-button"
-              disabled={submitting}
-            >
-              {submitting
-                ? "Đang cập nhật..."
-                : "Đặt lại mật khẩu"}
-            </button>
-
-          </form>
-        )
+        </form>
       )}
-
 
       <p className="support">
         Liên kết xác thực chỉ có hiệu lực
@@ -383,6 +353,5 @@ function ResetPassword() {
     </AuthLayout>
   );
 }
-
 
 export default ResetPassword;

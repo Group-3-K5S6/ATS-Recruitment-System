@@ -253,3 +253,16 @@ model PasswordResetToken {
 
   @@index([email])
 }
+
+model LoginAttempt {
+  id             String    @id @default(uuid())
+  email          String
+  deviceId       String
+  failedAttempts Int       @default(0)
+  lockedUntil    DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@unique([email, deviceId])
+  @@index([email])
+}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { FormEvent } from "react";
 
 import {
@@ -45,14 +45,7 @@ type PasswordRule = {
 };
 
 
-type ChangePasswordData = {
-  message?: string;
-  accessToken: string;
-  refreshToken: string;
-};
-
-
-type ApiResponse<T> = {
+type ApiResponse<T = unknown> = {
   success?: boolean;
   data?: T;
   message?: string;
@@ -155,12 +148,6 @@ function ChangePassword() {
   ] = useState(false);
 
 
-  const [
-    isSuccess,
-    setIsSuccess,
-  ] = useState(false);
-
-
   /* =========================================================
      KIỂM TRA PASSWORD
   ========================================================= */
@@ -185,40 +172,6 @@ function ChangePassword() {
 
 
   /* =========================================================
-     RESET FORM SAU KHI THÀNH CÔNG
-  ========================================================= */
-
-  useEffect(() => {
-
-    if (!isSuccess) {
-      return;
-    }
-
-
-    const resetTimer =
-      window.setTimeout(() => {
-
-        setCurrentPassword("");
-        setNewPassword("");
-        setConfirmation("");
-
-        setErrors({});
-        setApiError("");
-
-        setIsSuccess(false);
-
-      }, 3500);
-
-
-    return () =>
-      window.clearTimeout(
-        resetTimer
-      );
-
-  }, [isSuccess]);
-
-
-  /* =========================================================
      VALIDATE FORM
   ========================================================= */
 
@@ -229,31 +182,26 @@ function ChangePassword() {
 
 
     if (!currentPassword) {
-
       nextErrors.currentPassword =
         "Vui lòng nhập mật khẩu hiện tại.";
     }
 
 
     if (!newPassword) {
-
       nextErrors.newPassword =
         "Vui lòng nhập mật khẩu mới.";
 
     } else if (!allRulesValid) {
-
       nextErrors.newPassword =
         "Mật khẩu mới phải tối thiểu 8 ký tự, có chữ và số.";
     }
 
 
     if (!confirmation) {
-
       nextErrors.confirmation =
         "Vui lòng xác nhận mật khẩu mới.";
 
     } else if (!passwordsMatch) {
-
       nextErrors.confirmation =
         "Mật khẩu xác nhận không khớp.";
     }
@@ -261,9 +209,28 @@ function ChangePassword() {
 
     setErrors(nextErrors);
 
-
     return (
       Object.keys(nextErrors).length === 0
+    );
+  };
+
+
+  /* =========================================================
+     XÓA PHIÊN ĐĂNG NHẬP
+  ========================================================= */
+
+  const clearSession = () => {
+
+    sessionStorage.removeItem(
+      "accessToken"
+    );
+
+    sessionStorage.removeItem(
+      "refreshToken"
+    );
+
+    sessionStorage.removeItem(
+      "atsUser"
     );
   };
 
@@ -280,7 +247,6 @@ function ChangePassword() {
       event.preventDefault();
 
       setApiError("");
-      setIsSuccess(false);
 
 
       if (!validate()) {
@@ -289,7 +255,7 @@ function ChangePassword() {
 
 
       /* =========================
-         LẤY ACCESS TOKEN HIỆN TẠI
+         LẤY ACCESS TOKEN
       ========================= */
 
       const accessToken =
@@ -300,20 +266,14 @@ function ChangePassword() {
 
       if (!accessToken) {
 
-        setApiError(
-          "Phiên đăng nhập không tồn tại. Vui lòng đăng nhập lại."
+        clearSession();
+
+        navigate(
+          "/login",
+          {
+            replace: true,
+          }
         );
-
-
-        window.setTimeout(() => {
-
-          navigate(
-            "/login",
-            { replace: true }
-          );
-
-        }, 1200);
-
 
         return;
       }
@@ -348,20 +308,20 @@ function ChangePassword() {
 
 
         const result =
-          await response.json()
+          await response
+            .json()
             .catch(
               () =>
-                ({}) as
-                  ApiResponse<ChangePasswordData>
+                ({}) as ApiResponse
             );
 
 
         const apiResult =
-          result as ApiResponse<ChangePasswordData>;
+          result as ApiResponse;
 
 
         /* =========================
-           API BÁO LỖI
+           BACKEND BÁO LỖI
         ========================= */
 
         if (!response.ok) {
@@ -376,31 +336,30 @@ function ChangePassword() {
 
 
           /*
-           * Nếu phiên đã hết hiệu lực
-           * thì xóa token và quay về login.
+           * Phiên không còn hợp lệ:
+           * xóa toàn bộ session
+           * và quay về đăng nhập.
            */
 
           if (
             response.status === 401
           ) {
 
-            sessionStorage.removeItem(
-              "accessToken"
+            clearSession();
+
+            window.setTimeout(
+              () => {
+
+                navigate(
+                  "/login",
+                  {
+                    replace: true,
+                  }
+                );
+
+              },
+              1000
             );
-
-            sessionStorage.removeItem(
-              "refreshToken"
-            );
-
-
-            window.setTimeout(() => {
-
-              navigate(
-                "/login",
-                { replace: true }
-              );
-
-            }, 1500);
           }
 
 
@@ -408,59 +367,36 @@ function ChangePassword() {
         }
 
 
-        /* =========================
-           LẤY TOKEN MỚI
-        ========================= */
+        /* =====================================================
+           ĐỔI MẬT KHẨU THÀNH CÔNG
 
-        const data =
-          apiResult.data;
+           Backend đã:
+           - kiểm tra mật khẩu hiện tại
+           - cập nhật passwordHash trong CSDL
+           - thu hồi phiên cũ
 
+           Frontend:
+           - xóa session hiện tại
+           - quay ngay về màn hình đăng nhập
+        ===================================================== */
 
-        if (
-          !data?.accessToken ||
-          !data?.refreshToken
-        ) {
-
-          setApiError(
-            "Backend đã đổi mật khẩu nhưng không trả về phiên đăng nhập mới."
-          );
-
-          return;
-        }
+        clearSession();
 
 
-        /* =========================
-           THAY ACCESS TOKEN CŨ
-        ========================= */
+        navigate(
+          "/login",
+          {
+            replace: true,
 
-        sessionStorage.setItem(
-          "accessToken",
-          data.accessToken
+            state: {
+              message:
+                "Đổi mật khẩu thành công. Vui lòng đăng nhập lại bằng mật khẩu mới.",
+            },
+          }
         );
 
+        return;
 
-        /* =========================
-           THAY REFRESH TOKEN CŨ
-        ========================= */
-
-        sessionStorage.setItem(
-          "refreshToken",
-          data.refreshToken
-        );
-
-
-        /* =========================
-           THÀNH CÔNG
-        ========================= */
-
-        setCurrentPassword("");
-        setNewPassword("");
-        setConfirmation("");
-
-        setErrors({});
-        setApiError("");
-
-        setIsSuccess(true);
 
       } catch (error) {
 
@@ -474,9 +410,11 @@ function ChangePassword() {
           "Không thể kết nối đến máy chủ. Vui lòng kiểm tra Backend."
         );
 
+
       } finally {
 
         setIsSubmitting(false);
+
       }
     };
 
@@ -573,7 +511,8 @@ function ChangePassword() {
         <button
           type="button"
 
-          className="password-visibility-button"
+          className=
+            "password-visibility-button"
 
           onClick={
             () =>
@@ -623,12 +562,11 @@ function ChangePassword() {
 
           <p
             id={`${id}-error`}
-            className="change-password-error"
+            className=
+              "change-password-error"
             role="alert"
           >
-
             {error}
-
           </p>
         )
       }
@@ -647,12 +585,17 @@ function ChangePassword() {
 
       <section
         className="change-password-card"
-        aria-labelledby="change-password-title"
+        aria-labelledby=
+          "change-password-title"
       >
 
-        <div className="change-password-header">
+        <div className=
+          "change-password-header"
+        >
 
-          <div className="change-password-header-icon">
+          <div className=
+            "change-password-header-icon"
+          >
 
             <ShieldCheck
               size={26}
@@ -664,7 +607,9 @@ function ChangePassword() {
 
           <div>
 
-            <span className="change-password-eyebrow">
+            <span className=
+              "change-password-eyebrow"
+            >
               BẢO MẬT TÀI KHOẢN
             </span>
 
@@ -675,7 +620,8 @@ function ChangePassword() {
 
 
             <p>
-              Giữ tài khoản nội bộ của bạn luôn an toàn.
+              Giữ tài khoản nội bộ của bạn
+              luôn an toàn.
             </p>
 
           </div>
@@ -700,7 +646,9 @@ function ChangePassword() {
           }
 
 
-          <div className="change-password-field">
+          <div className=
+            "change-password-field"
+          >
 
             {
               renderPasswordField(
@@ -716,7 +664,8 @@ function ChangePassword() {
 
             <div
               className="password-rules"
-              aria-label="Yêu cầu mật khẩu"
+              aria-label=
+                "Yêu cầu mật khẩu"
             >
 
               {
@@ -745,7 +694,9 @@ function ChangePassword() {
                         }
                       >
 
-                        <span className="password-rule-icon">
+                        <span className=
+                          "password-rule-icon"
+                        >
 
                           {
                             valid
@@ -795,21 +746,25 @@ function ChangePassword() {
             apiError && (
 
               <p
-                className="change-password-error"
+                className=
+                  "change-password-error"
                 role="alert"
               >
-
                 {apiError}
-
               </p>
             )
           }
 
 
           <button
-            className="change-password-submit"
+            className=
+              "change-password-submit"
+
             type="submit"
-            disabled={isSubmitting}
+
+            disabled={
+              isSubmitting
+            }
           >
 
             {
@@ -817,7 +772,8 @@ function ChangePassword() {
                 ? (
                   <>
                     <span
-                      className="change-password-spinner"
+                      className=
+                        "change-password-spinner"
                       aria-hidden="true"
                     />
 
@@ -842,48 +798,14 @@ function ChangePassword() {
 
 
         <Link
-          className="change-password-back"
+          className=
+            "change-password-back"
           to="/dashboard"
         >
           ← Quay lại trang chính
         </Link>
 
       </section>
-
-
-      {
-        isSuccess && (
-
-          <div
-            className="change-password-toast"
-            role="status"
-          >
-
-            <div className="change-password-toast-icon">
-
-              <Check
-                size={18}
-              />
-
-            </div>
-
-
-            <div>
-
-              <strong>
-                Đổi mật khẩu thành công!
-              </strong>
-
-
-              <p>
-                Các phiên đăng nhập cũ đã bị thu hồi.
-              </p>
-
-            </div>
-
-          </div>
-        )
-      }
 
     </main>
   );

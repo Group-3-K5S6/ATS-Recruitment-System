@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 
 import {
@@ -8,6 +8,7 @@ import {
   Routes,
   Link,
   useNavigate,
+  useLocation,
 } from "react-router-dom";
 
 import "./App.css";
@@ -33,8 +34,8 @@ import type { Role } from "./data/roleMenus";
 import {
   consumeSessionExpired,
   clearLocalSession,
+  markSessionExpired,
 } from "./services/session";
-
 
 /* =========================================================
    BACKEND
@@ -276,6 +277,26 @@ async function logoutFromBackend(): Promise<void> {
 /* =========================================================
    LOGIN
 ========================================================= */
+const DEVICE_ID_KEY = "atsDeviceId";
+
+function getOrCreateDeviceId(): string {
+  let deviceId = localStorage.getItem(DEVICE_ID_KEY);
+
+  if (!deviceId) {
+    deviceId =
+      `device-${Date.now()}-` +
+      Math.random().toString(36).slice(2) +
+      Math.random().toString(36).slice(2);
+
+    localStorage.setItem(
+      DEVICE_ID_KEY,
+      deviceId
+    );
+  }
+
+  return deviceId;
+}
+
 
 function Login() {
   const navigate =
@@ -353,7 +374,8 @@ function Login() {
 
 
     try {
-      const response =
+      
+             const response =
         await fetch(
           `${API_URL}/api/auth/login`,
           {
@@ -365,10 +387,10 @@ function Login() {
             },
 
             body: JSON.stringify({
-              email:
-                email.trim(),
-
+              email: email.trim(),
               password,
+              deviceId:
+                getOrCreateDeviceId(),
             }),
           }
         );
@@ -376,7 +398,6 @@ function Login() {
 
       let result:
         ApiResponse<LoginData>;
-
 
       try {
         result =
@@ -1014,14 +1035,126 @@ function RootRoute() {
 /* =========================================================
    APP
 ========================================================= */
+const IDLE_TIMEOUT_MS = 10 * 1000;
+
+function SessionIdleWatcher() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const accessToken =
+      sessionStorage.getItem("accessToken");
+
+    /*
+     * Chưa đăng nhập thì không chạy bộ đếm.
+     */
+    if (!accessToken) {
+      return;
+    }
+
+    let timerId:
+      ReturnType<typeof setTimeout>;
+
+    const expireSession = async () => {
+      /*
+       * Cố gắng vô hiệu hóa phiên phía Backend.
+       * Nếu Backend lỗi thì vẫn phải logout
+       * phía Frontend vì người dùng đã idle quá 10 giây.
+       */
+      try {
+        await logoutFromBackend();
+      } catch (error) {
+        console.error(
+          "Idle logout failed:",
+          error
+        );
+      }
+
+      /*
+       * clearSession() sẽ xóa:
+       * accessToken
+       * refreshToken
+       * atsUser
+       */
+      clearSession();
+
+      /*
+       * Phải đánh dấu SAU clearSession(),
+       * vì clearLocalSession() bên trong clearSession()
+       * cũng xóa sessionExpired.
+       */
+      markSessionExpired();
+
+      navigate(
+        "/login",
+        {
+          replace: true,
+        }
+      );
+    };
+
+    const resetTimer = () => {
+      clearTimeout(timerId);
+
+      timerId =
+        setTimeout(
+          expireSession,
+          IDLE_TIMEOUT_MS
+        );
+    };
+
+    const activityEvents = [
+      "mousemove",
+      "mousedown",
+      "keydown",
+      "click",
+      "scroll",
+      "touchstart",
+    ];
+
+    activityEvents.forEach(
+      (eventName) => {
+        window.addEventListener(
+          eventName,
+          resetTimer
+        );
+      }
+    );
+
+    /*
+     * Bắt đầu đếm 10 giây ngay
+     * sau khi vào phiên đăng nhập.
+     */
+    resetTimer();
+
+    return () => {
+      clearTimeout(timerId);
+
+      activityEvents.forEach(
+        (eventName) => {
+          window.removeEventListener(
+            eventName,
+            resetTimer
+          );
+        }
+      );
+    };
+  }, [
+    navigate,
+    location.pathname,
+  ]);
+
+  return null;
+}
 
 function App() {
 
   return (
     <BrowserRouter>
 
-      <Routes>
+      <SessionIdleWatcher />
 
+      <Routes>
         {/* ROOT */}
 
         <Route
