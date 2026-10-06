@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { RoleType, ROLE_DESCRIPTIONS, ALL_ROLES } from '../src/rbac/roles';
 import { ALL_PERMISSIONS } from '../src/rbac/permissions';
@@ -93,6 +94,9 @@ export async function runSeed() {
   console.log('Seeding Test Users...');
   const defaultPasswordHash = await hashPassword('Password123!');
 
+  const resetTestEmail =
+  process.env.RESET_TEST_EMAIL?.trim().toLowerCase();
+
   async function seedUser(
     email: string,
     fullName: string,
@@ -140,6 +144,19 @@ export async function runSeed() {
   const approver = await seedUser('approver@ats.local', 'VP Approver', RoleType.APPROVER, hrDept.id);
   const candidateUser1 = await seedUser('candidate1@ats.local', 'Nguyễn Văn Ứng Viên 1', RoleType.CANDIDATE);
   const candidateUser2 = await seedUser('candidate2@ats.local', 'Trần Thị Ứng Viên 2', RoleType.CANDIDATE);
+
+if (resetTestEmail) {
+  await seedUser(
+    resetTestEmail,
+    'Reset Password Test',
+    RoleType.RECRUITER,
+    hrDept.id
+  );
+
+  console.log(
+    `Seeded reset-password test account: ${resetTestEmail}`
+  );
+}
 
   // 6. Seed Sample Requisitions
   console.log('Seeding Sample Requisitions & Jobs...');

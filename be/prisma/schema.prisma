@@ -8,18 +8,26 @@ generator client {
 }
 
 model User {
-  id           String     @id @default(uuid())
-  email        String     @unique
+  id           String  @id @default(uuid())
+  email        String  @unique
   passwordHash String
   fullName     String
   departmentId String?
-  isActive     Boolean    @default(true)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  isActive     Boolean @default(true)
 
-  department   Department? @relation(fields: [departmentId], references: [id])
-  roles        UserRole[]
-  auditLogs    AuditLog[]
+  // S1-01 - khóa tạm sau 5 lần đăng nhập sai liên tiếp
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+
+  // S1-04 - dùng để vô hiệu hóa các phiên đăng nhập cũ
+  tokenVersion Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  department Department? @relation(fields: [departmentId], references: [id])
+  roles      UserRole[]
+  auditLogs  AuditLog[]
 
   candidateProfile     Candidate?
   managedRequisitions  Requisition[] @relation("HiringManagerRequisitions")
@@ -31,6 +39,9 @@ model User {
   evaluations          Evaluation[]  @relation("InterviewerEvaluations")
   createdOffers        Offer[]       @relation("RecruiterOffers")
   approvedOffers       Offer[]       @relation("ApproverOffers")
+
+  // S1-03 / S1-04
+  passwordHistories PasswordHistory[]
 }
 
 model Role {
@@ -79,16 +90,16 @@ model Department {
 }
 
 model Requisition {
-  id              String      @id @default(uuid())
+  id              String   @id @default(uuid())
   title           String
   departmentId    String
   hiringManagerId String
   approverId      String?
-  status          String      @default("DRAFT") // DRAFT, PENDING_APPROVAL, APPROVED, REJECTED
-  headcount       Int         @default(1)
+  status          String   @default("DRAFT")
+  headcount       Int      @default(1)
   budget          Float?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   department    Department @relation(fields: [departmentId], references: [id])
   hiringManager User       @relation("HiringManagerRequisitions", fields: [hiringManagerId], references: [id])
@@ -97,17 +108,17 @@ model Requisition {
 }
 
 model Job {
-  id              String      @id @default(uuid())
+  id              String   @id @default(uuid())
   title           String
   requisitionId   String?
   departmentId    String
   hiringManagerId String
   recruiterId     String?
-  status          String      @default("DRAFT") // DRAFT, PUBLISHED, CLOSED
+  status          String   @default("DRAFT")
   description     String
-  location        String      @default("Hanoi")
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  location        String   @default("Hanoi")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   requisition   Requisition?  @relation(fields: [requisitionId], references: [id])
   department    Department    @relation(fields: [departmentId], references: [id])
@@ -117,8 +128,8 @@ model Job {
 }
 
 model Candidate {
-  id             String        @id @default(uuid())
-  userId         String?       @unique
+  id             String   @id @default(uuid())
+  userId         String?  @unique
   fullName       String
   email          String
   phone          String?
@@ -126,22 +137,22 @@ model Candidate {
   address        String?
   expectedSalary Float?
   currentCompany String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   user         User?         @relation(fields: [userId], references: [id])
   applications Application[]
 }
 
 model Application {
-  id                  String      @id @default(uuid())
+  id                  String   @id @default(uuid())
   candidateId         String
   jobId               String
-  stage               String      @default("APPLIED") // APPLIED, SCREENING, INTERVIEWING, OFFERED, HIRED, REJECTED
-  status              String      @default("ACTIVE")
+  stage               String   @default("APPLIED")
+  status              String   @default("ACTIVE")
   assignedRecruiterId String?
-  createdAt           DateTime    @default(now())
-  updatedAt           DateTime    @updatedAt
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   candidate         Candidate   @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   job               Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
@@ -151,15 +162,15 @@ model Application {
 }
 
 model Interview {
-  id              String       @id @default(uuid())
+  id              String   @id @default(uuid())
   applicationId   String
   interviewerId   String
   scheduledAt     DateTime
-  durationMinutes Int          @default(60)
-  status          String       @default("SCHEDULED") // SCHEDULED, COMPLETED, CANCELLED
+  durationMinutes Int      @default(60)
+  status          String   @default("SCHEDULED")
   meetingLink     String?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   application Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   interviewer User         @relation("InterviewerInterviews", fields: [interviewerId], references: [id])
@@ -173,7 +184,7 @@ model Evaluation {
   score          Int
   technicalNotes String
   culturalNotes  String?
-  recommendation String   // STRONG_HIRE, HIRE, NO_HIRE, STRONG_NO_HIRE
+  recommendation String
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -187,7 +198,7 @@ model Offer {
   recruiterId   String
   approverId    String?
   baseSalary    Float
-  status        String   @default("DRAFT") // DRAFT, PENDING_APPROVAL, APPROVED, REJECTED, SENT, ACCEPTED, DECLINED
+  status        String   @default("DRAFT")
   internalNotes String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -205,15 +216,53 @@ model AuditLog {
   resourceId   String?
   ipAddress    String?
   userAgent    String?
-  metadata     String?  // JSON formatted metadata
+  metadata     String?
   createdAt    DateTime @default(now())
 
   actor User? @relation(fields: [actorId], references: [id])
 }
 
+// S1-02
 model RevokedToken {
-  id         String   @id @default(uuid())
-  tokenHash  String   @unique
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+// S1-03 / S1-04
+model PasswordHistory {
+  id           String   @id @default(uuid())
+  userId       String
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// S1-03
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  email     String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([email])
+}
+
+model LoginAttempt {
+  id             String    @id @default(uuid())
+  email          String
+  deviceId       String
+  failedAttempts Int       @default(0)
+  lockedUntil    DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@unique([email, deviceId])
+  @@index([email])
 }
