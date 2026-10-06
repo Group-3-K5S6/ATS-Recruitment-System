@@ -48,6 +48,7 @@ export const roleMenus: Record<Role, MenuItem[]> = {
       label: "Phòng ban & tổ chức",
     },
     { label: "Chức danh & dải lương" },
+    { label: "Khung năng lực" },
   ],
 
   Approver: [

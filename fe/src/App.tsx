@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
+import CompetencyFrameworkManagement from "./pages/CompetencyFrameworkManagement";
 
 import {
   BrowserRouter,
@@ -1008,6 +1009,46 @@ function JobTitleRoute() {
   );
 }
 
+/* =========================================================
+   COMPETENCY FRAMEWORK - S2-06
+========================================================= */
+
+function CompetencyFrameworkRoute() {
+  const user = getSessionUser();
+
+  if (!user) {
+    return (
+      <Navigate
+        to="/login"
+        replace
+      />
+    );
+  }
+
+  const role = resolveRole(user.roles);
+
+  /*
+   * S2-06:
+   * Actor trong backlog là
+   * Trưởng phòng Nhân sự.
+   */
+  if (role !== "HRManager") {
+    return (
+      <Navigate
+        to="/403"
+        replace
+      />
+    );
+  }
+
+  return (
+    <CompetencyFrameworkManagement
+      role={role}
+      userName={user.fullName}
+    />
+  );
+}
+
 
 /* =========================================================
    ROOT
@@ -1225,6 +1266,13 @@ function App() {
             <JobTitleRoute />
           }
         />
+
+         <Route
+           path="/competency-frameworks"
+           element={
+              <CompetencyFrameworkRoute />
+       }
+/>
 
 
         <Route

@@ -62,6 +62,12 @@ function Sidebar({
       return;
     }
 
+     if (label === "Khung năng lực") {
+       navigate("/competency-frameworks");
+       setOpen(false);
+       return;
+    }
+    
     /*
      * Các menu còn lại giữ nguyên cơ chế hiện tại.
      */
