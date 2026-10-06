@@ -6,6 +6,7 @@ import {
   updateUserSchema,
   assignRolesSchema,
   importPayloadSchema,
+  updateProfileSchema,
 } from './user.controller';
 
 import { authenticate } from '../../middleware/authenticate';
@@ -17,6 +18,15 @@ const router = Router();
 
 router.use(authenticate);
 
+router.get('/me', UserController.getProfile);
+
+router.put(
+  '/me',
+  validateBody(updateProfileSchema),
+  UserController.updateProfile
+);
+
+
 /*
  * DANH SÁCH TÀI KHOẢN
  */
@@ -26,7 +36,6 @@ router.get(
   UserController.list
 );
 
-<<<<<<< HEAD
 router.get('/import/template', UserController.downloadTemplate);
 
 router.post(
@@ -43,11 +52,9 @@ router.post(
   UserController.importUsers
 );
 
-=======
 /*
  * TẠO TÀI KHOẢN
  */
->>>>>>> origin/develop
 router.post(
   '/',
   requirePermission(PermissionCode.USERS_CREATE),

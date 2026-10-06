@@ -20,9 +20,15 @@ import { RoleType } from '../../rbac/roles';
 
 
 /*
- * =========================================
+ * ==================================    );
+  }
+
+  /*
  * VALIDATION
- * =========================================
+ * ==================================    );
+  }
+
+  /*
  */
 
 export const createUserSchema = z.object({
@@ -63,6 +69,14 @@ export const importPayloadSchema = z.object({
 });
 
 
+export const updateProfileSchema = z.object({
+  fullName: z.string().min(2, 'Họ tên phải có ít nhất 2 ký tự').optional(),
+  phone: z.string().regex(/^(?:\+?84|0)(?:3|5|7|8|9)\d{8}$/, 'Số điện thoại không hợp lệ').optional(),
+  avatarUrl: z.string().url('Đường dẫn ảnh đại diện không hợp lệ').optional(),
+  jobTitle: z.string().optional(),
+});
+
+
 export const assignRolesSchema = z.object({
   roles: z
     .array(z.nativeEnum(RoleType))
@@ -73,9 +87,15 @@ export const assignRolesSchema = z.object({
 export class UserController {
 
   /*
-   * =========================================
+   * ==================================    );
+  }
+
+  /*
    * DANH SÁCH TÀI KHOẢN
-   * =========================================
+   * ==================================    );
+  }
+
+  /*
    */
 
   static async list(
@@ -164,9 +184,15 @@ export class UserController {
 
 
   /*
-   * =========================================
+   * ==================================    );
+  }
+
+  /*
    * TẠO TÀI KHOẢN
-   * =========================================
+   * ==================================    );
+  }
+
+  /*
    */
 
   static async create(
@@ -315,9 +341,15 @@ export class UserController {
 
 
   /*
-   * =========================================
+   * ==================================    );
+  }
+
+  /*
    * S1-08 - SỬA TÀI KHOẢN
-   * =========================================
+   * ==================================    );
+  }
+
+  /*
    */
 
   static async update(
@@ -448,9 +480,15 @@ export class UserController {
 
 
   /*
-   * =========================================
+   * ==================================    );
+  }
+
+  /*
    * S1-09 - GÁN / THU HỒI VAI TRÒ
-   * =========================================
+   * ==================================    );
+  }
+
+  /*
    */
 
   static async assignRoles(
@@ -640,9 +678,15 @@ export class UserController {
 
 
   /*
-   * =========================================
+   * ==================================    );
+  }
+
+  /*
    * S1-10 - KHÓA TÀI KHOẢN
-   * =========================================
+   * ==================================    );
+  }
+
+  /*
    */
 
   static async disable(
@@ -748,10 +792,15 @@ export class UserController {
 
 
   /*
-   * =========================================
-<<<<<<< HEAD
+   * ==================================    );
+  }
+
+  /*
    * S2-01 - TẢI FILE MẪU NHẬP NHÂN SỰ
-   * =========================================
+   * ==================================    );
+  }
+
+  /*
    */
   static async downloadTemplate(
     _req: Request,
@@ -772,11 +821,128 @@ export class UserController {
     res.status(200).send(csvHeader + sampleRows);
   }
 
+  /*
+   * ==================================    );
+  }
 
   /*
-   * =========================================
+   * S2-02 - XEM HỒ SƠ CÁ NHÂN
+   * ==================================    );
+  }
+
+  /*
+   */
+  static async getProfile(
+    req: Request,
+    res: Response
+  ): Promise<void> {
+    const user = req.user!;
+    
+    const profile = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        phone: true,
+        avatarUrl: true,
+        departmentId: true,
+        department: true,
+        roles: {
+          include: {
+            role: true
+          }
+        },
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+
+    if (!profile) {
+      errorResponse(res, 'User not found', 404, 'NOT_FOUND');
+      return;
+    }
+
+    const sanitizedProfile = {
+      ...profile,
+      roles: profile.roles.map(r => r.role.name)
+    };
+
+    successResponse(res, sanitizedProfile, 200);
+  }
+
+  /*
+   * ==================================    );
+  }
+
+  /*
+   * S2-02 - CẬP NHẬT HỒ SƠ CÁ NHÂN
+   * ==================================    );
+  }
+
+  /*
+   */
+  static async updateProfile(
+    req: Request,
+    res: Response
+  ): Promise<void> {
+    const user = req.user!;
+    const { fullName, phone, avatarUrl, jobTitle } = req.body;
+
+    const updateData: any = {};
+    if (fullName !== undefined) updateData.fullName = fullName;
+    if (phone !== undefined) updateData.phone = phone;
+    if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
+    if (jobTitle !== undefined) updateData.jobTitle = jobTitle;
+
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: updateData,
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        phone: true,
+        avatarUrl: true,
+        departmentId: true,
+        department: true,
+        roles: {
+          include: {
+            role: true
+          }
+        },
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+
+    const sanitizedUpdated = {
+      ...updated,
+      roles: updated.roles.map(r => r.role.name)
+    };
+
+    await recordRequestAudit(
+      req,
+      AuditAction.USER_UPDATED,
+      'user',
+      user.id,
+      { updatedFields: Object.keys(updateData) }
+    );
+
+    successResponse(res, sanitizedUpdated, 200, 'Profile updated successfully');
+  }
+
+
+  /*
+   * ==================================    );
+  }
+
+  /*
    * S2-01 - XEM TRƯỚC VÀ KIỂM TRA DỮ LIỆU DÒNG
-   * =========================================
+   * ==================================    );
+  }
+
+  /*
    */
   static async previewImport(
     req: Request,
@@ -851,9 +1017,15 @@ export class UserController {
 
 
   /*
-   * =========================================
+   * ==================================    );
+  }
+
+  /*
    * S2-01 - NHẬP DANH SÁCH NHÂN SỰ HÀNG LOẠT
-   * =========================================
+   * ==================================    );
+  }
+
+  /*
    * Lỗi dòng bị bỏ qua, hợp lệ dòng vẫn được nhập, có báo cáo tổng hợp.
    */
   static async importUsers(
@@ -1012,9 +1184,15 @@ export class UserController {
       },
       200,
       `Nhập thành công ${createdUsers.length}/${empList.length} tài khoản.`
-=======
+    );
+  }
+
+  /*
    * S1-10 - MỞ KHÓA TÀI KHOẢN
-   * =========================================
+   * ==================================    );
+  }
+
+  /*
    */
 
   static async enable(
@@ -1102,7 +1280,6 @@ export class UserController {
       updated,
       200,
       'User account has been enabled.'
->>>>>>> origin/develop
     );
   }
 }
