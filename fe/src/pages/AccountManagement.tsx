@@ -6,14 +6,12 @@ import EmployeeImportModal from "../components/EmployeeImportModal";
 type AccountStatus = "Hoạt động" | "Đã khóa";
 
 type Account = {
-  id: number;
+  id: string; // API returns string UUID
   name: string;
   email: string;
   department: string;
   role: string;
   status: AccountStatus;
-
-  // S1-10
   lockReason?: string;
   assignedPositions?: number;
 };
@@ -26,42 +24,51 @@ type AccountForm = {
 
 const PAGE_SIZE = 20;
 
+import { useEffect } from "react";
+
 const AccountManagement = () => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   /* =========================
      DỮ LIỆU TÀI KHOẢN
   ========================= */
-  const [accounts, setAccounts] = useState<Account[]>([
-    {
-      id: 1,
-      name: "Nguyễn Văn An",
-      email: "an.nguyen@example.com",
-      department: "Công nghệ",
-      role: "Quản trị hệ thống",
-      status: "Hoạt động",
-      assignedPositions: 0,
-    },
-    {
-      id: 2,
-      name: "Trần Thị Mai",
-      email: "mai.tran@example.com",
-      department: "Nhân sự",
-      role: "Nhân viên tuyển dụng",
-      status: "Hoạt động",
-      assignedPositions: 3,
-    },
-    {
-      id: 3,
-      name: "Lê Minh Đức",
-      email: "duc.le@example.com",
-      department: "Công nghệ",
-      role: "Người phỏng vấn",
-      status: "Đã khóa",
-      lockReason: "Nhân sự đã nghỉ việc",
-      assignedPositions: 0,
-    },
-  ]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+
+  const fetchAccounts = async () => {
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch("/api/users", {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.data) {
+          const mappedAccounts: Account[] = json.data.map((u: any) => ({
+            id: u.id,
+            name: u.fullName,
+            email: u.email,
+            department: u.department?.name || "Chưa phân bổ",
+            role: u.roles && u.roles.length > 0 ? u.roles[0] : "Người phỏng vấn",
+            status: u.isActive ? "Hoạt động" : "Đã khóa",
+            assignedPositions: 0,
+          }));
+          setAccounts(mappedAccounts);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch accounts", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAccounts();
+  }, []);
 
   /* =========================
      TÌM KIẾM + LỌC
@@ -76,7 +83,7 @@ const AccountManagement = () => {
   ========================= */
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
 
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [form, setForm] = useState<AccountForm>({
     name: "",
@@ -437,21 +444,8 @@ const AccountManagement = () => {
       {isImportModalOpen && (
         <EmployeeImportModal
           onClose={() => setIsImportModalOpen(false)}
-          onImportSuccess={(newEmployees) => {
-            const nextId =
-              accounts.length === 0
-                ? 1
-                : Math.max(...accounts.map((a) => a.id)) + 1;
-            const formatted = newEmployees.map((emp, index) => ({
-              id: nextId + index,
-              name: emp.name,
-              email: emp.email,
-              department: emp.department,
-              role: emp.role || "Người phỏng vấn",
-              status: "Hoạt động" as const,
-              assignedPositions: 0,
-            }));
-            setAccounts((prev) => [...prev, ...formatted]);
+          onImportSuccess={() => {
+            fetchAccounts();
           }}
         />
       )}

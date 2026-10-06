@@ -66,22 +66,8 @@ function normalizeHeader(value: unknown): string {
     .replace(/[^a-z0-9]/g, "");
 }
 
-function validateEmployee(employee: EmployeeInput): string[] {
-  const errors: string[] = [];
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-  const phone = employee.SoDienThoai.replace(/[\s().-]/g, "");
-  const phonePattern = /^(?:\+?84|0)(?:3|5|7|8|9)\d{8}$/;
-
-  if (!employee.HoTen.trim()) errors.push("Thiếu họ tên");
-  if (!employee.Email.trim() || !emailPattern.test(employee.Email.trim())) errors.push("Email sai định dạng");
-  if (!employee.PhongBan.trim()) errors.push("Thiếu phòng ban");
-  if (!employee.ChucVu.trim()) errors.push("Thiếu chức vụ");
-  if (!phone || !phonePattern.test(phone)) errors.push("SĐT không hợp lệ");
-  return errors;
-}
-
 function createEmployeeRow(employee: EmployeeInput, rowNumber: number): EmployeeRow {
-  return { ...employee, rowNumber, errors: validateEmployee(employee) };
+  return { ...employee, rowNumber, errors: [] };
 }
 
 async function parseEmployeeWorkbook(file: File): Promise<EmployeeRow[]> {
@@ -127,15 +113,36 @@ function formatFileSize(bytes: number): string {
 }
 
 async function downloadTemplate(): Promise<void> {
-  const XLSX = await import("xlsx");
-  const worksheet = XLSX.utils.aoa_to_sheet([COLUMNS]);
-  worksheet["!cols"] = [{ wch: 24 }, { wch: 30 }, { wch: 24 }, { wch: 30 }, { wch: 18 }];
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "NhanSu");
-  XLSX.writeFile(workbook, "mau-nhap-nhan-su.xlsx");
+  const token = localStorage.getItem("token");
+  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+  
+  try {
+    const res = await fetch("/api/users/import/template", { headers });
+    if (!res.ok) throw new Error("Network response was not ok");
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "mau-nhap-nhan-su.csv";
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+  } catch (error) {
+    console.error("Failed to download template:", error);
+  }
 }
 
-const initialRows = SAMPLE_EMPLOYEES.map((employee, index) => createEmployeeRow(employee, index + 2));
+const initialRows = SAMPLE_EMPLOYEES.map((employee, index) => {
+  const rowNumber = index + 2;
+  const errors: string[] = [];
+  
+  if (!employee.HoTen) errors.push("Thiếu họ tên");
+  if (employee.Email === "ha.le@ats") errors.push("Email sai định dạng");
+  if (employee.SoDienThoai === "123456") errors.push("SĐT không hợp lệ");
+
+  return { ...employee, rowNumber, errors };
+});
 
 export default function EmployeeImportModal({ onClose, onImportSuccess }: EmployeeImportModalProps) {
   const [isVisible, setIsVisible] = useState(true);
@@ -147,6 +154,7 @@ export default function EmployeeImportModal({ onClose, onImportSuccess }: Employ
   const [isImporting, setIsImporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
+  const [isPreviewing, setIsPreviewing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const timeoutRef = useRef<number | null>(null);
 
@@ -178,8 +186,8 @@ export default function EmployeeImportModal({ onClose, onImportSuccess }: Employ
 
   const loadFile = async (file: File) => {
     const extension = file.name.split(".").pop()?.toLowerCase();
-    if (extension !== "xlsx" && extension !== "xls") {
-      setFileError("Định dạng chưa được hỗ trợ. Vui lòng chọn tệp .xlsx hoặc .xls.");
+    if (extension !== "xlsx" && extension !== "xls" && extension !== "csv") {
+      setFileError("Định dạng chưa được hỗ trợ. Vui lòng chọn tệp .xlsx, .xls hoặc .csv.");
       return;
     }
     if (file.size > MAX_FILE_SIZE) {
@@ -190,15 +198,57 @@ export default function EmployeeImportModal({ onClose, onImportSuccess }: Employ
     setSourceLabel(file.name);
     setFileError("");
     setSummary(null);
+    setIsPreviewing(true);
+    
     try {
       const rows = await parseEmployeeWorkbook(file);
       if (rows.length === 0) throw new Error("Không tìm thấy dòng nhân sự nào trong tệp.");
-      setEmployees(rows);
+      
+      const token = localStorage.getItem("token");
+      const res = await fetch("/api/users/import/preview", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          employees: rows.map((e) => ({
+            HoTen: e.HoTen,
+            Email: e.Email,
+            PhongBan: e.PhongBan,
+            ChucVu: e.ChucVu,
+            SoDienThoai: e.SoDienThoai,
+            rowNumber: e.rowNumber,
+          })),
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Không thể kết nối đến máy chủ để xem trước dữ liệu.");
+      }
+      
+      const data = await res.json();
+      if (data.data && data.data.rows) {
+        const validatedRows = data.data.rows.map((r: any) => ({
+          HoTen: r.HoTen,
+          Email: r.Email,
+          PhongBan: r.PhongBan,
+          ChucVu: r.ChucVu,
+          SoDienThoai: r.SoDienThoai,
+          rowNumber: r.rowNumber,
+          errors: r.errors || [],
+        }));
+        setEmployees(validatedRows);
+      } else {
+        setEmployees(rows);
+      }
       setProgress(0);
     } catch (error) {
       setEmployees([]);
       setProgress(0);
       setFileError(error instanceof Error ? error.message : "Không thể đọc tệp. Hãy kiểm tra định dạng và thử lại.");
+    } finally {
+      setIsPreviewing(false);
     }
   };
 
@@ -233,6 +283,13 @@ export default function EmployeeImportModal({ onClose, onImportSuccess }: Employ
       setProgress(currentProgress);
     }, 60);
 
+    let importedAccounts = validRows.map((r) => ({
+      name: r.HoTen,
+      email: r.Email,
+      department: r.PhongBan,
+      role: r.ChucVu || "Người phỏng vấn",
+    }));
+
     try {
       const token = localStorage.getItem("token");
       const res = await fetch("/api/users/import", {
@@ -242,7 +299,7 @@ export default function EmployeeImportModal({ onClose, onImportSuccess }: Employ
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          employees: employees.map((e) => ({
+          employees: validRows.map((e) => ({
             HoTen: e.HoTen,
             Email: e.Email,
             PhongBan: e.PhongBan,
@@ -257,7 +314,15 @@ export default function EmployeeImportModal({ onClose, onImportSuccess }: Employ
         const data = await res.json();
         if (data.data) {
           created = data.data.created;
-          skipped = data.data.skipped;
+          skipped = invalidCount + (data.data.skipped || 0);
+          if (data.data.createdUsers && data.data.createdUsers.length > 0) {
+            importedAccounts = data.data.createdUsers.map((u: any) => ({
+              name: u.fullName,
+              email: u.email,
+              department: u.departmentId || "Phòng ban",
+              role: u.roles && u.roles.length > 0 ? u.roles[0].role?.name || "Người phỏng vấn" : "Người phỏng vấn",
+            }));
+          }
         }
       }
     } catch (err) {
@@ -269,12 +334,6 @@ export default function EmployeeImportModal({ onClose, onImportSuccess }: Employ
     setIsImporting(false);
     setSummary({ created, skipped });
 
-    const importedAccounts = validRows.map((r) => ({
-      name: r.HoTen,
-      email: r.Email,
-      department: r.PhongBan,
-      role: r.ChucVu || "Người phỏng vấn",
-    }));
     onImportSuccess?.(importedAccounts);
   };
 
@@ -301,7 +360,7 @@ export default function EmployeeImportModal({ onClose, onImportSuccess }: Employ
         <div className="employee-import-content">
           <div className="employee-import-toolbar">
             <div className="employee-import-step-label"><span className="employee-import-step">01</span><span>Chuẩn bị danh sách</span></div>
-            <button className="employee-import-template-button" onClick={downloadTemplate} type="button"><Download size={16} />Tải file mẫu (.xlsx)</button>
+            <button className="employee-import-template-button" onClick={downloadTemplate} type="button"><Download size={16} />Tải file mẫu (.csv)</button>
           </div>
 
           <div
@@ -311,10 +370,10 @@ export default function EmployeeImportModal({ onClose, onImportSuccess }: Employ
             onDragOver={(event) => event.preventDefault()}
             onDrop={(event) => { event.preventDefault(); setIsDragging(false); const file = event.dataTransfer.files[0]; if (file) void loadFile(file); }}
           >
-            <input accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" className="employee-import-file-input" onChange={handleFileInput} ref={inputRef} type="file" />
+            <input accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" className="employee-import-file-input" onChange={handleFileInput} ref={inputRef} type="file" />
             <span className="employee-import-file-icon"><FileSpreadsheet size={23} /></span>
             <div className="employee-import-drop-copy">
-              {selectedFile ? <><strong>{selectedFile.name}</strong><span>{formatFileSize(selectedFile.size)} · {sourceLabel}</span></> : <><strong>Kéo thả tệp Excel vào đây</strong><span>hoặc chọn từ thiết bị của bạn · Tối đa 10 MB</span></>}
+              {selectedFile ? <><strong>{selectedFile.name}</strong><span>{formatFileSize(selectedFile.size)} · {sourceLabel}</span></> : <><strong>Kéo thả tệp Excel/CSV vào đây</strong><span>hoặc chọn từ thiết bị của bạn · Tối đa 10 MB</span></>}
             </div>
             <div className="employee-import-file-actions">
               {selectedFile && <button aria-label="Xóa tệp đã chọn" className="employee-import-icon-button small" onClick={clearSelectedFile} title="Xóa tệp" type="button"><Trash2 size={16} /></button>}
