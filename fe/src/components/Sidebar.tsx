@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+
 import type { Role } from "../data/roleMenus";
 import { roleMenus } from "../data/roleMenus";
 
@@ -32,10 +34,42 @@ function Sidebar({
 }: SidebarProps) {
   const [open, setOpen] = useState(false);
 
-  const menu = [...roleMenus[role], { label: "Hồ sơ cá nhân" }];
+  const navigate = useNavigate();
+
+  /*
+   * Menu theo vai trò
+   * + 2 chức năng chung cho mọi tài khoản
+   */
+  const menu = [
+    ...roleMenus[role],
+    { label: "Hồ sơ cá nhân" },
+    { label: "Đổi mật khẩu" },
+  ];
 
   const handleLogout = async () => {
     await onLogout();
+  };
+
+  const handleMenuClick = (label: string) => {
+    /*
+     * S1-04:
+     * Chuyển trực tiếp tới trang đổi mật khẩu
+     * trên cùng tab để giữ sessionStorage.
+     */
+    if (label === "Đổi mật khẩu") {
+      navigate("/change-password");
+      setOpen(false);
+      return;
+    }
+
+    /*
+     * Các menu còn lại giữ nguyên cơ chế hiện tại.
+     */
+    if (onMenuSelect) {
+      onMenuSelect(label);
+    }
+
+    setOpen(false);
   };
 
   return (
@@ -82,13 +116,7 @@ function Sidebar({
               className={`sidebar-menu-item ${
                 selectedMenu === item.label ? "active" : ""
               }`}
-              onClick={() => {
-                if (onMenuSelect) {
-                  onMenuSelect(item.label);
-                }
-
-                setOpen(false);
-              }}
+              onClick={() => handleMenuClick(item.label)}
             >
               {item.label}
             </button>
