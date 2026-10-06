@@ -109,6 +109,10 @@ export const ROLE_PERMISSIONS: Record<RoleType, PermissionCode[]> = {
     PermissionCode.USERS_READ,
     PermissionCode.ROLES_READ,
     PermissionCode.AUDIT_LOGS_READ,
+    PermissionCode.INTERVIEW_QUESTIONS_READ,
+    PermissionCode.INTERVIEW_QUESTIONS_CREATE,
+    PermissionCode.INTERVIEW_QUESTIONS_UPDATE,
+    PermissionCode.INTERVIEW_QUESTIONS_DELETE,
   ],
 
   [RoleType.ADMIN]: [

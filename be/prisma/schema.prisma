@@ -120,11 +120,12 @@ model Job {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  requisition   Requisition?  @relation(fields: [requisitionId], references: [id])
-  department    Department    @relation(fields: [departmentId], references: [id])
-  hiringManager User          @relation("HiringManagerJobs", fields: [hiringManagerId], references: [id])
-  recruiter     User?         @relation("RecruiterJobs", fields: [recruiterId], references: [id])
-  applications  Application[]
+  requisition          Requisition?             @relation(fields: [requisitionId], references: [id])
+  department           Department               @relation(fields: [departmentId], references: [id])
+  hiringManager        User                     @relation("HiringManagerJobs", fields: [hiringManagerId], references: [id])
+  recruiter            User?                    @relation("RecruiterJobs", fields: [recruiterId], references: [id])
+  applications         Application[]
+  competencyFrameworks JobCompetencyFramework[]
 }
 
 model Candidate {
@@ -260,9 +261,66 @@ model LoginAttempt {
   deviceId       String
   failedAttempts Int       @default(0)
   lockedUntil    DateTime?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@unique([email, deviceId])
   @@index([email])
+}
+
+// S2-06 - Khung năng lực
+model CompetencyFramework {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  criteria    CompetencyCriterion[]
+  jobMappings JobCompetencyFramework[]
+}
+
+// S2-06 - Tiêu chí trong khung năng lực
+model CompetencyCriterion {
+  id          String   @id @default(uuid())
+  frameworkId String
+  name        String
+  description String?
+  weight      Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  framework          CompetencyFramework @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+  interviewQuestions InterviewQuestion[]
+
+  @@index([frameworkId])
+}
+
+// Liên kết chức danh với khung năng lực
+model JobCompetencyFramework {
+  jobId       String
+  frameworkId String
+  createdAt   DateTime @default(now())
+
+  job       Job                 @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  framework CompetencyFramework @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+
+  @@id([jobId, frameworkId])
+  @@index([frameworkId])
+}
+
+// S2-07 - Ngân hàng câu hỏi phỏng vấn
+model InterviewQuestion {
+  id                    String   @id @default(uuid())
+  question              String
+  difficulty            String
+  suggestedAnswer       String
+  competencyCriterionId String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  criterion CompetencyCriterion @relation(fields: [competencyCriterionId], references: [id], onDelete: Restrict)
+
+  @@index([competencyCriterionId])
 }

@@ -29,6 +29,11 @@ export enum PermissionCode {
   INTERVIEWS_UPDATE = 'interviews:update',
   INTERVIEWS_DELETE = 'interviews:delete',
 
+INTERVIEW_QUESTIONS_READ = 'interview_questions:read',
+INTERVIEW_QUESTIONS_CREATE = 'interview_questions:create',
+INTERVIEW_QUESTIONS_UPDATE = 'interview_questions:update',
+INTERVIEW_QUESTIONS_DELETE = 'interview_questions:delete',
+
   // Evaluations
   EVALUATIONS_READ = 'evaluations:read',
   EVALUATIONS_CREATE = 'evaluations:create',
@@ -97,6 +102,28 @@ export const ALL_PERMISSIONS: PermissionDefinition[] = [
   { code: PermissionCode.INTERVIEWS_CREATE, module: 'interviews', description: 'Lên lịch phỏng vấn mới' },
   { code: PermissionCode.INTERVIEWS_UPDATE, module: 'interviews', description: 'Cập nhật lịch phỏng vấn' },
   { code: PermissionCode.INTERVIEWS_DELETE, module: 'interviews', description: 'Hủy lịch phỏng vấn' },
+         
+  // Interview Question Bank - S2-07
+{
+  code: PermissionCode.INTERVIEW_QUESTIONS_READ,
+  module: 'interview_questions',
+  description: 'Xem và tìm kiếm ngân hàng câu hỏi phỏng vấn',
+},
+{
+  code: PermissionCode.INTERVIEW_QUESTIONS_CREATE,
+  module: 'interview_questions',
+  description: 'Tạo câu hỏi phỏng vấn',
+},
+{
+  code: PermissionCode.INTERVIEW_QUESTIONS_UPDATE,
+  module: 'interview_questions',
+  description: 'Cập nhật câu hỏi phỏng vấn',
+},
+{
+  code: PermissionCode.INTERVIEW_QUESTIONS_DELETE,
+  module: 'interview_questions',
+  description: 'Xóa câu hỏi phỏng vấn',
+},
 
   // Evaluations
   { code: PermissionCode.EVALUATIONS_READ, module: 'evaluations', description: 'Xem phiếu đánh giá phỏng vấn' },
