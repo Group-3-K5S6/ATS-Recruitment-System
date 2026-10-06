@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import CompetencyFrameworkManagement from "./pages/CompetencyFrameworkManagement";
+import InterviewQuestionBank from "./pages/InterviewQuestionBank";
 
 import {
   BrowserRouter,
@@ -1049,6 +1050,27 @@ function CompetencyFrameworkRoute() {
   );
 }
 
+function InterviewQuestionBankRoute() {
+  const user = getSessionUser();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const role = resolveRole(user.roles);
+
+  if (role !== "HRManager") {
+    return <Navigate to="/403" replace />;
+  }
+
+  return (
+    <InterviewQuestionBank
+      role={role}
+      userName={user.fullName}
+    />
+  );
+}
+
 
 /* =========================================================
    ROOT
@@ -1273,7 +1295,12 @@ function App() {
               <CompetencyFrameworkRoute />
        }
 />
-
+          <Route
+            path="/interview-question-bank"
+            element={
+            <InterviewQuestionBankRoute />
+            }
+/>
 
         <Route
           path="/profile"

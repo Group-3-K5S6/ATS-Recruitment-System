@@ -68,6 +68,12 @@ function Sidebar({
        return;
     }
     
+if (label === "Ngân hàng câu hỏi phỏng vấn") {
+  navigate("/interview-question-bank");
+  setOpen(false);
+  return;
+}
+
     /*
      * Các menu còn lại giữ nguyên cơ chế hiện tại.
      */
