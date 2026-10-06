@@ -4,7 +4,7 @@ exports.authenticate = authenticate;
 const token_1 = require("../utils/token");
 const prisma_1 = require("../database/prisma");
 const response_1 = require("../utils/response");
-async function authenticate(req, res, next) {
+async function authenticateRequest(req, res, next) {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         (0, response_1.errorResponse)(res, 'Authentication required. Missing Bearer token.', 401, 'UNAUTHORIZED');
@@ -69,4 +69,9 @@ async function authenticate(req, res, next) {
     };
     req.token = token;
     next();
+}
+
+// Express 4 does not forward rejected async middleware promises by itself.
+function authenticate(req, res, next) {
+    authenticateRequest(req, res, next).catch(next);
 }

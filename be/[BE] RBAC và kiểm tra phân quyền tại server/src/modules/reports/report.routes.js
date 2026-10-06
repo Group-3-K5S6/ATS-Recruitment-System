@@ -1,4 +1,5 @@
 "use strict";
+const async_handler_1 = require("../../middleware/async-handler");
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const report_controller_1 = require("./report.controller");
@@ -7,5 +8,5 @@ const authorize_1 = require("../../middleware/authorize");
 const permissions_1 = require("../../rbac/permissions");
 const router = (0, express_1.Router)();
 router.use(authenticate_1.authenticate);
-router.get('/dashboard', (0, authorize_1.requirePermission)(permissions_1.PermissionCode.REPORTS_READ), report_controller_1.ReportController.getDashboard);
+router.get('/dashboard', (0, authorize_1.requirePermission)(permissions_1.PermissionCode.REPORTS_READ), (0, async_handler_1.asyncHandler)(report_controller_1.ReportController.getDashboard));
 exports.default = router;

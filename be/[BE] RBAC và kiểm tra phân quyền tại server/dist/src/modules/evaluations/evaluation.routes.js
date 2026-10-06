@@ -1,4 +1,5 @@
 "use strict";
+const async_handler_1 = require("../../middleware/async-handler");
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const evaluation_controller_1 = require("./evaluation.controller");
@@ -8,7 +9,7 @@ const validate_1 = require("../../middleware/validate");
 const permissions_1 = require("../../rbac/permissions");
 const router = (0, express_1.Router)();
 router.use(authenticate_1.authenticate);
-router.get('/:id', (0, authorize_1.requirePermission)(permissions_1.PermissionCode.EVALUATIONS_READ), evaluation_controller_1.EvaluationController.getById);
-router.post('/', (0, authorize_1.requirePermission)(permissions_1.PermissionCode.EVALUATIONS_CREATE), (0, validate_1.validateBody)(evaluation_controller_1.createEvaluationSchema), evaluation_controller_1.EvaluationController.create);
-router.put('/:id', (0, authorize_1.requirePermission)(permissions_1.PermissionCode.EVALUATIONS_UPDATE), (0, validate_1.validateBody)(evaluation_controller_1.updateEvaluationSchema), evaluation_controller_1.EvaluationController.update);
+router.get('/:id', (0, authorize_1.requirePermission)(permissions_1.PermissionCode.EVALUATIONS_READ), (0, async_handler_1.asyncHandler)(evaluation_controller_1.EvaluationController.getById));
+router.post('/', (0, authorize_1.requirePermission)(permissions_1.PermissionCode.EVALUATIONS_CREATE), (0, validate_1.validateBody)(evaluation_controller_1.createEvaluationSchema), (0, async_handler_1.asyncHandler)(evaluation_controller_1.EvaluationController.create));
+router.put('/:id', (0, authorize_1.requirePermission)(permissions_1.PermissionCode.EVALUATIONS_UPDATE), (0, validate_1.validateBody)(evaluation_controller_1.updateEvaluationSchema), (0, async_handler_1.asyncHandler)(evaluation_controller_1.EvaluationController.update));
 exports.default = router;

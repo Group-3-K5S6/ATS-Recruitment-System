@@ -29,21 +29,23 @@ function errorResponse(res, message, statusCode = 400, code, requestId) {
                 : statusCode >= 500
                     ? 'Hệ thống đang gặp sự cố. Vui lòng thử lại sau ít phút.'
                     : message;
+    const action = statusCode === 401
+        ? 'LOGIN_AGAIN'
+        : statusCode === 403
+            ? 'BACK_TO_DASHBOARD'
+            : statusCode === 404
+                ? 'BACK_TO_PREVIOUS_PAGE'
+                : statusCode >= 500
+                    ? 'RETRY_LATER'
+                    : 'REVIEW_INPUT';
+
     return res.status(statusCode).json({
         success: false,
-    error: {
-        code: errorCode,
-        message: userMessage,
-        requestId: correlationId,
-        action: statusCode === 401
-            ? 'LOGIN_AGAIN'
-            : statusCode === 403
-                ? 'BACK_TO_DASHBOARD'
-                : statusCode === 404
-                    ? 'BACK_TO_PREVIOUS_PAGE'
-                    : statusCode >= 500
-                        ? 'RETRY_LATER'
-                        : 'REVIEW_INPUT',
-    },
+        error: {
+            code: errorCode,
+            message: userMessage,
+            requestId: correlationId,
+            action,
+        },
     });
 }

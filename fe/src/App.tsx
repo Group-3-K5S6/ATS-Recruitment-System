@@ -38,9 +38,6 @@ function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
 
-  const [loggedIn, setLoggedIn] = useState(false);
-  const [role, setRole] = useState<Role>("Admin");
-  const [userName, setUserName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // S1-02:
@@ -75,9 +72,7 @@ function Login() {
       }
       sessionStorage.setItem("accessToken", result.accessToken);
       sessionStorage.setItem("refreshToken", result.refreshToken);
-      setRole(frontendRole);
-      setUserName(result.user.fullName);
-      setLoggedIn(true);
+      navigate("/dashboard", { replace: true });
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.status === 401) {
         setError("Email hoặc mật khẩu không chính xác.");
@@ -89,34 +84,6 @@ function Login() {
       setIsSubmitting(false);
     }
   };
-
-  // ==============================
-  // S1-02 - ĐĂNG XUẤT
-  // ==============================
-
-  const handleLogout = async () => {
-    await logout().catch(() => clearLocalSession());
-
-    setLoggedIn(false);
-
-    setEmail("");
-    setPassword("");
-    setError("");
-  };
-
-  // ==============================
-  // SAU KHI ĐĂNG NHẬP
-  // ==============================
-
-  if (loggedIn) {
-  return (
-    <Dashboard
-      role={role}
-      userName={userName}
-      onLogout={handleLogout}
-    />
-  );
-}
 
   // ==============================
   // TRANG ĐĂNG NHẬP
