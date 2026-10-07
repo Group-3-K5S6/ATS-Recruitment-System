@@ -747,12 +747,15 @@ const AccountManagement = () => {
       </div>
 
       {isImportModalOpen && (
-        <EmployeeImportModal
-          onClose={() =>
-            setIsImportModalOpen(false)
-          }
-        />
-      )}
+  <EmployeeImportModal
+    onClose={() => {
+      setIsImportModalOpen(false);
+    }}
+    onImportSuccess={async () => {
+      await loadAccounts();
+    }}
+  />
+)}
 
       {pageError && (
         <div
