@@ -7,6 +7,40 @@ import { AuditAction } from '../../rbac/types';
 import { QuestionDifficulty } from './interview-question.types';
 
 export class InterviewQuestionController {
+
+
+  /**
+ * Lấy dữ liệu chức danh và tiêu chí cho FE S2-07
+ */
+static async getLookups(
+  req: Request,
+  res: Response
+): Promise<void> {
+  try {
+    const user = req.user!;
+
+    if (!InterviewQuestionPolicy.canView(user)) {
+      errorResponse(
+        res,
+        'Access denied. You do not have permission to view interview questions.',
+        403,
+        'FORBIDDEN_PERMISSION'
+      );
+      return;
+    }
+
+    const data =
+      await InterviewQuestionService.getLookups();
+
+    successResponse(res, data, 200);
+  } catch (error: any) {
+    InterviewQuestionController.handleError(
+      res,
+      error
+    );
+  }
+}
+
   /**
    * List interview questions with filtering and searching
    */

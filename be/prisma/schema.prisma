@@ -126,6 +126,7 @@ model Job {
   recruiter            User?                    @relation("RecruiterJobs", fields: [recruiterId], references: [id])
   applications         Application[]
   competencyFrameworks JobCompetencyFramework[]
+  interviewQuestions   InterviewQuestion[]
 }
 
 model Candidate {
@@ -317,10 +318,13 @@ model InterviewQuestion {
   difficulty            String
   suggestedAnswer       String
   competencyCriterionId String
+  jobId                 String?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
   criterion CompetencyCriterion @relation(fields: [competencyCriterionId], references: [id], onDelete: Restrict)
+  job       Job?                @relation(fields: [jobId], references: [id], onDelete: Restrict)
 
   @@index([competencyCriterionId])
+  @@index([jobId])
 }

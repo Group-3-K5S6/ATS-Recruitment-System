@@ -37,6 +37,7 @@ export class InterviewQuestionService {
       suggestedAnswer: question.suggestedAnswer,
       competencyCriterionId:
         question.competencyCriterionId,
+        jobId: question.jobId,
       createdAt: question.createdAt,
       updatedAt: question.updatedAt,
 
@@ -217,6 +218,67 @@ export class InterviewQuestionService {
   /**
    * Lấy chi tiết câu hỏi
    */
+
+/**
+ * Lấy chức danh + khung năng lực + tiêu chí
+ * phục vụ dropdown S2-07
+ */
+static async getLookups() {
+  const jobs = await prisma.job.findMany({
+    where: {
+      competencyFrameworks: {
+        some: {},
+      },
+    },
+
+    select: {
+      id: true,
+      title: true,
+
+      competencyFrameworks: {
+        select: {
+          framework: {
+            select: {
+              id: true,
+              name: true,
+
+              criteria: {
+                select: {
+                  id: true,
+                  name: true,
+                  weight: true,
+                },
+
+                orderBy: {
+                  createdAt: 'asc',
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+
+    orderBy: {
+      title: 'asc',
+    },
+  });
+
+  return jobs.map((job) => ({
+    id: job.id,
+    title: job.title,
+
+    frameworks: job.competencyFrameworks.map(
+      (mapping) => ({
+        id: mapping.framework.id,
+        name: mapping.framework.name,
+        criteria: mapping.framework.criteria,
+      })
+    ),
+  }));
+}
+
+
   static async getQuestionById(
     id: string
   ): Promise<InterviewQuestionResponse | null> {
@@ -275,6 +337,18 @@ export class InterviewQuestionService {
       );
     }
 
+const job = await prisma.job.findUnique({
+  where: { id: data.jobId },
+});
+
+if (!job) {
+  throw new AppError(
+    'Job not found.',
+    404,
+    'JOB_NOT_FOUND'
+  );
+}
+
     const created =
       await prisma.interviewQuestion.create({
         data: {
@@ -284,6 +358,7 @@ export class InterviewQuestionService {
             data.suggestedAnswer,
           competencyCriterionId:
             data.competencyCriterionId,
+            jobId: data.jobId,
         },
 
         include: {

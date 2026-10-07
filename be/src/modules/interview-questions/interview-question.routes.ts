@@ -11,24 +11,32 @@ import {
 
 const router = Router();
 
-// All routes require authentication
+// Tất cả route đều yêu cầu đăng nhập
 router.use(authenticate);
 
-// 1. List / search / filter interview questions
+// 1. Danh sách / tìm kiếm / lọc câu hỏi
 router.get(
   '/',
   requirePermission(PermissionCode.INTERVIEW_QUESTIONS_READ),
   InterviewQuestionController.list
 );
 
-// 2. Get interview question details by ID
+// 2. Lookup chức danh / khung năng lực / tiêu chí
+// PHẢI đặt trước /:id
+router.get(
+  '/lookups',
+  requirePermission(PermissionCode.INTERVIEW_QUESTIONS_READ),
+  InterviewQuestionController.getLookups
+);
+
+// 3. Chi tiết câu hỏi theo ID
 router.get(
   '/:id',
   requirePermission(PermissionCode.INTERVIEW_QUESTIONS_READ),
   InterviewQuestionController.getById
 );
 
-// 3. Create a new interview question
+// 4. Tạo câu hỏi
 router.post(
   '/',
   requirePermission(PermissionCode.INTERVIEW_QUESTIONS_CREATE),
@@ -36,7 +44,7 @@ router.post(
   InterviewQuestionController.create
 );
 
-// 4. Update an existing interview question
+// 5. Cập nhật câu hỏi
 router.put(
   '/:id',
   requirePermission(PermissionCode.INTERVIEW_QUESTIONS_UPDATE),
@@ -44,7 +52,7 @@ router.put(
   InterviewQuestionController.update
 );
 
-// 5. Delete an interview question
+// 6. Xóa câu hỏi
 router.delete(
   '/:id',
   requirePermission(PermissionCode.INTERVIEW_QUESTIONS_DELETE),
