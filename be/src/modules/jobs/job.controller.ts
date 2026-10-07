@@ -8,6 +8,7 @@ import { RoleType } from '../../rbac/roles';
 export const createJobSchema = z.object({
   title: z.string().min(3),
   requisitionId: z.string().uuid().optional(),
+  jobTitleId: z.string().uuid(),
   departmentId: z.string().uuid(),
   hiringManagerId: z.string().uuid(),
   description: z.string().min(10),
@@ -16,6 +17,7 @@ export const createJobSchema = z.object({
 
 export const updateJobSchema = z.object({
   title: z.string().min(3).optional(),
+  jobTitleId: z.string().uuid().optional(),
   description: z.string().min(10).optional(),
   location: z.string().optional(),
   recruiterId: z.string().uuid().optional(),
@@ -87,6 +89,7 @@ export class JobController {
       data: {
         title: data.title,
         requisitionId: data.requisitionId,
+        jobTitleId: data.jobTitleId,
         departmentId: data.departmentId,
         hiringManagerId: data.hiringManagerId,
         recruiterId: user.id,

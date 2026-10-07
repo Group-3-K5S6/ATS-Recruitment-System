@@ -30,6 +30,45 @@ const INITIAL_PROFILE: EditableProfile = {
 };
 
 const PHONE_PATTERN = /^(03|05|07|08|09)\d{8}$/;
+const AVATAR_STORAGE_KEY = "ats-user-avatar";
+
+function readAsDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") resolve(reader.result);
+      else reject(new Error("Không thể đọc ảnh."));
+    };
+    reader.onerror = () => reject(new Error("Không thể đọc ảnh."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function prepareAvatar(file: File): Promise<string> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, 512 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Không thể xử lý ảnh.");
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+
+    const compressed = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (blob) => blob ? resolve(blob) : reject(new Error("Không thể nén ảnh.")),
+        "image/webp",
+        0.82,
+      );
+    });
+    return readAsDataUrl(compressed);
+  } catch {
+    // Keep avatar selection usable in browsers without createImageBitmap/WebP support.
+    return readAsDataUrl(file);
+  }
+}
 
 export default function UserProfilePage() {
   const getInitialProfile = (): EditableProfile => {
@@ -55,7 +94,10 @@ export default function UserProfilePage() {
   const [errors, setErrors] = useState<ProfileErrors>({});
   const [isSaving, setIsSaving] = useState(false);
   const [toast, setToast] = useState("");
-  const [avatar, setAvatar] = useState<string | null>(null);
+  const [savedAvatar, setSavedAvatar] = useState<string | null>(() =>
+    localStorage.getItem(AVATAR_STORAGE_KEY),
+  );
+  const [avatar, setAvatar] = useState<string | null>(savedAvatar);
   const phoneInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -122,9 +164,19 @@ export default function UserProfilePage() {
         phone: form.phone.trim(),
         jobTitle: form.jobTitle.trim(),
       };
-      setSavedProfile(updated);
+      try {
+        localStorage.setItem("ats-user-profile", JSON.stringify(updated));
+        if (avatar) localStorage.setItem(AVATAR_STORAGE_KEY, avatar);
+        else localStorage.removeItem(AVATAR_STORAGE_KEY);
+      } catch {
+        setIsSaving(false);
+        setToast("Không thể lưu ảnh vào trình duyệt. Hãy thử chọn ảnh nhỏ hơn.");
+        toastTimeoutRef.current = window.setTimeout(() => setToast(""), 4200);
+        return;
+      }
 
-      localStorage.setItem("ats-user-profile", JSON.stringify(updated));
+      setSavedProfile(updated);
+      setSavedAvatar(avatar);
 
       setForm(updated);
       setErrors({});
@@ -136,23 +188,25 @@ export default function UserProfilePage() {
 
   const handleCancel = () => {
     setForm(savedProfile);
+    setAvatar(savedAvatar);
     setErrors({});
     setToast("");
   };
 
-  const handleAvatarChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) {
       event.target.value = "";
+      setToast("Vui lòng chọn tệp ảnh hợp lệ.");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") setAvatar(reader.result);
-    };
-    reader.readAsDataURL(file);
     event.target.value = "";
+    try {
+      setAvatar(await prepareAvatar(file));
+    } catch {
+      setToast("Không thể đọc ảnh. Hãy chọn ảnh khác.");
+    }
   };
 
   const initials = savedProfile.fullName

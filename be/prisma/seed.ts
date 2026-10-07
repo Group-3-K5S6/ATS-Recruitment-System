@@ -90,7 +90,19 @@ export async function runSeed() {
     create: { name: 'Marketing & Truyền thông', code: 'MKT' },
   });
 
-  // 5. Seed Test Users (Default password: Password123!)
+  // 5. Seed job titles and their confidential salary bands
+  const seniorBackendTitle = await prisma.jobTitle.upsert({
+    where: { code: 'ENG-SBE-01' },
+    update: { name: 'Senior Backend Engineer', level: 'Senior', minSalary: 30000000, maxSalary: 50000000 },
+    create: { code: 'ENG-SBE-01', name: 'Senior Backend Engineer', level: 'Senior', minSalary: 30000000, maxSalary: 50000000 },
+  });
+  const marketingLeadTitle = await prisma.jobTitle.upsert({
+    where: { code: 'MKT-LEAD-01' },
+    update: { name: 'Marketing Campaign Lead', level: 'Lead', minSalary: 15000000, maxSalary: 30000000 },
+    create: { code: 'MKT-LEAD-01', name: 'Marketing Campaign Lead', level: 'Lead', minSalary: 15000000, maxSalary: 30000000 },
+  });
+
+  // 6. Seed Test Users (Default password: Password123!)
   console.log('Seeding Test Users...');
   const defaultPasswordHash = await hashPassword('Password123!');
 
@@ -158,7 +170,7 @@ if (resetTestEmail) {
   );
 }
 
-  // 6. Seed Sample Requisitions
+  // 7. Seed Sample Requisitions
   console.log('Seeding Sample Requisitions & Jobs...');
   const reqEng = await prisma.requisition.upsert({
     where: { id: 'req-eng-001' },
@@ -190,10 +202,10 @@ if (resetTestEmail) {
     },
   });
 
-  // 7. Seed Sample Jobs
+  // 8. Seed Sample Jobs
   const jobEng = await prisma.job.upsert({
     where: { id: 'job-eng-001' },
-    update: {},
+    update: { jobTitleId: seniorBackendTitle.id },
     create: {
       id: 'job-eng-001',
       title: 'Senior Backend Engineer (NodeJS/TypeScript)',
@@ -201,6 +213,7 @@ if (resetTestEmail) {
       departmentId: engDept.id,
       hiringManagerId: hmEng.id,
       recruiterId: recruiter1.id,
+      jobTitleId: seniorBackendTitle.id,
       status: 'PUBLISHED',
       description: 'Phát triển backend microservices và hệ thống RBAC an toàn.',
       location: 'Hanoi',
@@ -209,7 +222,7 @@ if (resetTestEmail) {
 
   const jobMkt = await prisma.job.upsert({
     where: { id: 'job-mkt-001' },
-    update: {},
+    update: { jobTitleId: marketingLeadTitle.id },
     create: {
       id: 'job-mkt-001',
       title: 'Marketing Campaign Lead',
@@ -217,13 +230,14 @@ if (resetTestEmail) {
       departmentId: mktDept.id,
       hiringManagerId: hmMkt.id,
       recruiterId: recruiter2.id,
+      jobTitleId: marketingLeadTitle.id,
       status: 'DRAFT',
       description: 'Lập chiến lược truyền thông và tuyển dụng nội bộ.',
       location: 'Hanoi',
     },
   });
 
-  // 8. Seed Candidates & Applications
+  // 9. Seed Candidates & Applications
   console.log('Seeding Sample Candidates & Applications...');
   const cand1 = await prisma.candidate.upsert({
     where: { id: 'cand-001' },
@@ -285,7 +299,7 @@ if (resetTestEmail) {
     },
   });
 
-  // 9. Seed Interview & Evaluation
+  // 10. Seed Interview & Evaluation
   const interview1 = await prisma.interview.upsert({
     where: { id: 'interview-001' },
     update: {},
@@ -314,7 +328,7 @@ if (resetTestEmail) {
     },
   });
 
-  // 10. Seed Offer
+  // 11. Seed Offer
   await prisma.offer.upsert({
     where: { id: 'offer-001' },
     update: {},

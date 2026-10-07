@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import type { Role } from "../data/roleMenus";
 import { roleMenus } from "../data/roleMenus";
+import { clearLocalSession } from "../services/session";
 
 type SidebarProps = {
   role: Role;
@@ -47,7 +48,17 @@ function Sidebar({
   ];
 
   const handleLogout = async () => {
-    await onLogout();
+    try {
+      await onLogout();
+    } catch (error) {
+      console.error("Lỗi khi đăng xuất:", error);
+    } finally {
+      // Xóa thông tin phiên đăng nhập, giữ lại hồ sơ cá nhân và ảnh đại diện.
+      clearLocalSession();
+
+      // Tải lại trang hoàn toàn về màn hình đăng nhập để xóa hết state cũ
+      window.location.href = "/login";
+    }
   };
 
   const handleMenuClick = (label: string) => {

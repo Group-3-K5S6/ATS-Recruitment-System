@@ -8,6 +8,7 @@ Hệ thống phân quyền Backend an toàn, bảo vệ dữ liệu nhân sự, 
 
 * **Authentication Context**: Xác thực qua JWT (Access Token + Refresh Token), hỗ trợ cơ chế thu hồi token tức thời (Token Blacklist/Revocation khi Logout).
 * **RBAC Permission Model**: Mô hình phân quyền dạng `resource:action` (`candidates:read`, `jobs:publish`, `offers:approve`, v.v.).
+* **Chức danh & dải lương**: CRUD danh mục chức danh, cấp bậc và dải lương; API giới hạn riêng cho `HR_MANAGER`. Job phải gắn với chức danh và offer được kiểm tra trong dải trước khi gửi hoặc duyệt.
 * **Ma trận quyền 7 Roles**: Đầy đủ 7 vai trò: `CANDIDATE`, `RECRUITER`, `HIRING_MANAGER`, `INTERVIEWER`, `HR_MANAGER`, `APPROVER`, `ADMIN`.
 * **Resource-Level Authorization & Scope**: Tách biệt logic kiểm tra quyền sở hữu qua Policy Layer (`CandidatePolicy`, `JobPolicy`, `RequisitionPolicy`, `InterviewPolicy`, `OfferPolicy`, `UserPolicy`, `ReportPolicy`, `AuditLogPolicy`).
 * **Chống IDOR (Insecure Direct Object Reference)**: Kiểm tra quyền sở hữu và phạm vi phòng ban/phân công trước khi trả dữ liệu. Scoped database queries ngăn chặn rò rỉ dữ liệu.
@@ -82,7 +83,23 @@ npm start
 
 ---
 
-## 4. Tài Khoản Thử Nghiệm Mẫu
+## API chức danh & dải lương
+
+Các API dưới đây yêu cầu access token của tài khoản có role `HR_MANAGER`; role `ADMIN` không được xem dải lương trừ khi tài khoản đó cũng có role `HR_MANAGER`.
+
+| Method | Endpoint | Mục đích |
+|---|---|---|
+| `GET` | `/api/job-titles/options` | Xem mã, tên, cấp bậc để liên kết job; không trả dải lương (vai trò nội bộ có quyền xem tổ chức) |
+| `GET` | `/api/job-titles` | Xem danh mục chức danh và dải lương |
+| `POST` | `/api/job-titles` | Tạo chức danh (`code`, `name`, `level`, `minSalary`, `maxSalary`) |
+| `PUT` | `/api/job-titles/:id` | Cập nhật thông tin hoặc dải lương |
+| `DELETE` | `/api/job-titles/:id` | Xóa chức danh chưa gắn với tin tuyển dụng |
+
+`POST /api/jobs` nhận thêm `jobTitleId` để liên kết tin tuyển dụng với chức danh; `PUT /api/jobs/:id` cũng nhận trường này để gắn chức danh cho job hiện có. `POST /api/offers`, cập nhật lương offer và duyệt offer đều được kiểm tra theo dải đã cấu hình; phản hồi ngoài dải không tiết lộ con số lương cho người không thuộc HR.
+
+Sau khi cập nhật schema, chạy `npm run prisma:push` rồi `npm run prisma:seed` để đồng bộ SQLite và gắn chức danh cho dữ liệu mẫu.
+
+## 5. Tài Khoản Thử Nghiệm Mẫu
 
 Mật khẩu mặc định cho tất cả tài khoản là: `Password123!`
 

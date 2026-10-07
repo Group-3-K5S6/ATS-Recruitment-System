@@ -89,6 +89,19 @@ model Department {
   jobs         Job[]
 }
 
+model JobTitle {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  level     String
+  minSalary Float
+  maxSalary Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  jobs Job[]
+}
+
 model Requisition {
   id              String   @id @default(uuid())
   title           String
@@ -114,6 +127,7 @@ model Job {
   departmentId    String
   hiringManagerId String
   recruiterId     String?
+  jobTitleId      String?
   status          String   @default("DRAFT")
   description     String
   location        String   @default("Hanoi")
@@ -124,6 +138,7 @@ model Job {
   department           Department               @relation(fields: [departmentId], references: [id])
   hiringManager        User                     @relation("HiringManagerJobs", fields: [hiringManagerId], references: [id])
   recruiter            User?                    @relation("RecruiterJobs", fields: [recruiterId], references: [id])
+  jobTitle             JobTitle?                 @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
   applications         Application[]
   competencyFrameworks JobCompetencyFramework[]
 }
