@@ -24,8 +24,48 @@ type EmployeeInput = {
 };
 
 type EmployeeRow = EmployeeInput & { rowNumber: number; errors: string[] };
-type EmployeeImportModalProps = { onClose?: () => void };
+type EmployeeImportModalProps = {
+  onClose?: () => void;
+  onImportSuccess?: () => Promise<void> | void;
+};
 type ImportSummary = { created: number; skipped: number };
+
+const API_URL =
+  import.meta.env.VITE_ATS_API_URL || "http://localhost:4000";
+
+type ApiResponse<T> = {
+  success: boolean;
+  data?: T;
+  message?: string;
+  error?: {
+    code?: string;
+    message?: string;
+  };
+};
+
+type PreviewData = {
+  total: number;
+  validCount: number;
+  invalidCount: number;
+  rows: Array<
+    EmployeeInput & {
+      rowNumber: number;
+      errors: string[];
+      isValid: boolean;
+    }
+  >;
+};
+
+type ImportData = {
+  total: number;
+  created: number;
+  skipped: number;
+  errors: Array<{
+    rowNumber: number;
+    email: string;
+    errors: string[];
+  }>;
+};
 
 const COLUMNS: (keyof EmployeeInput)[] = [
   "HoTen",
@@ -35,18 +75,6 @@ const COLUMNS: (keyof EmployeeInput)[] = [
   "SoDienThoai",
 ];
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
-
-const SAMPLE_EMPLOYEES: EmployeeInput[] = [
-  { HoTen: "Nguyễn Minh Anh", Email: "minh.anh@ats.vn", PhongBan: "Nhân sự", ChucVu: "Chuyên viên tuyển dụng", SoDienThoai: "0912345678" },
-  { HoTen: "Trần Quốc Bảo", Email: "bao.tran@ats.vn", PhongBan: "Công nghệ thông tin", ChucVu: "Kỹ sư phần mềm", SoDienThoai: "0987654321" },
-  { HoTen: "Lê Thu Hà", Email: "ha.le@ats", PhongBan: "Tài chính", ChucVu: "Kế toán tổng hợp", SoDienThoai: "0901234567" },
-  { HoTen: "Phạm Đức Long", Email: "long.pham@ats.vn", PhongBan: "Kinh doanh", ChucVu: "Trưởng nhóm kinh doanh", SoDienThoai: "0324567890" },
-  { HoTen: "", Email: "thao.nguyen@ats.vn", PhongBan: "Marketing", ChucVu: "Chuyên viên nội dung", SoDienThoai: "0976543210" },
-  { HoTen: "Vũ Hoàng Nam", Email: "nam.vu@ats.vn", PhongBan: "Vận hành", ChucVu: "Điều phối viên", SoDienThoai: "123456" },
-  { HoTen: "Đặng Mỹ Linh", Email: "linh.dang@ats.vn", PhongBan: "Nhân sự", ChucVu: "Chuyên viên C&B", SoDienThoai: "0934567890" },
-  { HoTen: "Bùi Gia Huy", Email: "huy.bui@ats.vn", PhongBan: "Sản phẩm", ChucVu: "Product Designer", SoDienThoai: "0845678901" },
-];
-
 const HEADER_ALIASES: Record<keyof EmployeeInput, string[]> = {
   HoTen: ["hoten", "fullname", "name"],
   Email: ["email", "emailcongty"],
@@ -132,20 +160,23 @@ async function downloadTemplate(): Promise<void> {
   XLSX.writeFile(workbook, "mau-nhap-nhan-su.xlsx");
 }
 
-const initialRows = SAMPLE_EMPLOYEES.map((employee, index) => createEmployeeRow(employee, index + 2));
+const initialRows: EmployeeRow[] = [];
 
-export default function EmployeeImportModal({ onClose }: EmployeeImportModalProps) {
+export default function EmployeeImportModal({
+  onClose,
+  onImportSuccess,
+}: EmployeeImportModalProps) {
   const [isVisible, setIsVisible] = useState(true);
   const [employees, setEmployees] = useState<EmployeeRow[]>(initialRows);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState("");
-  const [sourceLabel, setSourceLabel] = useState("Dữ liệu mẫu");
+  const [sourceLabel, setSourceLabel] = useState("Chưa chọn tệp");
   const [isDragging, setIsDragging] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const timeoutRef = useRef<number | null>(null);
+
 
   const validCount = employees.filter((employee) => employee.errors.length === 0).length;
   const invalidCount = employees.length - validCount;
@@ -162,9 +193,7 @@ export default function EmployeeImportModal({ onClose }: EmployeeImportModalProp
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isImporting, isVisible, onClose, summary]);
 
-  useEffect(() => () => {
-    if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
-  }, []);
+
 
   if (!isVisible) return null;
 
@@ -174,30 +203,105 @@ export default function EmployeeImportModal({ onClose }: EmployeeImportModalProp
   };
 
   const loadFile = async (file: File) => {
-    const extension = file.name.split(".").pop()?.toLowerCase();
-    if (extension !== "xlsx" && extension !== "xls") {
-      setFileError("Định dạng chưa được hỗ trợ. Vui lòng chọn tệp .xlsx hoặc .xls.");
-      return;
+  const extension = file.name
+    .split(".")
+    .pop()
+    ?.toLowerCase();
+
+  if (extension !== "xlsx" && extension !== "xls") {
+    setFileError(
+      "Định dạng chưa được hỗ trợ. Vui lòng chọn tệp .xlsx hoặc .xls."
+    );
+    return;
+  }
+
+  if (file.size > MAX_FILE_SIZE) {
+    setFileError(
+      "Tệp vượt quá dung lượng tối đa 10 MB."
+    );
+    return;
+  }
+
+  setSelectedFile(file);
+  setSourceLabel(file.name);
+  setFileError("");
+  setSummary(null);
+  setProgress(0);
+
+  try {
+    const rows = await parseEmployeeWorkbook(file);
+
+    if (rows.length === 0) {
+      throw new Error(
+        "Không tìm thấy dòng nhân sự nào trong tệp."
+      );
     }
-    if (file.size > MAX_FILE_SIZE) {
-      setFileError("Tệp vượt quá dung lượng tối đa 10 MB.");
-      return;
+
+    const token =
+      sessionStorage.getItem("accessToken");
+
+    if (!token) {
+      throw new Error(
+        "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."
+      );
     }
-    setSelectedFile(file);
-    setSourceLabel(file.name);
-    setFileError("");
-    setSummary(null);
-    try {
-      const rows = await parseEmployeeWorkbook(file);
-      if (rows.length === 0) throw new Error("Không tìm thấy dòng nhân sự nào trong tệp.");
-      setEmployees(rows);
-      setProgress(0);
-    } catch (error) {
-      setEmployees([]);
-      setProgress(0);
-      setFileError(error instanceof Error ? error.message : "Không thể đọc tệp. Hãy kiểm tra định dạng và thử lại.");
+
+    const response = await fetch(
+      `${API_URL}/api/users/import/preview`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          employees: rows.map((row) => ({
+            HoTen: row.HoTen,
+            Email: row.Email,
+            PhongBan: row.PhongBan,
+            ChucVu: row.ChucVu,
+            SoDienThoai: row.SoDienThoai,
+            rowNumber: row.rowNumber,
+          })),
+        }),
+      }
+    );
+
+    const result =
+      (await response.json()) as ApiResponse<PreviewData>;
+
+    if (
+      !response.ok ||
+      !result.success ||
+      !result.data
+    ) {
+      throw new Error(
+        result.error?.message ||
+          "Không thể kiểm tra dữ liệu với hệ thống."
+      );
     }
-  };
+
+    const checkedRows: EmployeeRow[] =
+      result.data.rows.map((row) => ({
+        HoTen: row.HoTen,
+        Email: row.Email,
+        PhongBan: row.PhongBan,
+        ChucVu: row.ChucVu,
+        SoDienThoai: row.SoDienThoai,
+        rowNumber: row.rowNumber,
+        errors: row.errors,
+      }));
+
+    setEmployees(checkedRows);
+  } catch (error) {
+    setEmployees([]);
+    setFileError(
+      error instanceof Error
+        ? error.message
+        : "Không thể đọc hoặc kiểm tra tệp."
+    );
+  }
+};
 
   const handleFileInput = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -207,34 +311,94 @@ export default function EmployeeImportModal({ onClose }: EmployeeImportModalProp
 
   const clearSelectedFile = () => {
     setSelectedFile(null);
-    setEmployees(initialRows);
-    setSourceLabel("Dữ liệu mẫu");
+    setEmployees([]);
+    setSourceLabel("Chưa chọn tệp");
     setFileError("");
     setProgress(0);
     setSummary(null);
   };
 
-  const startImport = () => {
-    if (validCount === 0 || isImporting) return;
-    const created = validCount;
-    const skipped = invalidCount;
-    let nextProgress = 0;
-    setSummary(null);
-    setProgress(0);
-    setIsImporting(true);
+  const startImport = async () => {
+  if (
+    validCount === 0 ||
+    isImporting ||
+    employees.length === 0
+  ) {
+    return;
+  }
 
-    const advance = () => {
-      nextProgress = Math.min(nextProgress + 8, 100);
-      setProgress(nextProgress);
-      if (nextProgress === 100) {
-        setIsImporting(false);
-        setSummary({ created, skipped });
-        return;
+  const token =
+    sessionStorage.getItem("accessToken");
+
+  if (!token) {
+    setFileError(
+      "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."
+    );
+    return;
+  }
+
+  setSummary(null);
+  setFileError("");
+  setProgress(20);
+  setIsImporting(true);
+
+  try {
+    const response = await fetch(
+      `${API_URL}/api/users/import`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          employees: employees.map((row) => ({
+            HoTen: row.HoTen,
+            Email: row.Email,
+            PhongBan: row.PhongBan,
+            ChucVu: row.ChucVu,
+            SoDienThoai: row.SoDienThoai,
+            rowNumber: row.rowNumber,
+          })),
+        }),
       }
-      timeoutRef.current = window.setTimeout(advance, 70);
-    };
-    timeoutRef.current = window.setTimeout(advance, 90);
-  };
+    );
+
+    setProgress(70);
+
+    const result =
+      (await response.json()) as ApiResponse<ImportData>;
+
+    if (
+      !response.ok ||
+      !result.success ||
+      !result.data
+    ) {
+      throw new Error(
+        result.error?.message ||
+          "Không thể nhập danh sách nhân sự."
+      );
+    }
+
+    setProgress(100);
+
+    setSummary({
+      created: result.data.created,
+      skipped: result.data.skipped,
+    });
+    await onImportSuccess?.();
+  } catch (error) {
+    setProgress(0);
+
+    setFileError(
+      error instanceof Error
+        ? error.message
+        : "Không thể nhập dữ liệu."
+    );
+  } finally {
+    setIsImporting(false);
+  }
+};
 
   return (
     <div

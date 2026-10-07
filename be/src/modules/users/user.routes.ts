@@ -5,6 +5,7 @@ import {
   createUserSchema,
   updateUserSchema,
   assignRolesSchema,
+  importPayloadSchema,
 } from './user.controller';
 
 import { authenticate } from '../../middleware/authenticate';
@@ -23,6 +24,26 @@ router.get(
   '/',
   requirePermission(PermissionCode.USERS_READ),
   UserController.list
+);
+
+/*
+ * S2-01 - XEM TRƯỚC VÀ KIỂM TRA DỮ LIỆU NHÂN SỰ
+ */
+router.post(
+  '/import/preview',
+  requirePermission(PermissionCode.USERS_CREATE),
+  validateBody(importPayloadSchema),
+  UserController.previewImport
+);
+
+/*
+ * S2-01 - NHẬP NHÂN SỰ HÀNG LOẠT
+ */
+router.post(
+  '/import',
+  requirePermission(PermissionCode.USERS_CREATE),
+  validateBody(importPayloadSchema),
+  UserController.importUsers
 );
 
 /*
