@@ -9,17 +9,34 @@ const difficultyEnum = z.nativeEnum(QuestionDifficulty, {
 
 export const createInterviewQuestionSchema = z
   .object({
-    question: z.string().trim().min(1, 'Question content cannot be empty.').optional(),
-    content: z.string().trim().min(1, 'Question content cannot be empty.').optional(),
+    question: z
+      .string()
+      .trim()
+      .min(1, 'Question content cannot be empty.')
+      .optional(),
+
+    content: z
+      .string()
+      .trim()
+      .min(1, 'Question content cannot be empty.')
+      .optional(),
+
     difficulty: difficultyEnum,
+
     suggestedAnswer: z
       .string()
       .trim()
       .min(1, 'Suggested answer cannot be empty.'),
+
     competencyCriterionId: z
       .string()
       .trim()
       .min(1, 'Competency criterion ID cannot be empty.'),
+
+    jobId: z
+      .string()
+      .trim()
+      .min(1, 'Job ID cannot be empty.'),
   })
   .refine((data) => !!(data.question || data.content), {
     message: 'Question content cannot be empty.',
@@ -32,14 +49,26 @@ export const createInterviewQuestionSchema = z
 
 export const updateInterviewQuestionSchema = z
   .object({
-    question: z.string().trim().min(1, 'Question content cannot be empty.').optional(),
-    content: z.string().trim().min(1, 'Question content cannot be empty.').optional(),
+    question: z
+      .string()
+      .trim()
+      .min(1, 'Question content cannot be empty.')
+      .optional(),
+
+    content: z
+      .string()
+      .trim()
+      .min(1, 'Question content cannot be empty.')
+      .optional(),
+
     difficulty: difficultyEnum.optional(),
+
     suggestedAnswer: z
       .string()
       .trim()
       .min(1, 'Suggested answer cannot be empty.')
       .optional(),
+
     competencyCriterionId: z
       .string()
       .trim()
@@ -47,17 +76,31 @@ export const updateInterviewQuestionSchema = z
       .optional(),
   })
   .transform((data) => {
-    const effectiveQuestion = data.question || data.content;
+    const effectiveQuestion =
+      data.question || data.content;
+
     return {
       ...data,
-      ...(effectiveQuestion ? { question: effectiveQuestion.trim() } : {}),
+      ...(effectiveQuestion
+        ? {
+            question:
+              effectiveQuestion.trim(),
+          }
+        : {}),
     };
   });
 
-export const filterInterviewQuestionQuerySchema = z.object({
-  search: z.string().trim().optional(),
-  jobId: z.string().trim().optional(),
-  competencyFrameworkId: z.string().trim().optional(),
-  competencyCriterionId: z.string().trim().optional(),
-  difficulty: difficultyEnum.optional(),
-});
+export const filterInterviewQuestionQuerySchema =
+  z.object({
+    search: z.string().trim().optional(),
+    jobId: z.string().trim().optional(),
+    competencyFrameworkId: z
+      .string()
+      .trim()
+      .optional(),
+    competencyCriterionId: z
+      .string()
+      .trim()
+      .optional(),
+    difficulty: difficultyEnum.optional(),
+  });

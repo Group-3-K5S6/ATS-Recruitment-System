@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import type { Role } from "../data/roleMenus";
@@ -9,60 +9,64 @@ type Props = {
   userName: string;
 };
 
-type Difficulty = "Dễ" | "Trung bình" | "Khó";
+type DifficultyApi = "EASY" | "MEDIUM" | "HARD";
+type DifficultyLabel = "Dễ" | "Trung bình" | "Khó";
 
-type InterviewQuestion = {
+type ApiQuestion = {
   id: string;
-  jobTitle: string;
-  criterion: string;
   question: string;
-  difficulty: Difficulty;
-  goodAnswer: string;
+  difficulty: DifficultyApi;
+  suggestedAnswer: string;
+  competencyCriterionId: string;
+  jobId: string | null;
 };
 
-const criteriaByJobTitle: Record<string, string[]> = {
-  "Lập trình viên Backend": [
-    "Kiến thức chuyên môn",
-    "Kỹ năng giải quyết vấn đề",
-    "Giao tiếp",
-  ],
-  "Chuyên viên tuyển dụng": [
-    "Kiến thức chuyên môn",
-    "Kỹ năng giải quyết vấn đề",
-    "Giao tiếp",
-  ],
-  "Trưởng phòng Nhân sự": [
-    "Kiến thức chuyên môn",
-    "Kỹ năng giải quyết vấn đề",
-    "Giao tiếp",
-  ],
-  "Chuyên viên Marketing": [
-    "Kiến thức chuyên môn",
-    "Kỹ năng giải quyết vấn đề",
-    "Giao tiếp",
-  ],
+type LookupCriterion = {
+  id: string;
+  name: string;
+  weight: number;
 };
 
-const initialQuestions: InterviewQuestion[] = [
-  {
-    id: "1",
-    jobTitle: "Lập trình viên Backend",
-    criterion: "Kiến thức chuyên môn",
-    question: "REST API là gì và khi nào nên sử dụng?",
-    difficulty: "Trung bình",
-    goodAnswer:
-      "Ứng viên giải thích được REST, HTTP method, resource và cách thiết kế API.",
-  },
-  {
-    id: "2",
-    jobTitle: "Lập trình viên Backend",
-    criterion: "Kỹ năng giải quyết vấn đề",
-    question: "Bạn sẽ xử lý thế nào khi API phản hồi chậm?",
-    difficulty: "Khó",
-    goodAnswer:
-      "Ứng viên biết kiểm tra truy vấn, log, tài nguyên hệ thống và xác định nút thắt.",
-  },
-];
+type LookupFramework = {
+  id: string;
+  name: string;
+  criteria: LookupCriterion[];
+};
+
+type LookupJob = {
+  id: string;
+  title: string;
+  frameworks: LookupFramework[];
+};
+
+type ApiResponse<T> = {
+  success: boolean;
+  data: T;
+  message?: string;
+  error?: {
+    message?: string;
+    code?: string;
+  };
+};
+
+const API_URL =
+  import.meta.env.VITE_ATS_API_URL || "http://localhost:4000";
+
+const difficultyToLabel = (
+  value: DifficultyApi
+): DifficultyLabel => {
+  switch (value) {
+    case "EASY":
+      return "Dễ";
+    case "HARD":
+      return "Khó";
+    default:
+      return "Trung bình";
+  }
+};
+
+const getToken = () =>
+  sessionStorage.getItem("accessToken");
 
 export default function InterviewQuestionBank({
   role,
@@ -71,127 +75,468 @@ export default function InterviewQuestionBank({
   const navigate = useNavigate();
 
   const [questions, setQuestions] =
-    useState<InterviewQuestion[]>(initialQuestions);
+    useState<ApiQuestion[]>([]);
+
+  const [lookups, setLookups] =
+    useState<LookupJob[]>([]);
 
   const [searchText, setSearchText] = useState("");
-  const [filterJobTitle, setFilterJobTitle] = useState("");
-  const [filterCriterion, setFilterCriterion] = useState("");
+  const [filterJobId, setFilterJobId] = useState("");
+  const [filterCriterionId, setFilterCriterionId] =
+    useState("");
 
-  const [jobTitle, setJobTitle] = useState("Lập trình viên Backend");
-  const [criterion, setCriterion] = useState("Kiến thức chuyên môn");
+  const [jobId, setJobId] = useState("");
+  const [criterionId, setCriterionId] = useState("");
+
   const [question, setQuestion] = useState("");
   const [difficulty, setDifficulty] =
-    useState<Difficulty>("Trung bình");
+    useState<DifficultyApi>("MEDIUM");
   const [goodAnswer, setGoodAnswer] = useState("");
+
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
 
-  const jobTitles = Object.keys(criteriaByJobTitle);
+  const handleUnauthorized = () => {
+    clearLocalSession();
+    navigate("/login");
+  };
 
-  const formCriteria = criteriaByJobTitle[jobTitle] || [];
+  const loadLookups = async () => {
+    const token = getToken();
 
-  const filterCriteria = filterJobTitle
-    ? criteriaByJobTitle[filterJobTitle] || []
-    : Array.from(
-        new Set(Object.values(criteriaByJobTitle).flat())
+    if (!token) {
+      handleUnauthorized();
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/interview-questions/lookups`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
       );
 
-  const filteredQuestions = useMemo(() => {
-    return questions.filter((item) => {
-      const keyword = searchText.trim().toLowerCase();
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
 
-      const matchSearch =
-        !keyword ||
-        item.question.toLowerCase().includes(keyword) ||
-        item.goodAnswer.toLowerCase().includes(keyword);
+      const body: ApiResponse<LookupJob[]> =
+        await response.json();
 
-      const matchJobTitle =
-        !filterJobTitle || item.jobTitle === filterJobTitle;
+      if (!response.ok || !body.success) {
+        throw new Error(
+          body.error?.message ||
+            "Không thể tải dữ liệu chức danh."
+        );
+      }
 
-      const matchCriterion =
-        !filterCriterion || item.criterion === filterCriterion;
+      const data = body.data || [];
 
-      return matchSearch && matchJobTitle && matchCriterion;
-    });
+      setLookups(data);
+
+      if (data.length > 0) {
+        const firstJob = data[0];
+
+        setJobId((current) =>
+          current || firstJob.id
+        );
+
+        const firstCriterion =
+          firstJob.frameworks
+            .flatMap(
+              (framework) => framework.criteria
+            )[0];
+
+        if (firstCriterion) {
+          setCriterionId((current) =>
+            current || firstCriterion.id
+          );
+        }
+      }
+    } catch (error) {
+      console.error(error);
+      setMessage(
+        "Không thể tải chức danh và tiêu chí."
+      );
+    }
+  };
+
+  const loadQuestions = async () => {
+    const token = getToken();
+
+    if (!token) {
+      handleUnauthorized();
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const params = new URLSearchParams();
+
+      if (searchText.trim()) {
+        params.set("search", searchText.trim());
+      }
+
+      if (filterJobId) {
+        params.set("jobId", filterJobId);
+      }
+
+      if (filterCriterionId) {
+        params.set(
+          "competencyCriterionId",
+          filterCriterionId
+        );
+      }
+
+      const query = params.toString();
+
+      const response = await fetch(
+        `${API_URL}/api/interview-questions${
+          query ? `?${query}` : ""
+        }`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      const body: ApiResponse<ApiQuestion[]> =
+        await response.json();
+
+      if (!response.ok || !body.success) {
+        throw new Error(
+          body.error?.message ||
+            "Không thể tải danh sách câu hỏi."
+        );
+      }
+
+      setQuestions(body.data || []);
+    } catch (error) {
+      console.error(error);
+      setMessage(
+        "Không thể tải danh sách câu hỏi."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadLookups();
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadQuestions();
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [
-    questions,
     searchText,
-    filterJobTitle,
-    filterCriterion,
+    filterJobId,
+    filterCriterionId,
   ]);
 
-  const handleAddQuestion = () => {
+  const selectedJob = useMemo(
+    () =>
+      lookups.find((item) => item.id === jobId),
+    [lookups, jobId]
+  );
+
+  const formCriteria = useMemo(() => {
+    if (!selectedJob) {
+      return [];
+    }
+
+    const allCriteria =
+      selectedJob.frameworks.flatMap(
+        (framework) => framework.criteria
+      );
+
+    return Array.from(
+      new Map(
+        allCriteria.map((item) => [
+          item.id,
+          item,
+        ])
+      ).values()
+    );
+  }, [selectedJob]);
+
+  const filterCriteria = useMemo(() => {
+    const jobs = filterJobId
+      ? lookups.filter(
+          (item) => item.id === filterJobId
+        )
+      : lookups;
+
+    const allCriteria = jobs.flatMap((job) =>
+      job.frameworks.flatMap(
+        (framework) => framework.criteria
+      )
+    );
+
+    return Array.from(
+      new Map(
+        allCriteria.map((item) => [
+          item.id,
+          item,
+        ])
+      ).values()
+    );
+  }, [lookups, filterJobId]);
+
+  const criterionMap = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        criterionName: string;
+        jobTitles: string[];
+      }
+    >();
+
+    lookups.forEach((job) => {
+      job.frameworks.forEach((framework) => {
+        framework.criteria.forEach(
+          (criterion) => {
+            const existing = map.get(
+              criterion.id
+            );
+
+            if (existing) {
+              if (
+                !existing.jobTitles.includes(
+                  job.title
+                )
+              ) {
+                existing.jobTitles.push(
+                  job.title
+                );
+              }
+            } else {
+              map.set(criterion.id, {
+                criterionName: criterion.name,
+                jobTitles: [job.title],
+              });
+            }
+          }
+        );
+      });
+    });
+
+    return map;
+  }, [lookups]);
+
+  const handleJobChange = (value: string) => {
+    setJobId(value);
+
+    const job = lookups.find(
+      (item) => item.id === value
+    );
+
+    const firstCriterion =
+      job?.frameworks.flatMap(
+        (framework) => framework.criteria
+      )[0];
+
+    setCriterionId(
+      firstCriterion?.id || ""
+    );
+  };
+
+  const handleFilterJobChange = (
+    value: string
+  ) => {
+    setFilterJobId(value);
+    setFilterCriterionId("");
+  };
+
+  const handleAddQuestion = async () => {
     setMessage("");
 
-    if (!jobTitle) {
+    if (!jobId) {
       setMessage("Vui lòng chọn chức danh.");
       return;
     }
 
-    if (!criterion) {
+    if (!criterionId) {
       setMessage("Vui lòng chọn tiêu chí.");
       return;
     }
 
     if (!question.trim()) {
-      setMessage("Vui lòng nhập câu hỏi phỏng vấn.");
+      setMessage(
+        "Vui lòng nhập câu hỏi phỏng vấn."
+      );
       return;
     }
 
     if (!goodAnswer.trim()) {
-      setMessage("Vui lòng nhập gợi ý câu trả lời tốt.");
+      setMessage(
+        "Vui lòng nhập gợi ý câu trả lời tốt."
+      );
       return;
     }
 
-    const newQuestion: InterviewQuestion = {
-      id: Date.now().toString(),
-      jobTitle,
-      criterion,
-      question: question.trim(),
-      difficulty,
-      goodAnswer: goodAnswer.trim(),
-    };
+    const token = getToken();
 
-    setQuestions((prev) => [newQuestion, ...prev]);
+    if (!token) {
+      handleUnauthorized();
+      return;
+    }
 
-    setQuestion("");
-    setGoodAnswer("");
-    setDifficulty("Trung bình");
+    try {
+      setAdding(true);
 
-    setMessage("Thêm câu hỏi thành công.");
+      const response = await fetch(
+        `${API_URL}/api/interview-questions`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+           question: question.trim(),
+            difficulty,
+          suggestedAnswer: goodAnswer.trim(),
+             competencyCriterionId: criterionId,
+               jobId,
+    }),
+        }
+      );
+
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      const body: ApiResponse<ApiQuestion> =
+        await response.json();
+
+      if (!response.ok || !body.success) {
+        throw new Error(
+          body.error?.message ||
+            body.message ||
+            "Không thể thêm câu hỏi."
+        );
+      }
+
+      setQuestion("");
+      setGoodAnswer("");
+      setDifficulty("MEDIUM");
+
+      setMessage(
+        "Thêm câu hỏi thành công."
+      );
+
+      await loadQuestions();
+    } catch (error) {
+      console.error(error);
+
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Không thể thêm câu hỏi."
+      );
+    } finally {
+      setAdding(false);
+    }
   };
 
-  const handleJobTitleChange = (value: string) => {
-    setJobTitle(value);
+const handleDeleteQuestion = async (id: string) => {
+  const confirmed = window.confirm(
+    "Bạn có chắc muốn xóa câu hỏi này không?"
+  );
 
-    const criteria = criteriaByJobTitle[value] || [];
-    setCriterion(criteria[0] || "");
-  };
+  if (!confirmed) {
+    return;
+  }
 
-  const handleFilterJobTitleChange = (value: string) => {
-    setFilterJobTitle(value);
-    setFilterCriterion("");
-  };
+  const token = getToken();
 
-  const handleLogout = async () => {
-  clearLocalSession();
-  localStorage.removeItem("accessToken");
-  localStorage.removeItem("refreshToken");
-  localStorage.removeItem("atsUser");
-  navigate("/login");
+  if (!token) {
+    handleUnauthorized();
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `${API_URL}/api/interview-questions/${id}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (response.status === 401) {
+      handleUnauthorized();
+      return;
+    }
+
+    const body = await response.json();
+
+    if (!response.ok || !body.success) {
+      throw new Error(
+        body.error?.message ||
+          "Không thể xóa câu hỏi."
+      );
+    }
+
+    setMessage("Xóa câu hỏi thành công.");
+
+    await loadQuestions();
+  } catch (error) {
+    console.error(error);
+
+    setMessage(
+      error instanceof Error
+        ? error.message
+        : "Không thể xóa câu hỏi."
+    );
+  }
 };
 
-  const handleMenuSelect = (label: string) => {
+  const handleLogout = async () => {
+    clearLocalSession();
+    navigate("/login");
+  };
+
+  const handleMenuSelect = (
+    label: string
+  ) => {
     if (label === "Tổng quan") {
       navigate("/dashboard");
       return;
     }
 
-    if (label === "Phòng ban & tổ chức") {
+    if (
+      label === "Phòng ban & tổ chức"
+    ) {
       navigate("/departments");
       return;
     }
 
-    if (label === "Chức danh & dải lương") {
+    if (
+      label === "Chức danh & dải lương"
+    ) {
       navigate("/job-titles");
       return;
     }
@@ -201,8 +546,13 @@ export default function InterviewQuestionBank({
       return;
     }
 
-    if (label === "Ngân hàng câu hỏi phỏng vấn") {
-      navigate("/interview-question-bank");
+    if (
+      label ===
+      "Ngân hàng câu hỏi phỏng vấn"
+    ) {
+      navigate(
+        "/interview-question-bank"
+      );
       return;
     }
 
@@ -240,7 +590,11 @@ export default function InterviewQuestionBank({
             margin: "0 auto",
           }}
         >
-          <div style={{ marginBottom: "28px" }}>
+          <div
+            style={{
+              marginBottom: "28px",
+            }}
+          >
             <h1
               style={{
                 margin: 0,
@@ -256,15 +610,17 @@ export default function InterviewQuestionBank({
                 marginTop: "8px",
               }}
             >
-              Quản lý câu hỏi phỏng vấn theo chức danh và tiêu chí
-              trong khung năng lực.
+              Quản lý câu hỏi phỏng vấn theo
+              chức danh và tiêu chí trong khung
+              năng lực.
             </p>
           </div>
 
           <section
             style={{
               background: "#ffffff",
-              border: "1px solid #e2e8f0",
+              border:
+                "1px solid #e2e8f0",
               borderRadius: "12px",
               padding: "24px",
               marginBottom: "24px",
@@ -283,18 +639,31 @@ export default function InterviewQuestionBank({
               }}
             >
               <div>
-                <label style={labelStyle}>Chức danh</label>
+                <label style={labelStyle}>
+                  Chức danh
+                </label>
 
                 <select
-                  value={jobTitle}
+                  value={jobId}
                   onChange={(e) =>
-                    handleJobTitleChange(e.target.value)
+                    handleJobChange(
+                      e.target.value
+                    )
                   }
                   style={inputStyle}
                 >
-                  {jobTitles.map((title) => (
-                    <option key={title} value={title}>
-                      {title}
+                  {lookups.length === 0 && (
+                    <option value="">
+                      Chưa có chức danh
+                    </option>
+                  )}
+
+                  {lookups.map((job) => (
+                    <option
+                      key={job.id}
+                      value={job.id}
+                    >
+                      {job.title}
                     </option>
                   ))}
                 </select>
@@ -306,42 +675,67 @@ export default function InterviewQuestionBank({
                 </label>
 
                 <select
-                  value={criterion}
+                  value={criterionId}
                   onChange={(e) =>
-                    setCriterion(e.target.value)
+                    setCriterionId(
+                      e.target.value
+                    )
                   }
                   style={inputStyle}
                 >
-                  {formCriteria.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
+                  {formCriteria.length ===
+                    0 && (
+                    <option value="">
+                      Chưa có tiêu chí
                     </option>
-                  ))}
+                  )}
+
+                  {formCriteria.map(
+                    (item) => (
+                      <option
+                        key={item.id}
+                        value={item.id}
+                      >
+                        {item.name}
+                      </option>
+                    )
+                  )}
                 </select>
               </div>
 
               <div>
-                <label style={labelStyle}>Mức độ khó</label>
+                <label style={labelStyle}>
+                  Mức độ khó
+                </label>
 
                 <select
                   value={difficulty}
                   onChange={(e) =>
                     setDifficulty(
-                      e.target.value as Difficulty
+                      e.target
+                        .value as DifficultyApi
                     )
                   }
                   style={inputStyle}
                 >
-                  <option value="Dễ">Dễ</option>
-                  <option value="Trung bình">
+                  <option value="EASY">
+                    Dễ
+                  </option>
+
+                  <option value="MEDIUM">
                     Trung bình
                   </option>
-                  <option value="Khó">Khó</option>
+
+                  <option value="HARD">
+                    Khó
+                  </option>
                 </select>
               </div>
             </div>
 
-            <div style={{ marginTop: "16px" }}>
+            <div
+              style={{ marginTop: "16px" }}
+            >
               <label style={labelStyle}>
                 Câu hỏi phỏng vấn
               </label>
@@ -360,7 +754,9 @@ export default function InterviewQuestionBank({
               />
             </div>
 
-            <div style={{ marginTop: "16px" }}>
+            <div
+              style={{ marginTop: "16px" }}
+            >
               <label style={labelStyle}>
                 Gợi ý câu trả lời tốt
               </label>
@@ -368,7 +764,9 @@ export default function InterviewQuestionBank({
               <textarea
                 value={goodAnswer}
                 onChange={(e) =>
-                  setGoodAnswer(e.target.value)
+                  setGoodAnswer(
+                    e.target.value
+                  )
                 }
                 placeholder="Nhập gợi ý câu trả lời tốt"
                 rows={4}
@@ -384,7 +782,8 @@ export default function InterviewQuestionBank({
                 style={{
                   marginTop: "14px",
                   color:
-                    message === "Thêm câu hỏi thành công."
+                    message ===
+                    "Thêm câu hỏi thành công."
                       ? "#15803d"
                       : "#dc2626",
                   fontWeight: 600,
@@ -403,10 +802,21 @@ export default function InterviewQuestionBank({
             >
               <button
                 type="button"
-                onClick={handleAddQuestion}
-                style={primaryButtonStyle}
+                onClick={() =>
+                  void handleAddQuestion()
+                }
+                disabled={adding}
+                style={{
+                  ...primaryButtonStyle,
+                  opacity: adding ? 0.6 : 1,
+                  cursor: adding
+                    ? "not-allowed"
+                    : "pointer",
+                }}
               >
-                + Thêm câu hỏi
+                {adding
+                  ? "Đang thêm..."
+                  : "+ Thêm câu hỏi"}
               </button>
             </div>
           </section>
@@ -414,7 +824,8 @@ export default function InterviewQuestionBank({
           <section
             style={{
               background: "#ffffff",
-              border: "1px solid #e2e8f0",
+              border:
+                "1px solid #e2e8f0",
               borderRadius: "12px",
               padding: "24px",
             }}
@@ -436,16 +847,18 @@ export default function InterviewQuestionBank({
                 type="text"
                 value={searchText}
                 onChange={(e) =>
-                  setSearchText(e.target.value)
+                  setSearchText(
+                    e.target.value
+                  )
                 }
                 placeholder="Tìm kiếm câu hỏi..."
                 style={inputStyle}
               />
 
               <select
-                value={filterJobTitle}
+                value={filterJobId}
                 onChange={(e) =>
-                  handleFilterJobTitleChange(
+                  handleFilterJobChange(
                     e.target.value
                   )
                 }
@@ -455,17 +868,22 @@ export default function InterviewQuestionBank({
                   Tất cả chức danh
                 </option>
 
-                {jobTitles.map((title) => (
-                  <option key={title} value={title}>
-                    {title}
+                {lookups.map((job) => (
+                  <option
+                    key={job.id}
+                    value={job.id}
+                  >
+                    {job.title}
                   </option>
                 ))}
               </select>
 
               <select
-                value={filterCriterion}
+                value={filterCriterionId}
                 onChange={(e) =>
-                  setFilterCriterion(e.target.value)
+                  setFilterCriterionId(
+                    e.target.value
+                  )
                 }
                 style={inputStyle}
               >
@@ -473,15 +891,30 @@ export default function InterviewQuestionBank({
                   Tất cả tiêu chí
                 </option>
 
-                {filterCriteria.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
+                {filterCriteria.map(
+                  (item) => (
+                    <option
+                      key={item.id}
+                      value={item.id}
+                    >
+                      {item.name}
+                    </option>
+                  )
+                )}
               </select>
             </div>
 
-            {filteredQuestions.length === 0 ? (
+            {loading ? (
+              <div
+                style={{
+                  padding: "30px",
+                  textAlign: "center",
+                  color: "#64748b",
+                }}
+              >
+                Đang tải danh sách câu hỏi...
+              </div>
+            ) : questions.length === 0 ? (
               <div
                 style={{
                   padding: "30px",
@@ -499,76 +932,118 @@ export default function InterviewQuestionBank({
                   gap: "14px",
                 }}
               >
-                {filteredQuestions.map((item) => (
-                  <div
-                    key={item.id}
-                    style={{
-                      border: "1px solid #e2e8f0",
-                      borderRadius: "10px",
-                      padding: "18px",
-                    }}
-                  >
+                {questions.map((item) => {
+                  const info = criterionMap.get(
+                  item.competencyCriterionId
+              );
+
+                  const selectedQuestionJob = lookups.find(
+                 (job) => job.id === item.jobId
+         );
+
+                  return (
                     <div
+                      key={item.id}
                       style={{
-                        display: "flex",
-                        justifyContent:
-                          "space-between",
-                        gap: "16px",
-                        flexWrap: "wrap",
+                        border:
+                          "1px solid #e2e8f0",
+                        borderRadius: "10px",
+                        padding: "18px",
                       }}
                     >
-                      <div>
-                        <div
-                          style={{
-                            fontWeight: 700,
-                            fontSize: "17px",
-                            marginBottom: "8px",
-                          }}
-                        >
-                          {item.question}
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent:
+                            "space-between",
+                          gap: "16px",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <div>
+                          <div
+                            style={{
+                              fontWeight: 700,
+                              fontSize: "17px",
+                              marginBottom:
+                                "8px",
+                            }}
+                          >
+                            {item.question}
+                          </div>
+
+                          <div
+                            style={{
+                              color: "#64748b",
+                              fontSize: "14px",
+                            }}
+                          >
+                           {selectedQuestionJob?.title ||
+                            "Chưa xác định chức danh"}{" "}
+                               •{" "}
+                            {info?.criterionName ||
+                              "Chưa xác định tiêu chí"}
+                          </div>
                         </div>
 
-                        <div
-                          style={{
-                            color: "#64748b",
-                            fontSize: "14px",
-                          }}
-                        >
-                          {item.jobTitle} •{" "}
-                          {item.criterion}
-                        </div>
+                       <div
+  style={{
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+  }}
+>
+  <div
+    style={{
+      background: "#eff6ff",
+      color: "#1d4ed8",
+      padding: "6px 12px",
+      borderRadius: "20px",
+      fontWeight: 600,
+      fontSize: "14px",
+    }}
+  >
+    {difficultyToLabel(item.difficulty)}
+  </div>
+
+  <button
+    type="button"
+    onClick={() =>
+      void handleDeleteQuestion(item.id)
+    }
+    style={{
+      border: "1px solid #dc2626",
+      background: "#ffffff",
+      color: "#dc2626",
+      borderRadius: "8px",
+      padding: "7px 12px",
+      cursor: "pointer",
+      fontWeight: 600,
+    }}
+  >
+    Xóa
+  </button>
+</div>
                       </div>
 
                       <div
                         style={{
-                          background: "#eff6ff",
-                          color: "#1d4ed8",
-                          padding: "6px 12px",
-                          borderRadius: "20px",
-                          height: "fit-content",
-                          fontWeight: 600,
-                          fontSize: "14px",
+                          marginTop: "14px",
+                          background:
+                            "#f8fafc",
+                          padding:
+                            "12px 14px",
+                          borderRadius: "8px",
                         }}
                       >
-                        {item.difficulty}
+                        <strong>
+                          Gợi ý câu trả lời tốt:
+                        </strong>{" "}
+                        {item.suggestedAnswer}
                       </div>
                     </div>
-
-                    <div
-                      style={{
-                        marginTop: "14px",
-                        background: "#f8fafc",
-                        padding: "12px 14px",
-                        borderRadius: "8px",
-                      }}
-                    >
-                      <strong>
-                        Gợi ý câu trả lời tốt:
-                      </strong>{" "}
-                      {item.goodAnswer}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </section>
@@ -602,5 +1077,4 @@ const primaryButtonStyle: React.CSSProperties = {
   borderRadius: "8px",
   padding: "11px 18px",
   fontWeight: 700,
-  cursor: "pointer",
 };
