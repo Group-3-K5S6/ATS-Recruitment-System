@@ -234,8 +234,9 @@ export default function EmployeeImportModal({ onClose, onImportSuccess }: Employ
     }, 60);
 
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch("/api/users/import", {
+      const token = sessionStorage.getItem("accessToken");
+      const apiUrl = import.meta.env.VITE_ATS_API_URL || "http://localhost:4000";
+      const res = await fetch(`${apiUrl}/api/users/import`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
