@@ -19,6 +19,7 @@ import ChangePassword from "./pages/ChangePassword";
 import DepartmentManagement from "./pages/DepartmentManagement";
 import JobTitleSalaryManagement from "./pages/JobTitleSalaryManagement";
 import UserProfilePage from "./pages/UserProfilePage";
+import RecruitmentCatalogPage from "./pages/RecruitmentCatalogPage";
 
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./components/Dashboard";
@@ -1011,6 +1012,18 @@ function RootRoute() {
   );
 }
 
+function RecruitmentCatalogRoute() {
+  const user = getSessionUser();
+  if (!user) return <Navigate to="/login" replace />;
+  const role = resolveRole(user.roles);
+  const handleLogout = async () => {
+    await logoutFromBackend();
+    clearSession();
+    window.location.assign("/login");
+  };
+  return <RecruitmentCatalogPage role={role} userName={user.fullName} onLogout={handleLogout} />;
+}
+
 
 /* =========================================================
    APP
@@ -1095,6 +1108,8 @@ function App() {
             <JobTitleRoute />
           }
         />
+
+        <Route path="/recruitment-catalog" element={<RecruitmentCatalogRoute />} />
 
 
         <Route

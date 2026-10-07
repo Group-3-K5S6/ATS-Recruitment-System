@@ -35,6 +35,10 @@ function Dashboard({ role, userName, onLogout }: DashboardProps) {
       navigate("/departments");
       return;
     }
+    if (label === "Danh mục tuyển dụng") {
+      navigate("/recruitment-catalog");
+      return;
+    }
     if (label === "Hồ sơ cá nhân") {
       navigate("/profile");
       return;

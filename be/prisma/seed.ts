@@ -9,6 +9,18 @@ const prisma = new PrismaClient();
 export async function runSeed() {
   console.log('--- Starting ATS RBAC Seeding ---');
 
+  const recruitmentCatalog = [
+    ...['Giới thiệu nội bộ', 'LinkedIn', 'VietnamWorks', 'TopCV', 'CareerBuilder', 'Website công ty', 'Ngày hội việc làm', 'Cơ sở dữ liệu ứng viên'].map((name, sortOrder) => ({ category: 'SOURCE', name, sortOrder })),
+    ...['Không đáp ứng yêu cầu chuyên môn', 'Thiếu kinh nghiệm phù hợp', 'Không phù hợp văn hóa', 'Mức lương kỳ vọng vượt ngân sách', 'Ứng viên từ chối cơ hội', 'Không phản hồi', 'Vị trí đã tuyển đủ'].map((name, sortOrder) => ({ category: 'REJECTION_REASON', name, sortOrder })),
+  ];
+  for (const item of recruitmentCatalog) {
+    await prisma.recruitmentCatalogItem.upsert({
+      where: { category_name: { category: item.category, name: item.name } },
+      update: { sortOrder: item.sortOrder },
+      create: item,
+    });
+  }
+
   // 1. Seed Roles
   console.log('Seeding Roles...');
   const roleMap = new Map<string, string>();
