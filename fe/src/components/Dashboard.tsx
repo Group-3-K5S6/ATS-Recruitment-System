@@ -39,6 +39,10 @@ function Dashboard({ role, userName, onLogout }: DashboardProps) {
       navigate("/recruitment-catalog");
       return;
     }
+    if (label === "Trang giới thiệu công ty") {
+      navigate("/company-profile");
+      return;
+    }
     if (label === "Hồ sơ cá nhân") {
       navigate("/profile");
       return;

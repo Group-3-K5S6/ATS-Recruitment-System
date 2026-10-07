@@ -72,6 +72,7 @@ export default function RecruitmentCatalogPage({ role, userName, onLogout }: Pro
     if (label === "Tổng quan") navigate("/dashboard");
     if (label === "Phòng ban & tổ chức") navigate("/departments");
     if (label === "Chức danh & dải lương") navigate("/job-titles");
+    if (label === "Trang giới thiệu công ty") navigate("/company-profile");
     if (label === "Hồ sơ cá nhân") navigate("/profile");
   };
 

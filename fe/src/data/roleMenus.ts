@@ -49,6 +49,7 @@ export const roleMenus: Record<Role, MenuItem[]> = {
     },
     { label: "Chức danh & dải lương" },
     { label: "Danh mục tuyển dụng" },
+    { label: "Trang giới thiệu công ty" },
   ],
 
   Approver: [
@@ -64,6 +65,7 @@ export const roleMenus: Record<Role, MenuItem[]> = {
     { label: "Quản lý tài khoản" },
     { label: "Vai trò & quyền" },
     { label: "Danh mục hệ thống" },
+    { label: "Trang giới thiệu công ty" },
     { label: "Nhật ký hệ thống" },
     { label: "Cấu hình" },
     {
