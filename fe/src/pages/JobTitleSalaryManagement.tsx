@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -6,18 +6,21 @@ import Sidebar from "../components/Sidebar";
 import type { Role } from "../data/roleMenus";
 import { clearLocalSession } from "../services/session";
 
+import {
+  createJobTitle,
+  deleteJobTitle,
+  getJobTitles,
+  updateJobTitle,
+} from "../services/jobTitleApi";
+
+import type {
+  JobTitle,
+  JobTitlePayload,
+} from "../services/jobTitleApi";
+
 /* =========================================================
    TYPE
 ========================================================= */
-
-type JobTitle = {
-  id: string;
-  code: string;
-  name: string;
-  level: string;
-  minSalary: number;
-  maxSalary: number;
-};
 
 type JobTitleSalaryManagementProps = {
   role: Role;
@@ -28,40 +31,6 @@ type JobTitleSalaryManagementProps = {
    DỮ LIỆU MẪU
 ========================================================= */
 
-const initialJobTitles: JobTitle[] = [
-  {
-    id: "jt-001",
-    code: "HR-REC-01",
-    name: "Chuyên viên tuyển dụng",
-    level: "Chuyên viên",
-    minSalary: 12000000,
-    maxSalary: 18000000,
-  },
-  {
-    id: "jt-002",
-    code: "IT-BE-03",
-    name: "Lập trình viên Backend",
-    level: "Chuyên viên cao cấp",
-    minSalary: 30000000,
-    maxSalary: 45000000,
-  },
-  {
-    id: "jt-003",
-    code: "HR-MAN-01",
-    name: "Trưởng phòng Nhân sự",
-    level: "Quản lý",
-    minSalary: 35000000,
-    maxSalary: 50000000,
-  },
-  {
-    id: "jt-004",
-    code: "MKT-SPE-02",
-    name: "Chuyên viên Marketing",
-    level: "Chuyên viên",
-    minSalary: 15000000,
-    maxSalary: 25000000,
-  },
-];
 
 /* =========================================================
    FORMAT TIỀN
@@ -81,8 +50,10 @@ function JobTitleSalaryManagement({
 }: JobTitleSalaryManagementProps) {
   const navigate = useNavigate();
 
-  const [jobTitles, setJobTitles] =
-    useState<JobTitle[]>(initialJobTitles);
+ const [jobTitles, setJobTitles] =
+  useState<JobTitle[]>([]);
+
+
 
   const [showModal, setShowModal] = useState(false);
 
@@ -96,7 +67,36 @@ function JobTitleSalaryManagement({
   const [maxSalary, setMaxSalary] = useState("");
 
   const [error, setError] = useState("");
+useEffect(() => {
+  let active = true;
 
+  const loadJobTitles = async () => {
+    try {
+
+      setError("");
+
+      const data = await getJobTitles();
+
+      if (active) {
+        setJobTitles(data);
+      }
+    } catch (err) {
+      if (active) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Không thể tải danh sách chức danh.",
+        );
+      }
+    }
+  };
+
+  void loadJobTitles();
+
+  return () => {
+    active = false;
+  };
+}, []);
   /* =======================================================
      ĐĂNG XUẤT
   ======================================================= */
@@ -187,7 +187,7 @@ function JobTitleSalaryManagement({
      LƯU CHỨC DANH
   ======================================================= */
 
-  const handleSaveJob = () => {
+  const handleSaveJob = async () => {
     const min = Number(minSalary);
     const max = Number(maxSalary);
 
@@ -231,44 +231,52 @@ function JobTitleSalaryManagement({
       setError("Mã chức danh đã tồn tại.");
       return;
     }
+  const payload: JobTitlePayload = {
+  code: code.trim(),
+  name: name.trim(),
+  level: level.trim(),
+  minSalary: min,
+  maxSalary: max,
+};
 
-    if (editingJob) {
-      setJobTitles((current) =>
-        current.map((job) =>
-          job.id === editingJob.id
-            ? {
-                ...job,
-                code: code.trim(),
-                name: name.trim(),
-                level: level.trim(),
-                minSalary: min,
-                maxSalary: max,
-              }
-            : job,
-        ),
-      );
-    } else {
-      setJobTitles((current) => [
-        ...current,
-        {
-          id: `job-${Date.now()}`,
-          code: code.trim(),
-          name: name.trim(),
-          level: level.trim(),
-          minSalary: min,
-          maxSalary: max,
-        },
-      ]);
-    }
+try {
+  setError("");
 
-    closeModal();
+  if (editingJob) {
+    const updated = await updateJobTitle(
+      editingJob.id,
+      payload,
+    );
+
+    setJobTitles((current) =>
+      current.map((job) =>
+        job.id === updated.id ? updated : job,
+      ),
+    );
+  } else {
+    const created = await createJobTitle(payload);
+
+    setJobTitles((current) => [
+      ...current,
+      created,
+    ]);
+  }
+
+  closeModal();
+} catch (err) {
+  setError(
+    err instanceof Error
+      ? err.message
+      : "Không thể lưu chức danh.",
+  );
+}
   };
 
   /* =======================================================
      XÓA CHỨC DANH
   ======================================================= */
 
-  const handleDeleteJob = (job: JobTitle) => {
+  const handleDeleteJob = async (job: JobTitle) => {
     const confirmed = window.confirm(
       `Bạn có chắc muốn xóa chức danh "${job.name}" khỏi danh mục Nhân sự không?`,
     );
@@ -277,9 +285,21 @@ function JobTitleSalaryManagement({
       return;
     }
 
-    setJobTitles((current) =>
-      current.filter((item) => item.id !== job.id),
-    );
+   try {
+  setError("");
+
+  await deleteJobTitle(job.id);
+
+  setJobTitles((current) =>
+    current.filter((item) => item.id !== job.id),
+  );
+} catch (err) {
+  setError(
+    err instanceof Error
+      ? err.message
+      : "Không thể xóa chức danh.",
+  );
+}
   };
 
   /* =======================================================
