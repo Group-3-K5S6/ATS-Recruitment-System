@@ -155,17 +155,23 @@ export class InterviewQuestionService {
           query.competencyFrameworkId;
       }
 
-      // S2-07: lọc theo chức danh
-      if (query.jobId) {
-        where.criterion.framework = {
-          jobMappings: {
+     // S2-07: lọc theo tin tuyển dụng thông qua chức danh
+if (query.jobId) {
+  where.criterion.framework = {
+    jobTitleMappings: {
+      some: {
+        jobTitle: {
+          jobs: {
             some: {
-              jobId: query.jobId,
+              id: query.jobId,
             },
           },
-        };
-      }
-    }
+        },
+      },
+    },
+  };
+ }
+}
 
     // Tìm kiếm nội dung câu hỏi hoặc gợi ý trả lời
     if (query.search) {
@@ -226,8 +232,12 @@ export class InterviewQuestionService {
 static async getLookups() {
   const jobs = await prisma.job.findMany({
     where: {
-      competencyFrameworks: {
-        some: {},
+      jobTitle: {
+        is: {
+          competencyFrameworks: {
+            some: {},
+          },
+        },
       },
     },
 
@@ -235,22 +245,26 @@ static async getLookups() {
       id: true,
       title: true,
 
-      competencyFrameworks: {
+      jobTitle: {
         select: {
-          framework: {
+          competencyFrameworks: {
             select: {
-              id: true,
-              name: true,
-
-              criteria: {
+              framework: {
                 select: {
                   id: true,
                   name: true,
-                  weight: true,
-                },
+                  isActive: true,
 
-                orderBy: {
-                  createdAt: 'asc',
+                  criteria: {
+                    select: {
+                      id: true,
+                      name: true,
+                      weight: true,
+                    },
+                    orderBy: {
+                      createdAt: 'asc',
+                    },
+                  },
                 },
               },
             },
@@ -268,16 +282,17 @@ static async getLookups() {
     id: job.id,
     title: job.title,
 
-    frameworks: job.competencyFrameworks.map(
-      (mapping) => ({
-        id: mapping.framework.id,
-        name: mapping.framework.name,
-        criteria: mapping.framework.criteria,
-      })
-    ),
+    frameworks:
+      job.jobTitle?.competencyFrameworks
+        .map((mapping) => mapping.framework)
+        .filter((framework) => framework.isActive)
+        .map((framework) => ({
+          id: framework.id,
+          name: framework.name,
+          criteria: framework.criteria,
+        })) ?? [],
   }));
 }
-
 
   static async getQuestionById(
     id: string

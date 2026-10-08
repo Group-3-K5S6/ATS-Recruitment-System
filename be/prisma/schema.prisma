@@ -8,17 +8,17 @@ generator client {
 }
 
 model User {
-  id           String  @id @default(uuid())
-  email        String  @unique
-  passwordHash String
-  fullName     String
-  phone        String?
-  jobTitle     String?
+  id              String  @id @default(uuid())
+  email           String  @unique
+  passwordHash    String
+  fullName        String
+  phone           String?
+  jobTitle        String?
   // S2-03 - Ảnh đại diện nhân viên
   avatarImage     Bytes?
   avatarThumbnail Bytes?
-  departmentId String?
-  isActive     Boolean @default(true)
+  departmentId    String?
+  isActive        Boolean @default(true)
 
   // S1-01 - khóa tạm sau 5 lần đăng nhập sai liên tiếp
   failedLoginAttempts Int       @default(0)
@@ -115,7 +115,8 @@ model JobTitle {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  jobs Job[]
+  jobs                 Job[]
+  competencyFrameworks JobTitleCompetencyFramework[]
 }
 
 model Requisition {
@@ -150,14 +151,13 @@ model Job {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  requisition          Requisition?             @relation(fields: [requisitionId], references: [id])
-  department           Department               @relation(fields: [departmentId], references: [id])
-  hiringManager        User                     @relation("HiringManagerJobs", fields: [hiringManagerId], references: [id])
-  recruiter            User?                    @relation("RecruiterJobs", fields: [recruiterId], references: [id])
-  jobTitle             JobTitle?                 @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
-  applications         Application[]
-  competencyFrameworks JobCompetencyFramework[]
-  interviewQuestions   InterviewQuestion[]
+  requisition        Requisition?        @relation(fields: [requisitionId], references: [id])
+  department         Department          @relation(fields: [departmentId], references: [id])
+  hiringManager      User                @relation("HiringManagerJobs", fields: [hiringManagerId], references: [id])
+  recruiter          User?               @relation("RecruiterJobs", fields: [recruiterId], references: [id])
+  jobTitle           JobTitle?           @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
+  applications       Application[]
+  interviewQuestions InterviewQuestion[]
 }
 
 model Candidate {
@@ -309,8 +309,8 @@ model CompetencyFramework {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  criteria    CompetencyCriterion[]
-  jobMappings JobCompetencyFramework[]
+  criteria         CompetencyCriterion[]
+  jobTitleMappings JobTitleCompetencyFramework[]
 }
 
 // S2-06 - Tiêu chí trong khung năng lực
@@ -330,15 +330,15 @@ model CompetencyCriterion {
 }
 
 // Liên kết chức danh với khung năng lực
-model JobCompetencyFramework {
-  jobId       String
+model JobTitleCompetencyFramework {
+  jobTitleId  String
   frameworkId String
   createdAt   DateTime @default(now())
 
-  job       Job                 @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobTitle  JobTitle            @relation(fields: [jobTitleId], references: [id], onDelete: Cascade)
   framework CompetencyFramework @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
 
-  @@id([jobId, frameworkId])
+  @@id([jobTitleId, frameworkId])
   @@index([frameworkId])
 }
 
@@ -361,15 +361,15 @@ model InterviewQuestion {
 }
 
 model CompanyProfile {
-  id          String   @id @default("default")
-  companyName String   @default("")
-  tagline     String   @default("")
-  introduction String  @default("")
-  culture     String   @default("")
-  benefits    String   @default("")
-  website     String   @default("")
-  contactEmail String  @default("")
-  location    String   @default("")
-  isPublished Boolean  @default(false)
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default("default")
+  companyName  String   @default("")
+  tagline      String   @default("")
+  introduction String   @default("")
+  culture      String   @default("")
+  benefits     String   @default("")
+  website      String   @default("")
+  contactEmail String   @default("")
+  location     String   @default("")
+  isPublished  Boolean  @default(false)
+  updatedAt    DateTime @updatedAt
 }
