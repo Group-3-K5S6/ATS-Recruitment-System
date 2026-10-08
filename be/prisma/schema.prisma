@@ -116,6 +116,7 @@ model JobTitle {
   updatedAt DateTime @updatedAt
 
   jobs Job[]
+  requisitions Requisition[]
 }
 
 model Requisition {
@@ -124,6 +125,14 @@ model Requisition {
   departmentId    String
   hiringManagerId String
   approverId      String?
+  jobTitleId         String?
+  reason             String?
+  proposedSalaryMin  Float?
+  proposedSalaryMax  Float?
+  targetDate         DateTime?
+  description        String?
+  requirements       String?
+  salaryExplanation  String?
   status          String   @default("DRAFT")
   headcount       Int      @default(1)
   budget          Float?
@@ -133,6 +142,7 @@ model Requisition {
   department    Department @relation(fields: [departmentId], references: [id])
   hiringManager User       @relation("HiringManagerRequisitions", fields: [hiringManagerId], references: [id])
   approver      User?      @relation("ApproverRequisitions", fields: [approverId], references: [id])
+  jobTitle JobTitle? @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
   jobs          Job[]
 }
 
