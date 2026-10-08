@@ -50,7 +50,7 @@ describe('5. Role-Based Navigation Menu & Authorization API (GET /api/auth/me/me
   });
 
   describe('ADMIN Role Menu Retrieval', () => {
-    it('returns all 10 internal menus for ADMIN', async () => {
+    it('returns all permitted internal menus for ADMIN', async () => {
       const res = await request(app)
         .get('/api/auth/me/menu')
         .set(authHeader(adminToken));
@@ -73,6 +73,10 @@ describe('5. Role-Based Navigation Menu & Authorization API (GET /api/auth/me/me
         'reports',
         'users',
         'audit-logs',
+        'departments',
+'competency-frameworks',
+'company-profile',
+'company-config',
       ]);
 
       // Admin must NOT see candidate-specific portal links
@@ -112,6 +116,12 @@ describe('5. Role-Based Navigation Menu & Authorization API (GET /api/auth/me/me
         'reports',
         'users',
         'audit-logs',
+        'departments',
+'job-titles',
+'competency-frameworks',
+'interview-question-bank',
+'recruitment-shared-categories',
+'company-profile',
       ]);
 
       // HR Manager can view audit-logs and users

@@ -284,4 +284,85 @@ export const MENU_REGISTRY: MenuItemConfig[] = [
     requiredPermissions: [PermissionCode.OFFERS_READ],
     children: [],
   },
+
+    // 15. Phòng ban & tổ chức
+  {
+    key: 'departments',
+    label: 'Phòng ban & tổ chức',
+    path: '/departments',
+    icon: 'building',
+    order: 30,
+    requiredRoles: [RoleType.HR_MANAGER, RoleType.ADMIN],
+    requiredPermissions: [PermissionCode.ORGANIZATION_WRITE],
+    children: [],
+  },
+
+  // 16. Chức danh & dải lương
+  // API quản lý dải lương hiện chỉ cho HR_MANAGER.
+  {
+    key: 'job-titles',
+    label: 'Chức danh & dải lương',
+    path: '/job-titles',
+    icon: 'briefcase',
+    order: 31,
+    requiredRoles: [RoleType.HR_MANAGER],
+    children: [],
+  },
+
+  // 17. Khung năng lực
+  {
+    key: 'competency-frameworks',
+    label: 'Khung năng lực',
+    path: '/competency-frameworks',
+    icon: 'clipboard-check',
+    order: 32,
+    requiredRoles: [RoleType.HR_MANAGER, RoleType.ADMIN],
+    requiredPermissions: [PermissionCode.COMPETENCY_FRAMEWORKS_READ],
+    children: [],
+  },
+
+  // 18. Ngân hàng câu hỏi phỏng vấn
+  {
+    key: 'interview-question-bank',
+    label: 'Ngân hàng câu hỏi phỏng vấn',
+    path: '/interview-question-bank',
+    icon: 'help-circle',
+    order: 33,
+    requiredRoles: [RoleType.HR_MANAGER],
+    requiredPermissions: [PermissionCode.INTERVIEW_QUESTIONS_READ],
+    children: [],
+  },
+
+  // 19. Danh mục dùng chung tuyển dụng
+  {
+    key: 'recruitment-shared-categories',
+    label: 'Danh mục dùng chung tuyển dụng',
+    path: '/recruitment-shared-categories',
+    icon: 'list',
+    order: 34,
+    requiredRoles: [RoleType.HR_MANAGER],
+    children: [],
+  },
+
+  // 20. Trang giới thiệu công ty
+  {
+    key: 'company-profile',
+    label: 'Trang giới thiệu công ty',
+    path: '/company-profile',
+    icon: 'building',
+    order: 35,
+    requiredRoles: [RoleType.HR_MANAGER, RoleType.ADMIN],
+    children: [],
+  },
+
+  // 21. Cấu hình hệ thống
+  {
+    key: 'company-config',
+    label: 'Cấu hình',
+    path: '/company-config',
+    icon: 'settings',
+    order: 36,
+    requiredRoles: [RoleType.ADMIN],
+    children: [],
+  },
 ];
