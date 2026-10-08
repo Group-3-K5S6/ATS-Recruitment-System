@@ -27,9 +27,10 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  department Department? @relation(fields: [departmentId], references: [id])
-  roles      UserRole[]
-  auditLogs  AuditLog[]
+  department         Department?  @relation(fields: [departmentId], references: [id])
+  managedDepartments Department[] @relation("DepartmentManager")
+  roles              UserRole[]
+  auditLogs          AuditLog[]
 
   candidateProfile     Candidate?
   managedRequisitions  Requisition[] @relation("HiringManagerRequisitions")
@@ -83,9 +84,19 @@ model RolePermission {
 }
 
 model Department {
-  id           String        @id @default(uuid())
-  name         String
-  code         String        @unique
+  id   String @id @default(uuid())
+  name String
+  code String @unique
+
+  parentId String?
+  parent   Department?  @relation("DepartmentHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children Department[] @relation("DepartmentHierarchy")
+
+  managerId String?
+  manager   User?   @relation("DepartmentManager", fields: [managerId], references: [id], onDelete: Restrict)
+
+  isActive Boolean @default(true)
+
   users        User[]
   requisitions Requisition[]
   jobs         Job[]
