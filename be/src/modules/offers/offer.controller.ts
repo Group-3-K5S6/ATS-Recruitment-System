@@ -25,6 +25,22 @@ export const approveOfferSchema = z.object({
   notes: z.string().optional(),
 });
 
+async function getSalaryBandForApplication(applicationId: string) {
+  const application = await prisma.application.findUnique({
+    where: { id: applicationId },
+    include: { job: { include: { jobTitle: true } } },
+  });
+  if (!application) return { error: 'Không tìm thấy hồ sơ ứng tuyển.', status: 404 } as const;
+  if (!application.job.jobTitle) {
+    return { error: 'Tin tuyển dụng chưa được gắn chức danh có dải lương.', status: 409 } as const;
+  }
+  return { band: application.job.jobTitle } as const;
+}
+
+function salaryWithinBand(salary: number, band: { minSalary: number; maxSalary: number }): boolean {
+  return salary >= band.minSalary && salary <= band.maxSalary;
+}
+
 export class OfferController {
   static async list(req: Request, res: Response): Promise<void> {
     const user = req.user!;
@@ -125,6 +141,16 @@ export class OfferController {
       return;
     }
 
+    const salaryBand = await getSalaryBandForApplication(data.applicationId);
+    if ('error' in salaryBand && salaryBand.error) {
+      errorResponse(res, salaryBand.error, salaryBand.status, 'SALARY_BAND_REQUIRED');
+      return;
+    }
+    if (!salaryWithinBand(data.baseSalary, salaryBand.band)) {
+      errorResponse(res, 'Mức lương offer nằm ngoài dải được phép cho chức danh này.', 400, 'SALARY_OUT_OF_RANGE');
+      return;
+    }
+
     const offer = await prisma.offer.create({
       data: {
         applicationId: data.applicationId,
@@ -147,6 +173,27 @@ export class OfferController {
   static async update(req: Request, res: Response): Promise<void> {
     const { id } = req.params;
 
+    const existing = await prisma.offer.findUnique({
+      where: { id },
+      include: { application: { include: { job: { include: { jobTitle: true } } } } },
+    });
+    if (!existing) {
+      errorResponse(res, 'Offer not found.', 404, 'NOT_FOUND');
+      return;
+    }
+    const mustCheckSalary = req.body.baseSalary !== undefined || ['PENDING_APPROVAL', 'APPROVED'].includes(req.body.status);
+    if (mustCheckSalary) {
+      const band = existing.application.job.jobTitle;
+      if (!band) {
+        errorResponse(res, 'Tin tuyển dụng chưa được gắn chức danh có dải lương.', 409, 'SALARY_BAND_REQUIRED');
+        return;
+      }
+      if (!salaryWithinBand(req.body.baseSalary ?? existing.baseSalary, band)) {
+        errorResponse(res, 'Mức lương offer nằm ngoài dải được phép cho chức danh này.', 400, 'SALARY_OUT_OF_RANGE');
+        return;
+      }
+    }
+
     const updated = await prisma.offer.update({
       where: { id },
       data: req.body,
@@ -165,6 +212,24 @@ export class OfferController {
     const canApprove = await OfferPolicy.canApprove(user, id);
     if (!canApprove) {
       errorResponse(res, 'Access denied. You are not authorized to approve this offer.', 403, 'FORBIDDEN_SCOPE');
+      return;
+    }
+
+    const offerForApproval = await prisma.offer.findUnique({
+      where: { id },
+      include: { application: { include: { job: { include: { jobTitle: true } } } } },
+    });
+    if (!offerForApproval) {
+      errorResponse(res, 'Offer not found.', 404, 'NOT_FOUND');
+      return;
+    }
+    const band = offerForApproval.application.job.jobTitle;
+    if (!band) {
+      errorResponse(res, 'Tin tuyển dụng chưa được gắn chức danh có dải lương.', 409, 'SALARY_BAND_REQUIRED');
+      return;
+    }
+    if (decision === 'APPROVE' && !salaryWithinBand(offerForApproval.baseSalary, band)) {
+      errorResponse(res, 'Không thể duyệt offer nằm ngoài dải được phép cho chức danh này.', 400, 'SALARY_OUT_OF_RANGE');
       return;
     }
 

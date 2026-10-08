@@ -17,6 +17,7 @@ import userRoutes from './modules/users/user.routes';
 import auditLogRoutes from './modules/audit-logs/audit-log.routes';
 import menuRoutes from './modules/menu/menu.routes';
 import interviewQuestionRoutes from './modules/interview-questions/interview-question.routes';
+import jobTitleRoutes from './modules/job-titles/job-title.routes';
 import departmentRoutes from './modules/departments/department.routes';
 import companyProfileRoutes from './modules/company-profile/company-profile.routes';
 
@@ -38,6 +39,7 @@ export function createApp() {
   app.use('/api/candidates', candidateRoutes);
   app.use('/api/requisitions', requisitionRoutes);
   app.use('/api/jobs', jobRoutes);
+  app.use('/api/job-titles', jobTitleRoutes);
   app.use('/api/interviews', interviewRoutes);
   app.use('/api/evaluations', evaluationRoutes);
   app.use('/api/offers', offerRoutes);
