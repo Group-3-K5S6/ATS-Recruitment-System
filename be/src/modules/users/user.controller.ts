@@ -9,6 +9,9 @@ import { hashPassword } from '../../utils/password';
 
 import { randomUUID } from 'crypto';
 
+import sharp from "sharp";
+import { UploadedAvatarRequest } from "./avatar-upload";
+
 import {
   successResponse,
   errorResponse,
@@ -97,6 +100,204 @@ export const assignRolesSchema = z.object({
 
 
 export class UserController {
+
+  private static readonly avatarMaxPixels = 40_000_000;
+
+  private static isInternalEmployee(req: Request): boolean {
+    return Boolean(
+      req.user?.roles.some((role) => role !== RoleType.CANDIDATE),
+    );
+  }
+
+  // S2-03 - Tải ảnh đại diện của chính người dùng
+  static async uploadOwnAvatar(
+    req: Request,
+    res: Response,
+  ): Promise<void> {
+    if (!UserController.isInternalEmployee(req)) {
+      errorResponse(
+        res,
+        "Chỉ nhân viên nội bộ mới được cập nhật ảnh đại diện.",
+        403,
+        "FORBIDDEN_ROLE",
+      );
+      return;
+    }
+
+    const file = (req as UploadedAvatarRequest).file;
+
+    if (!file) {
+      errorResponse(
+        res,
+        "Vui lòng chọn ảnh JPG hoặc PNG.",
+        400,
+        "AVATAR_REQUIRED",
+      );
+      return;
+    }
+
+    try {
+      const metadata = await sharp(file.buffer, {
+        limitInputPixels: UserController.avatarMaxPixels,
+        failOn: "error",
+      }).metadata();
+
+      const validImage =
+        (metadata.format === "jpeg" &&
+          file.mimetype === "image/jpeg") ||
+        (metadata.format === "png" &&
+          file.mimetype === "image/png");
+
+      if (!validImage) {
+        errorResponse(
+          res,
+          "Tệp phải là ảnh JPG hoặc PNG hợp lệ.",
+          415,
+          "INVALID_IMAGE",
+        );
+        return;
+      }
+
+      const [avatarImage, avatarThumbnail] =
+        await Promise.all([
+          sharp(file.buffer, {
+            limitInputPixels:
+              UserController.avatarMaxPixels,
+          })
+            .rotate()
+            .resize(512, 512, {
+              fit: "cover",
+              position: "attention",
+            })
+            .webp({ quality: 84 })
+            .toBuffer(),
+
+          sharp(file.buffer, {
+            limitInputPixels:
+              UserController.avatarMaxPixels,
+          })
+            .rotate()
+            .resize(96, 96, {
+              fit: "cover",
+              position: "attention",
+            })
+            .webp({ quality: 78 })
+            .toBuffer(),
+        ]);
+
+      await prisma.user.update({
+        where: {
+          id: req.user!.id,
+        },
+        data: {
+          avatarImage,
+          avatarThumbnail,
+        },
+      });
+
+      await recordRequestAudit(
+        req,
+        AuditAction.USER_UPDATED,
+        "user",
+        req.user!.id,
+        {
+          changedField: "avatar",
+          sourceFormat: metadata.format,
+        },
+      );
+
+      successResponse(
+        res,
+        {
+          hasAvatar: true,
+        },
+        200,
+        "Cập nhật ảnh đại diện thành công.",
+      );
+    } catch (error) {
+      console.error(
+        "[Avatar processing error]:",
+        error instanceof Error
+          ? error.message
+          : error,
+      );
+
+      errorResponse(
+        res,
+        "Không thể xử lý ảnh. Vui lòng chọn ảnh JPG hoặc PNG hợp lệ.",
+        400,
+        "INVALID_IMAGE",
+      );
+    }
+  }
+
+  // S2-03 - Xem ảnh đại diện của chính người dùng
+  static async getOwnAvatar(
+    req: Request,
+    res: Response,
+  ): Promise<void> {
+    if (!UserController.isInternalEmployee(req)) {
+      errorResponse(
+        res,
+        "Chỉ nhân viên nội bộ mới được xem ảnh đại diện.",
+        403,
+        "FORBIDDEN_ROLE",
+      );
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: {
+        id: req.user!.id,
+      },
+      select: {
+        avatarImage: true,
+        avatarThumbnail: true,
+      },
+    });
+
+    if (!user) {
+      errorResponse(
+        res,
+        "Không tìm thấy người dùng.",
+        404,
+        "NOT_FOUND",
+      );
+      return;
+    }
+
+    const image =
+      req.query.size === "thumbnail"
+        ? user.avatarThumbnail
+        : user.avatarImage;
+
+    if (!image) {
+      errorResponse(
+        res,
+        "Người dùng chưa có ảnh đại diện.",
+        404,
+        "AVATAR_NOT_FOUND",
+      );
+      return;
+    }
+
+    res.setHeader("Content-Type", "image/webp");
+    res.setHeader(
+  "Cache-Control",
+  "private, no-store, no-cache, must-revalidate",
+);
+
+res.setHeader(
+  "Vary",
+  "Authorization",
+);
+    res.setHeader(
+      "X-Content-Type-Options",
+      "nosniff",
+    );
+
+    res.send(Buffer.from(image));
+  }
 
 static async getProfile(
   req: Request,
