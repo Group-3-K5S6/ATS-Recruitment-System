@@ -190,10 +190,47 @@ if (resetTestEmail) {
     },
   });
 
+  // Job Titles dùng cho dữ liệu mẫu S2-05/S2-06
+  const backendJobTitle = await prisma.jobTitle.upsert({
+    where: { code: 'IT-BE-03' },
+    update: {
+      name: 'Lập trình viên Backend',
+      level: 'Chuyên viên cao cấp',
+      minSalary: 30000000,
+      maxSalary: 45000000,
+    },
+    create: {
+      code: 'IT-BE-03',
+      name: 'Lập trình viên Backend',
+      level: 'Chuyên viên cao cấp',
+      minSalary: 30000000,
+      maxSalary: 45000000,
+    },
+  });
+
+  const marketingJobTitle = await prisma.jobTitle.upsert({
+    where: { code: 'MKT-SPE-02' },
+    update: {
+      name: 'Chuyên viên Marketing',
+      level: 'Chuyên viên',
+      minSalary: 15000000,
+      maxSalary: 25000000,
+    },
+    create: {
+      code: 'MKT-SPE-02',
+      name: 'Chuyên viên Marketing',
+      level: 'Chuyên viên',
+      minSalary: 15000000,
+      maxSalary: 25000000,
+    },
+  });
+
   // 7. Seed Sample Jobs
   const jobEng = await prisma.job.upsert({
     where: { id: 'job-eng-001' },
-    update: {},
+    update: {
+  jobTitleId: backendJobTitle.id,
+},
     create: {
       id: 'job-eng-001',
       title: 'Senior Backend Engineer (NodeJS/TypeScript)',
@@ -201,6 +238,7 @@ if (resetTestEmail) {
       departmentId: engDept.id,
       hiringManagerId: hmEng.id,
       recruiterId: recruiter1.id,
+      jobTitleId: backendJobTitle.id,
       status: 'PUBLISHED',
       description: 'Phát triển backend microservices và hệ thống RBAC an toàn.',
       location: 'Hanoi',
@@ -209,7 +247,9 @@ if (resetTestEmail) {
 
   const jobMkt = await prisma.job.upsert({
     where: { id: 'job-mkt-001' },
-    update: {},
+    update: {
+  jobTitleId: marketingJobTitle.id,
+},
     create: {
       id: 'job-mkt-001',
       title: 'Marketing Campaign Lead',
@@ -217,6 +257,7 @@ if (resetTestEmail) {
       departmentId: mktDept.id,
       hiringManagerId: hmMkt.id,
       recruiterId: recruiter2.id,
+      jobTitleId: marketingJobTitle.id,
       status: 'DRAFT',
       description: 'Lập chiến lược truyền thông và tuyển dụng nội bộ.',
       location: 'Hanoi',
@@ -350,14 +391,19 @@ if (resetTestEmail) {
     },
   });
 
-  await prisma.jobCompetencyFramework.upsert({
-    where: { jobId_frameworkId: { jobId: jobEng.id, frameworkId: framework1.id } },
-    update: {},
-    create: {
-      jobId: jobEng.id,
+  await prisma.jobTitleCompetencyFramework.upsert({
+  where: {
+    jobTitleId_frameworkId: {
+      jobTitleId: jobEng.jobTitleId!,
       frameworkId: framework1.id,
     },
-  });
+  },
+  update: {},
+  create: {
+    jobTitleId: jobEng.jobTitleId!,
+    frameworkId: framework1.id,
+  },
+});
 
   await prisma.interviewQuestion.upsert({
     where: { id: 'iq-node-001' },
@@ -372,18 +418,19 @@ if (resetTestEmail) {
     },
   });
 
-  await prisma.interviewQuestion.upsert({
-    where: { id: 'iq-sys-001' },
-    update: {},
-    create: {
-      id: 'iq-sys-001',
-      question: 'Làm thế nào để đảm bảo tính nhất quán dữ liệu trong Microservices?',
-      difficulty: 'HARD',
-      suggestedAnswer: 'Ứng viên đề cập đến các pattern như Saga, 2PC, Event Sourcing, Outbox Pattern.',
-      competencyCriterionId: criterion2.id,
-      jobId: jobEng.id,
-    },
-  });
+ await prisma.interviewQuestion.upsert({
+  where: { id: 'iq-sys-001' },
+  update: {},
+  create: {
+    id: 'iq-sys-001',
+    question: 'Làm thế nào để đảm bảo tính nhất quán dữ liệu trong Microservices?',
+    difficulty: 'HARD',
+    suggestedAnswer:
+      'Ứng viên đề cập đến các pattern như Saga, 2PC, Event Sourcing, Outbox Pattern.',
+    competencyCriterionId: criterion2.id,
+    jobId: jobEng.id,
+  },
+});
 
   // 10. Seed Offer
   await prisma.offer.upsert({
