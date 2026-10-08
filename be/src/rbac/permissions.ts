@@ -29,7 +29,13 @@ export enum PermissionCode {
   INTERVIEWS_UPDATE = 'interviews:update',
   INTERVIEWS_DELETE = 'interviews:delete',
 
-INTERVIEW_QUESTIONS_READ = 'interview_questions:read',
+  // Competency Framework - S2-06
+  COMPETENCY_FRAMEWORKS_READ = 'competency_frameworks:read',
+  COMPETENCY_FRAMEWORKS_CREATE = 'competency_frameworks:create',
+  COMPETENCY_FRAMEWORKS_UPDATE = 'competency_frameworks:update',
+  COMPETENCY_FRAMEWORKS_DELETE = 'competency_frameworks:delete',
+
+  INTERVIEW_QUESTIONS_READ = 'interview_questions:read',
 INTERVIEW_QUESTIONS_CREATE = 'interview_questions:create',
 INTERVIEW_QUESTIONS_UPDATE = 'interview_questions:update',
 INTERVIEW_QUESTIONS_DELETE = 'interview_questions:delete',
@@ -103,6 +109,28 @@ export const ALL_PERMISSIONS: PermissionDefinition[] = [
   { code: PermissionCode.INTERVIEWS_UPDATE, module: 'interviews', description: 'Cập nhật lịch phỏng vấn' },
   { code: PermissionCode.INTERVIEWS_DELETE, module: 'interviews', description: 'Hủy lịch phỏng vấn' },
          
+  // Competency Framework - S2-06
+  {
+    code: PermissionCode.COMPETENCY_FRAMEWORKS_READ,
+    module: 'competency_frameworks',
+    description: 'Xem khung năng lực và tiêu chí',
+  },
+  {
+    code: PermissionCode.COMPETENCY_FRAMEWORKS_CREATE,
+    module: 'competency_frameworks',
+    description: 'Tạo khung năng lực mới',
+  },
+  {
+    code: PermissionCode.COMPETENCY_FRAMEWORKS_UPDATE,
+    module: 'competency_frameworks',
+    description: 'Cập nhật khung năng lực, tiêu chí và gán chức danh',
+  },
+  {
+    code: PermissionCode.COMPETENCY_FRAMEWORKS_DELETE,
+    module: 'competency_frameworks',
+    description: 'Xóa hoặc vô hiệu hóa khung năng lực',
+  },
+
   // Interview Question Bank - S2-07
 {
   code: PermissionCode.INTERVIEW_QUESTIONS_READ,

@@ -20,6 +20,7 @@ export const ROLE_PERMISSIONS: Record<RoleType, PermissionCode[]> = {
     PermissionCode.EVALUATIONS_CREATE,
     PermissionCode.EVALUATIONS_UPDATE,
     PermissionCode.NOTIFICATIONS_READ,
+    PermissionCode.COMPETENCY_FRAMEWORKS_READ,
   ],
 
   [RoleType.HIRING_MANAGER]: [
@@ -34,6 +35,7 @@ export const ROLE_PERMISSIONS: Record<RoleType, PermissionCode[]> = {
     PermissionCode.OFFERS_READ,
     PermissionCode.NOTIFICATIONS_READ,
     PermissionCode.REPORTS_READ,
+    PermissionCode.COMPETENCY_FRAMEWORKS_READ,
   ],
 
   [RoleType.RECRUITER]: [
@@ -60,6 +62,7 @@ export const ROLE_PERMISSIONS: Record<RoleType, PermissionCode[]> = {
     PermissionCode.NOTIFICATIONS_READ,
     PermissionCode.NOTIFICATIONS_MANAGE,
     PermissionCode.REPORTS_READ,
+    PermissionCode.COMPETENCY_FRAMEWORKS_READ,
   ],
 
   [RoleType.APPROVER]: [
@@ -109,6 +112,10 @@ export const ROLE_PERMISSIONS: Record<RoleType, PermissionCode[]> = {
     PermissionCode.USERS_READ,
     PermissionCode.ROLES_READ,
     PermissionCode.AUDIT_LOGS_READ,
+    PermissionCode.COMPETENCY_FRAMEWORKS_READ,
+    PermissionCode.COMPETENCY_FRAMEWORKS_CREATE,
+    PermissionCode.COMPETENCY_FRAMEWORKS_UPDATE,
+    PermissionCode.COMPETENCY_FRAMEWORKS_DELETE,
     PermissionCode.INTERVIEW_QUESTIONS_READ,
     PermissionCode.INTERVIEW_QUESTIONS_CREATE,
     PermissionCode.INTERVIEW_QUESTIONS_UPDATE,
@@ -154,5 +161,9 @@ export const ROLE_PERMISSIONS: Record<RoleType, PermissionCode[]> = {
     PermissionCode.ROLES_READ,
     PermissionCode.ROLES_UPDATE,
     PermissionCode.AUDIT_LOGS_READ,
+    PermissionCode.COMPETENCY_FRAMEWORKS_READ,
+    PermissionCode.COMPETENCY_FRAMEWORKS_CREATE,
+    PermissionCode.COMPETENCY_FRAMEWORKS_UPDATE,
+    PermissionCode.COMPETENCY_FRAMEWORKS_DELETE,
   ],
 };
