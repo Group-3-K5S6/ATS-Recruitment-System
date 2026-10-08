@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { uploadAvatar } from "./avatar-upload";
 
 import {
   UserController,
@@ -17,6 +18,18 @@ import { PermissionCode } from '../../rbac/permissions';
 const router = Router();
 
 router.use(authenticate);
+
+// S2-03 - Ảnh đại diện cá nhân
+router.get(
+  "/me/avatar",
+  UserController.getOwnAvatar,
+);
+
+router.post(
+  "/me/avatar",
+  uploadAvatar,
+  UserController.uploadOwnAvatar,
+);
 
 // S2-02 - Xem hồ sơ cá nhân
 router.get(
