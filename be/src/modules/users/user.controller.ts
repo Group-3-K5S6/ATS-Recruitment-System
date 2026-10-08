@@ -7,6 +7,8 @@ import { UserPolicy } from '../../policies/user.policy';
 
 import { hashPassword } from '../../utils/password';
 
+import { randomUUID } from 'crypto';
+
 import {
   successResponse,
   errorResponse,
@@ -42,6 +44,43 @@ export const createUserSchema = z.object({
     .min(1),
 });
 
+export const importEmployeeRowSchema = z.object({
+  HoTen: z.string().optional().default(""),
+  Email: z.string().optional().default(""),
+  PhongBan: z.string().optional().default(""),
+  ChucVu: z.string().optional().default(""),
+  SoDienThoai: z.string().optional().default(""),
+  rowNumber: z.number().optional(),
+});
+
+export const importPayloadSchema = z.object({
+  employees: z.array(importEmployeeRowSchema).min(1),
+});
+
+export const updateProfileSchema = z
+  .object({
+    fullName: z
+      .string()
+      .trim()
+      .min(2, "Họ tên phải có ít nhất 2 ký tự")
+      .optional(),
+
+    phone: z
+      .string()
+      .trim()
+      .regex(
+        /^(?:\+?84|0)(?:3|5|7|8|9)\d{8}$/,
+        "Số điện thoại Việt Nam không hợp lệ",
+      )
+      .optional(),
+
+    jobTitle: z
+      .string()
+      .trim()
+      .min(1, "Chức danh hiển thị không được để trống")
+      .optional(),
+  })
+  .strict();
 
 export const updateUserSchema = z.object({
   email: z.string().email(),
@@ -58,6 +97,147 @@ export const assignRolesSchema = z.object({
 
 
 export class UserController {
+
+static async getProfile(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const user = req.user!;
+
+  const profile = await prisma.user.findUnique({
+    where: {
+      id: user.id,
+    },
+    select: {
+      id: true,
+      email: true,
+      fullName: true,
+      phone: true,
+      jobTitle: true,
+      departmentId: true,
+      department: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      roles: {
+        select: {
+          role: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!profile) {
+    errorResponse(
+      res,
+      "Không tìm thấy hồ sơ người dùng.",
+      404,
+      "USER_NOT_FOUND",
+    );
+    return;
+  }
+
+  successResponse(
+    res,
+    {
+      ...profile,
+      roles: profile.roles.map(
+        (item) => item.role.name,
+      ),
+    },
+    200,
+  );
+}
+
+static async updateProfile(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const user = req.user!;
+
+  const {
+    fullName,
+    phone,
+    jobTitle,
+  } = req.body;
+
+  const updateData: {
+    fullName?: string;
+    phone?: string;
+    jobTitle?: string;
+  } = {};
+
+  if (fullName !== undefined) {
+    updateData.fullName = fullName;
+  }
+
+  if (phone !== undefined) {
+    updateData.phone = phone;
+  }
+
+  if (jobTitle !== undefined) {
+    updateData.jobTitle = jobTitle;
+  }
+
+  const updated =
+    await prisma.user.update({
+      where: {
+        id: user.id,
+      },
+      data: updateData,
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        phone: true,
+        jobTitle: true,
+        departmentId: true,
+        department: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        roles: {
+          select: {
+            role: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+  await recordRequestAudit(
+    req,
+    AuditAction.USER_UPDATED,
+    "user",
+    user.id,
+    {
+      updatedFields: Object.keys(updateData),
+    },
+  );
+
+  successResponse(
+    res,
+    {
+      ...updated,
+      roles: updated.roles.map(
+        (item) => item.role.name,
+      ),
+    },
+    200,
+    "Cập nhật hồ sơ cá nhân thành công.",
+  );
+}
 
   /*
    * =========================================
@@ -825,6 +1005,364 @@ export class UserController {
       updated,
       200,
       'User account has been enabled.'
+    );
+  }
+    static async previewImport(
+    req: Request,
+    res: Response
+  ): Promise<void> {
+    const user = req.user!;
+
+    if (!UserPolicy.canManageUsers(user)) {
+      errorResponse(
+        res,
+        "Bạn không có quyền nhập danh sách nhân sự.",
+        403,
+        "FORBIDDEN_ROLE"
+      );
+      return;
+    }
+
+    const { employees } = req.body;
+
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    const phonePattern = /^(?:\+?84|0)(?:3|5|7|8|9)\d{8}$/;
+
+    const existingUsers = await prisma.user.findMany({
+      select: {
+        email: true,
+      },
+    });
+
+    const existingEmails = new Set(
+      existingUsers.map((item) => item.email.toLowerCase())
+    );
+
+    const departments = await prisma.department.findMany({
+      select: {
+        id: true,
+        name: true,
+      },
+    });
+
+    const departmentNames = new Set(
+      departments.map((item) =>
+        item.name.trim().toLowerCase()
+      )
+    );
+
+    const seenEmails = new Set<string>();
+
+    const rows = employees.map(
+      (employee: any, index: number) => {
+        const errors: string[] = [];
+
+        const rowNumber =
+          employee.rowNumber ?? index + 2;
+
+        const fullName = String(
+          employee.HoTen ?? ""
+        ).trim();
+
+        const email = String(
+          employee.Email ?? ""
+        )
+          .trim()
+          .toLowerCase();
+
+        const departmentName = String(
+          employee.PhongBan ?? ""
+        ).trim();
+
+        const jobTitle = String(
+          employee.ChucVu ?? ""
+        ).trim();
+
+        const phone = String(
+          employee.SoDienThoai ?? ""
+        ).replace(/[\s().-]/g, "");
+
+        if (!fullName) {
+          errors.push("Thiếu họ tên");
+        }
+
+        if (!email || !emailPattern.test(email)) {
+          errors.push("Email sai định dạng");
+        } else if (existingEmails.has(email)) {
+          errors.push(
+            "Email đã tồn tại trong hệ thống"
+          );
+        } else if (seenEmails.has(email)) {
+          errors.push("Email bị trùng trong tệp");
+        } else {
+          seenEmails.add(email);
+        }
+
+        if (!departmentName) {
+          errors.push("Thiếu phòng ban");
+        } else if (
+          !departmentNames.has(
+            departmentName.toLowerCase()
+          )
+        ) {
+          errors.push(
+            "Phòng ban chưa tồn tại trong hệ thống"
+          );
+        }
+
+        if (!jobTitle) {
+          errors.push("Thiếu chức vụ");
+        }
+
+        if (!phone || !phonePattern.test(phone)) {
+          errors.push(
+            "Số điện thoại không hợp lệ"
+          );
+        }
+
+        return {
+          rowNumber,
+          HoTen: employee.HoTen,
+          Email: employee.Email,
+          PhongBan: employee.PhongBan,
+          ChucVu: employee.ChucVu,
+          SoDienThoai: employee.SoDienThoai,
+          errors,
+          isValid: errors.length === 0,
+        };
+      }
+    );
+
+    const validCount = rows.filter(
+      (row: any) => row.isValid
+    ).length;
+
+    successResponse(
+      res,
+      {
+        total: rows.length,
+        validCount,
+        invalidCount:
+          rows.length - validCount,
+        rows,
+      },
+      200
+    );
+  }
+
+  static async importUsers(
+    req: Request,
+    res: Response
+  ): Promise<void> {
+    const user = req.user!;
+
+    if (!UserPolicy.canManageUsers(user)) {
+      errorResponse(
+        res,
+        "Bạn không có quyền nhập danh sách nhân sự.",
+        403,
+        "FORBIDDEN_ROLE"
+      );
+      return;
+    }
+
+    const { employees } = req.body;
+
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    const phonePattern =
+      /^(?:\+?84|0)(?:3|5|7|8|9)\d{8}$/;
+
+    const existingUsers =
+      await prisma.user.findMany({
+        select: {
+          email: true,
+        },
+      });
+
+    const existingEmails = new Set(
+      existingUsers.map((item) =>
+        item.email.toLowerCase()
+      )
+    );
+
+    const departments =
+      await prisma.department.findMany({
+        select: {
+          id: true,
+          name: true,
+        },
+      });
+
+    const departmentMap = new Map(
+      departments.map((item) => [
+        item.name.trim().toLowerCase(),
+        item,
+      ])
+    );
+
+    const seenEmails = new Set<string>();
+
+    const createdUsers: Array<{
+      id: string;
+      email: string;
+      fullName: string;
+      departmentId: string | null;
+    }> = [];
+
+    const failedRows: Array<{
+      rowNumber: number;
+      email: string;
+      errors: string[];
+    }> = [];
+
+    for (
+      let index = 0;
+      index < employees.length;
+      index++
+    ) {
+      const employee = employees[index];
+
+      const rowNumber =
+        employee.rowNumber ?? index + 2;
+
+      const errors: string[] = [];
+
+      const fullName = String(
+        employee.HoTen ?? ""
+      ).trim();
+
+      const email = String(
+        employee.Email ?? ""
+      )
+        .trim()
+        .toLowerCase();
+
+      const departmentName = String(
+        employee.PhongBan ?? ""
+      ).trim();
+
+      const jobTitle = String(
+        employee.ChucVu ?? ""
+      ).trim();
+
+      const phone = String(
+        employee.SoDienThoai ?? ""
+      ).replace(/[\s().-]/g, "");
+
+      if (!fullName) {
+        errors.push("Thiếu họ tên");
+      }
+
+      if (!email || !emailPattern.test(email)) {
+        errors.push("Email sai định dạng");
+      } else if (existingEmails.has(email)) {
+        errors.push(
+          "Email đã tồn tại trong hệ thống"
+        );
+      } else if (seenEmails.has(email)) {
+        errors.push("Email bị trùng trong tệp");
+      }
+
+      const department = departmentMap.get(
+        departmentName.toLowerCase()
+      );
+
+      if (!departmentName) {
+        errors.push("Thiếu phòng ban");
+      } else if (!department) {
+        errors.push(
+          "Phòng ban chưa tồn tại trong hệ thống"
+        );
+      }
+
+      if (!jobTitle) {
+        errors.push("Thiếu chức vụ");
+      }
+
+      if (!phone || !phonePattern.test(phone)) {
+        errors.push(
+          "Số điện thoại không hợp lệ"
+        );
+      }
+
+      if (errors.length > 0) {
+        failedRows.push({
+          rowNumber,
+          email,
+          errors,
+        });
+
+        continue;
+      }
+
+      seenEmails.add(email);
+
+      try {
+        const temporaryPassword =
+          `${randomUUID()}Aa1!`;
+
+        const passwordHash =
+          await hashPassword(
+            temporaryPassword
+          );
+
+        const newUser =
+          await prisma.user.create({
+            data: {
+              email,
+              passwordHash,
+              fullName,
+              departmentId: department!.id,
+              isActive: true,
+            },
+            select: {
+              id: true,
+              email: true,
+              fullName: true,
+              departmentId: true,
+            },
+          });
+
+        existingEmails.add(email);
+        createdUsers.push(newUser);
+      } catch {
+        failedRows.push({
+          rowNumber,
+          email,
+          errors: [
+            "Không thể tạo tài khoản trong cơ sở dữ liệu",
+          ],
+        });
+      }
+    }
+
+    if (createdUsers.length > 0) {
+      await recordRequestAudit(
+        req,
+        AuditAction.USER_BULK_IMPORTED,
+        "user",
+        undefined,
+        {
+          totalCount: employees.length,
+          createdCount:
+            createdUsers.length,
+          skippedCount:
+            failedRows.length,
+        }
+      );
+    }
+
+    successResponse(
+      res,
+      {
+        total: employees.length,
+        created: createdUsers.length,
+        skipped: failedRows.length,
+        errors: failedRows,
+        createdUsers,
+      },
+      200,
+      `Đã nhập thành công ${createdUsers.length}/${employees.length} tài khoản.`
     );
   }
 }

@@ -7,6 +7,7 @@ export enum QuestionDifficulty {
 export interface CreateInterviewQuestionDTO {
   question: string;
   content?: string;
+  jobId: string;
   difficulty: QuestionDifficulty;
   suggestedAnswer: string;
   competencyCriterionId: string;
@@ -34,6 +35,7 @@ export interface InterviewQuestionResponse {
   difficulty: string;
   suggestedAnswer: string;
   competencyCriterionId: string;
+  jobId: string | null;
   createdAt: Date;
   updatedAt: Date;
   criterion?: {

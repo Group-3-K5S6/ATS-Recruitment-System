@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import CompetencyFrameworkManagement from "./pages/CompetencyFrameworkManagement";
 import InterviewQuestionBank from "./pages/InterviewQuestionBank";
+import RecruitmentSharedCategories from "./pages/RecruitmentSharedCategories";
+
 
 import {
   BrowserRouter,
@@ -1071,6 +1073,27 @@ function InterviewQuestionBankRoute() {
   );
 }
 
+function RecruitmentSharedCategoriesRoute() {
+  const user = getSessionUser();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const role = resolveRole(user.roles);
+
+  if (role !== "HRManager") {
+    return <Navigate to="/403" replace />;
+  }
+
+  return (
+    <RecruitmentSharedCategories
+      role={role}
+      userName={user.fullName}
+    />
+  );
+}
+
 
 /* =========================================================
    ROOT
@@ -1300,6 +1323,11 @@ function App() {
             element={
             <InterviewQuestionBankRoute />
             }
+/>
+
+<Route
+  path="/recruitment-shared-categories"
+  element={<RecruitmentSharedCategoriesRoute />}
 />
 
         <Route

@@ -12,6 +12,8 @@ model User {
   email        String  @unique
   passwordHash String
   fullName     String
+  phone        String?
+  jobTitle     String?
   departmentId String?
   isActive     Boolean @default(true)
 
@@ -25,9 +27,10 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  department Department? @relation(fields: [departmentId], references: [id])
-  roles      UserRole[]
-  auditLogs  AuditLog[]
+  department         Department?  @relation(fields: [departmentId], references: [id])
+  managedDepartments Department[] @relation("DepartmentManager")
+  roles              UserRole[]
+  auditLogs          AuditLog[]
 
   candidateProfile     Candidate?
   managedRequisitions  Requisition[] @relation("HiringManagerRequisitions")
@@ -81,9 +84,19 @@ model RolePermission {
 }
 
 model Department {
-  id           String        @id @default(uuid())
-  name         String
-  code         String        @unique
+  id   String @id @default(uuid())
+  name String
+  code String @unique
+
+  parentId String?
+  parent   Department?  @relation("DepartmentHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children Department[] @relation("DepartmentHierarchy")
+
+  managerId String?
+  manager   User?   @relation("DepartmentManager", fields: [managerId], references: [id], onDelete: Restrict)
+
+  isActive Boolean @default(true)
+
   users        User[]
   requisitions Requisition[]
   jobs         Job[]
@@ -141,6 +154,7 @@ model Job {
   jobTitle             JobTitle?                 @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
   applications         Application[]
   competencyFrameworks JobCompetencyFramework[]
+  interviewQuestions   InterviewQuestion[]
 }
 
 model Candidate {
@@ -332,10 +346,13 @@ model InterviewQuestion {
   difficulty            String
   suggestedAnswer       String
   competencyCriterionId String
+  jobId                 String?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
   criterion CompetencyCriterion @relation(fields: [competencyCriterionId], references: [id], onDelete: Restrict)
+  job       Job?                @relation(fields: [jobId], references: [id], onDelete: Restrict)
 
   @@index([competencyCriterionId])
+  @@index([jobId])
 }

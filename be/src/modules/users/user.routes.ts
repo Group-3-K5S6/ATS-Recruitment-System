@@ -5,7 +5,9 @@ import {
   createUserSchema,
   updateUserSchema,
   assignRolesSchema,
-} from './user.controller';
+  importPayloadSchema,
+  updateProfileSchema,
+} from "./user.controller";
 
 import { authenticate } from '../../middleware/authenticate';
 import { requirePermission } from '../../middleware/authorize';
@@ -16,6 +18,19 @@ const router = Router();
 
 router.use(authenticate);
 
+// S2-02 - Xem hồ sơ cá nhân
+router.get(
+  "/me",
+  UserController.getProfile,
+);
+
+// S2-02 - Cập nhật hồ sơ cá nhân
+router.put(
+  "/me",
+  validateBody(updateProfileSchema),
+  UserController.updateProfile,
+);
+
 /*
  * DANH SÁCH TÀI KHOẢN
  */
@@ -23,6 +38,26 @@ router.get(
   '/',
   requirePermission(PermissionCode.USERS_READ),
   UserController.list
+);
+
+/*
+ * S2-01 - XEM TRƯỚC VÀ KIỂM TRA DỮ LIỆU NHÂN SỰ
+ */
+router.post(
+  '/import/preview',
+  requirePermission(PermissionCode.USERS_CREATE),
+  validateBody(importPayloadSchema),
+  UserController.previewImport
+);
+
+/*
+ * S2-01 - NHẬP NHÂN SỰ HÀNG LOẠT
+ */
+router.post(
+  '/import',
+  requirePermission(PermissionCode.USERS_CREATE),
+  validateBody(importPayloadSchema),
+  UserController.importUsers
 );
 
 /*
