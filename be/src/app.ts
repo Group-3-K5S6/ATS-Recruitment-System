@@ -18,6 +18,7 @@ import auditLogRoutes from './modules/audit-logs/audit-log.routes';
 import menuRoutes from './modules/menu/menu.routes';
 import interviewQuestionRoutes from './modules/interview-questions/interview-question.routes';
 import departmentRoutes from './modules/departments/department.routes';
+import companyProfileRoutes from './modules/company-profile/company-profile.routes';
 
 export function createApp() {
   const app = express();
@@ -46,6 +47,7 @@ export function createApp() {
 app.use('/api/menu', menuRoutes);
 app.use('/api/interview-questions', interviewQuestionRoutes);
 app.use('/api/departments', departmentRoutes);
+  app.use('/api/company-profile', companyProfileRoutes);
   // Catch-all 404
   app.use((_req: Request, res: Response) => {
     errorResponse(res, 'Route not found.', 404, 'NOT_FOUND');

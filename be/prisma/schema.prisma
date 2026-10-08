@@ -341,3 +341,17 @@ model InterviewQuestion {
   @@index([competencyCriterionId])
   @@index([jobId])
 }
+
+model CompanyProfile {
+  id          String   @id @default("default")
+  companyName String   @default("")
+  tagline     String   @default("")
+  introduction String  @default("")
+  culture     String   @default("")
+  benefits    String   @default("")
+  website     String   @default("")
+  contactEmail String  @default("")
+  location    String   @default("")
+  isPublished Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
+}
