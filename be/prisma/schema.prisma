@@ -163,6 +163,8 @@ model Application {
   id                  String   @id @default(uuid())
   candidateId         String
   jobId               String
+  sourceCatalogId     String?
+  rejectionReasonCatalogId String?
   stage               String   @default("APPLIED")
   status              String   @default("ACTIVE")
   assignedRecruiterId String?
@@ -174,6 +176,8 @@ model Application {
   assignedRecruiter User?       @relation("RecruiterApplications", fields: [assignedRecruiterId], references: [id])
   interviews        Interview[]
   offers            Offer[]
+  sourceCatalogItem  RecruitmentCatalogItem? @relation("ApplicationSourceCatalog", fields: [sourceCatalogId], references: [id], onDelete: SetNull)
+  rejectionReasonCatalogItem RecruitmentCatalogItem? @relation("ApplicationRejectionCatalog", fields: [rejectionReasonCatalogId], references: [id], onDelete: SetNull)
 }
 
 model Interview {
@@ -354,4 +358,21 @@ model CompanyProfile {
   location    String   @default("")
   isPublished Boolean  @default(false)
   updatedAt   DateTime @updatedAt
+}
+
+model RecruitmentCatalogItem {
+  id          String   @id @default(uuid())
+  category    String
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  applicationSources        Application[] @relation("ApplicationSourceCatalog")
+  applicationRejectionReasons Application[] @relation("ApplicationRejectionCatalog")
+
+  @@unique([category, name])
+  @@index([category, isActive, sortOrder])
 }
