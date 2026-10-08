@@ -216,15 +216,21 @@ export const MENU_REGISTRY: MenuItemConfig[] = [
         requiredPermissions: [PermissionCode.USERS_READ],
       },
       {
-        key: 'role-management',
-        label: 'Role Management',
-        path: '/users/roles',
-        icon: 'shield',
-        order: 2,
-        requiredPermissions: [PermissionCode.ROLES_READ],
-      },
-    ],
+       key: 'role-management',
+       label: 'Role Management',
+      path: '/users/roles',
+      icon: 'shield',
+      order: 2,
+
+      requiredRoles: [RoleType.ADMIN],
+
+     requiredPermissions: [
+     PermissionCode.ROLES_READ,
+  ],
+},
+],
   },
+  
 
   // 10. Audit Logs (System audit & compliance tracking)
   {

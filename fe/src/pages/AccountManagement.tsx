@@ -141,6 +141,8 @@ const AccountManagement = () => {
   );
 
   const [lockError, setLockError] = useState("");
+  const [lockReason, setLockReason] = useState("");
+const [handoverWarning, setHandoverWarning] = useState(""); 
 
   /* =====================================================
      LOAD ACCOUNT
@@ -447,12 +449,12 @@ const AccountManagement = () => {
   ===================================================== */
 
   const openLockDialog = (account: Account) => {
-    setSelectedAccount(account);
-
-    setAccountAction("lock");
-
-    setLockError("");
-  };
+  setSelectedAccount(account);
+  setAccountAction("lock");
+  setLockError("");
+  setLockReason("");
+  setHandoverWarning("");
+};
 
   const openUnlockDialog = (account: Account) => {
     setSelectedAccount(account);
@@ -462,100 +464,139 @@ const AccountManagement = () => {
     setLockError("");
   };
 
-  const closeAccountAction = () => {
-    setSelectedAccount(null);
-    setAccountAction(null);
+ const closeAccountAction = () => {
+  setSelectedAccount(null);
+  setAccountAction(null);
+  setLockError("");
+  setLockReason("");
+  setHandoverWarning("");
+};
 
-    setLockError("");
-  };
+  const confirmLockAccount = async (
+  confirmHandover = false,
+) => {
+  if (!selectedAccount) {
+    return;
+  }
 
-  const confirmLockAccount = async () => {
-    if (!selectedAccount) {
-      return;
-    }
+  const reason = lockReason.trim();
 
-    const token = getAccessToken();
+  if (reason.length < 3) {
+    setLockError(
+      "Vui lòng nhập lý do khóa tài khoản, ít nhất 3 ký tự.",
+    );
+    return;
+  }
 
-    if (!token) {
-      setLockError("Phiên đăng nhập không tồn tại.");
+  const token = getAccessToken();
 
-      return;
-    }
+  if (!token) {
+    setLockError("Phiên đăng nhập không tồn tại.");
+    return;
+  }
 
-    try {
-      const response = await fetch(
-        `${API_URL}/api/users/${selectedAccount.id}/disable`,
-        {
-          method: "PATCH",
+  setLockError("");
 
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+  try {
+    const response = await fetch(
+      `${API_URL}/api/users/${selectedAccount.id}/disable`,
+      {
+        method: "PATCH",
+
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
+
+        body: JSON.stringify({
+          reason,
+          confirmHandover,
+        }),
+      },
+    );
+
+    const result =
+      (await response.json()) as ApiResponse<unknown>;
+
+    if (
+      response.status === 409 &&
+      !confirmHandover
+    ) {
+      setHandoverWarning(
+        getApiMessage(
+          result,
+          "Người dùng đang phụ trách công việc. Cần xác nhận bàn giao trước khi khóa.",
+        ),
       );
-
-      const result = (await response.json()) as ApiResponse<unknown>;
-
-      if (!response.ok || !result.success) {
-        throw new Error(getApiMessage(result, "Không khóa được tài khoản."));
-      }
-
-      await loadAccounts();
-
-      closeAccountAction();
-    } catch (error) {
-      setLockError(
-        error instanceof Error ? error.message : "Không khóa được tài khoản.",
-      );
-    }
-  };
-
-  /* =====================================================
-     UNLOCK
-  ===================================================== */
-
-  const confirmUnlockAccount = async () => {
-    if (!selectedAccount) {
       return;
     }
 
-    const token = getAccessToken();
-
-    if (!token) {
-      setLockError("Phiên đăng nhập không tồn tại.");
-
-      return;
+    if (!response.ok || !result.success) {
+      throw new Error(
+        getApiMessage(
+          result,
+          "Không khóa được tài khoản.",
+        ),
+      );
     }
 
-    try {
-      const response = await fetch(
-        `${API_URL}/api/users/${selectedAccount.id}/enable`,
-        {
-          method: "PATCH",
+    await loadAccounts();
+    closeAccountAction();
+  } catch (error) {
+    setLockError(
+      error instanceof Error
+        ? error.message
+        : "Không khóa được tài khoản.",
+    );
+  }
+};
 
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+const confirmUnlockAccount = async () => {
+  if (!selectedAccount) {
+    return;
+  }
+
+  const token = getAccessToken();
+
+  if (!token) {
+    setLockError("Phiên đăng nhập không tồn tại.");
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `${API_URL}/api/users/${selectedAccount.id}/enable`,
+      {
+        method: "PATCH",
+
+        headers: {
+          Authorization: `Bearer ${token}`,
         },
-      );
+      },
+    );
 
-      const result = (await response.json()) as ApiResponse<unknown>;
+    const result =
+      (await response.json()) as ApiResponse<unknown>;
 
-      if (!response.ok || !result.success) {
-        throw new Error(getApiMessage(result, "Không mở khóa được tài khoản."));
-      }
-
-      await loadAccounts();
-
-      closeAccountAction();
-    } catch (error) {
-      setLockError(
-        error instanceof Error
-          ? error.message
-          : "Không mở khóa được tài khoản.",
+    if (!response.ok || !result.success) {
+      throw new Error(
+        getApiMessage(
+          result,
+          "Không mở khóa được tài khoản.",
+        ),
       );
     }
-  };
+
+    await loadAccounts();
+    closeAccountAction();
+  } catch (error) {
+    setLockError(
+      error instanceof Error
+        ? error.message
+        : "Không mở khóa được tài khoản.",
+    );
+  }
+};
 
   /* =====================================================
      UI
@@ -799,44 +840,110 @@ const AccountManagement = () => {
       )}
 
       {/* MODAL KHÓA */}
-      {accountAction === "lock" && selectedAccount && (
-        <div className="account-confirm-overlay">
-          <div className="account-confirm">
-            <h3>Khóa tài khoản</h3>
+{accountAction === "lock" && selectedAccount && (
+  <div className="account-confirm-overlay">
+    <div className="account-confirm">
+      <h3>Khóa tài khoản</h3>
 
-            <p>
-              Bạn có chắc muốn khóa tài khoản{" "}
-              <strong>{selectedAccount.name}</strong>?
-            </p>
+      <p>
+        Bạn có chắc muốn khóa tài khoản{" "}
+        <strong>{selectedAccount.name}</strong>?
+      </p>
 
-            <p className="account-confirm-email">{selectedAccount.email}</p>
+      <p className="account-confirm-email">
+        {selectedAccount.email}
+      </p>
 
-            {lockError && (
-              <div className="account-alert account-alert-error">
-                {lockError}
-              </div>
-            )}
+      <div style={{ marginTop: 16 }}>
+        <label
+          htmlFor="lockReason"
+          style={{
+            display: "block",
+            marginBottom: 6,
+            fontWeight: 600,
+          }}
+        >
+          Lý do khóa <span style={{ color: "#B42318" }}>*</span>
+        </label>
 
-            <div className="account-confirm-actions">
-              <button
-                type="button"
-                className="account-btn account-btn-secondary"
-                onClick={closeAccountAction}
-              >
-                Hủy
-              </button>
+        <textarea
+          id="lockReason"
+          value={lockReason}
+          onChange={(event) => {
+            setLockReason(event.target.value);
+            setLockError("");
+            setHandoverWarning("");
+          }}
+          placeholder="Ví dụ: Nhân viên đã nghỉ việc..."
+          rows={3}
+          maxLength={500}
+          style={{
+            width: "100%",
+            boxSizing: "border-box",
+            padding: 10,
+            resize: "vertical",
+          }}
+        />
+      </div>
 
-              <button
-                type="button"
-                className="account-btn account-btn-danger"
-                onClick={() => void confirmLockAccount()}
-              >
-                Xác nhận khóa
-              </button>
-            </div>
-          </div>
+      {handoverWarning && (
+        <div
+          style={{
+            marginTop: 12,
+            padding: 12,
+            background: "#FFF7E6",
+            border: "1px solid #F5B942",
+            borderRadius: 6,
+          }}
+        >
+          <strong>Cảnh báo bàn giao công việc</strong>
+
+          <p style={{ marginBottom: 0 }}>
+            {handoverWarning}
+          </p>
         </div>
       )}
+
+      {lockError && (
+        <div className="account-alert account-alert-error">
+          {lockError}
+        </div>
+      )}
+
+      <div className="account-confirm-actions">
+        <button
+          type="button"
+          className="account-btn account-btn-secondary"
+          onClick={closeAccountAction}
+        >
+          Hủy
+        </button>
+
+        {handoverWarning ? (
+          <button
+            type="button"
+            className="account-btn account-btn-danger"
+            onClick={() =>
+              void confirmLockAccount(true)
+            }
+          >
+            Đã bàn giao và xác nhận khóa
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="account-btn account-btn-danger"
+            onClick={() =>
+              void confirmLockAccount(false)
+            }
+          >
+            Xác nhận khóa
+          </button>
+        )}
+      </div>
+    </div>
+  </div>
+)}
 
       {/* MODAL MỞ KHÓA */}
       {accountAction === "unlock" && selectedAccount && (
