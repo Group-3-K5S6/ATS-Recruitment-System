@@ -74,6 +74,12 @@ if (label === "Ngân hàng câu hỏi phỏng vấn") {
   return;
 }
 
+if (label === "Danh mục dùng chung tuyển dụng") {
+  navigate("/recruitment-shared-categories");
+  setOpen(false);
+  return;
+}
+
     /*
      * Các menu còn lại giữ nguyên cơ chế hiện tại.
      */
