@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import CompetencyFrameworkManagement from "./pages/CompetencyFrameworkManagement";
 import InterviewQuestionBank from "./pages/InterviewQuestionBank";
 import RecruitmentSharedCategories from "./pages/RecruitmentSharedCategories";
-
+import { CompanyConfig } from "./pages/CompanyConfig";
 
 import {
   BrowserRouter,
@@ -1255,6 +1255,7 @@ function App() {
 
       <Routes>
         {/* ROOT */}
+       
 
         <Route
           path="/"
@@ -1330,6 +1331,12 @@ function App() {
            element={
               <CompetencyFrameworkRoute />
        }
+/>
+<Route
+  path="/company-config"
+  element={
+    <CompanyConfig />
+  }
 />
           <Route
             path="/interview-question-bank"
