@@ -12,6 +12,8 @@ model User {
   email        String  @unique
   passwordHash String
   fullName     String
+  phone        String?
+  jobTitle     String?
   departmentId String?
   isActive     Boolean @default(true)
 

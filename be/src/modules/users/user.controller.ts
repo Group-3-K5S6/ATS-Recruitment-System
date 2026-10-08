@@ -57,6 +57,31 @@ export const importPayloadSchema = z.object({
   employees: z.array(importEmployeeRowSchema).min(1),
 });
 
+export const updateProfileSchema = z
+  .object({
+    fullName: z
+      .string()
+      .trim()
+      .min(2, "Họ tên phải có ít nhất 2 ký tự")
+      .optional(),
+
+    phone: z
+      .string()
+      .trim()
+      .regex(
+        /^(?:\+?84|0)(?:3|5|7|8|9)\d{8}$/,
+        "Số điện thoại Việt Nam không hợp lệ",
+      )
+      .optional(),
+
+    jobTitle: z
+      .string()
+      .trim()
+      .min(1, "Chức danh hiển thị không được để trống")
+      .optional(),
+  })
+  .strict();
+
 export const updateUserSchema = z.object({
   email: z.string().email(),
 
@@ -72,6 +97,147 @@ export const assignRolesSchema = z.object({
 
 
 export class UserController {
+
+static async getProfile(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const user = req.user!;
+
+  const profile = await prisma.user.findUnique({
+    where: {
+      id: user.id,
+    },
+    select: {
+      id: true,
+      email: true,
+      fullName: true,
+      phone: true,
+      jobTitle: true,
+      departmentId: true,
+      department: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      roles: {
+        select: {
+          role: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!profile) {
+    errorResponse(
+      res,
+      "Không tìm thấy hồ sơ người dùng.",
+      404,
+      "USER_NOT_FOUND",
+    );
+    return;
+  }
+
+  successResponse(
+    res,
+    {
+      ...profile,
+      roles: profile.roles.map(
+        (item) => item.role.name,
+      ),
+    },
+    200,
+  );
+}
+
+static async updateProfile(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const user = req.user!;
+
+  const {
+    fullName,
+    phone,
+    jobTitle,
+  } = req.body;
+
+  const updateData: {
+    fullName?: string;
+    phone?: string;
+    jobTitle?: string;
+  } = {};
+
+  if (fullName !== undefined) {
+    updateData.fullName = fullName;
+  }
+
+  if (phone !== undefined) {
+    updateData.phone = phone;
+  }
+
+  if (jobTitle !== undefined) {
+    updateData.jobTitle = jobTitle;
+  }
+
+  const updated =
+    await prisma.user.update({
+      where: {
+        id: user.id,
+      },
+      data: updateData,
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        phone: true,
+        jobTitle: true,
+        departmentId: true,
+        department: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        roles: {
+          select: {
+            role: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+  await recordRequestAudit(
+    req,
+    AuditAction.USER_UPDATED,
+    "user",
+    user.id,
+    {
+      updatedFields: Object.keys(updateData),
+    },
+  );
+
+  successResponse(
+    res,
+    {
+      ...updated,
+      roles: updated.roles.map(
+        (item) => item.role.name,
+      ),
+    },
+    200,
+    "Cập nhật hồ sơ cá nhân thành công.",
+  );
+}
 
   /*
    * =========================================

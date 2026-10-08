@@ -6,7 +6,8 @@ import {
   updateUserSchema,
   assignRolesSchema,
   importPayloadSchema,
-} from './user.controller';
+  updateProfileSchema,
+} from "./user.controller";
 
 import { authenticate } from '../../middleware/authenticate';
 import { requirePermission } from '../../middleware/authorize';
@@ -16,6 +17,19 @@ import { PermissionCode } from '../../rbac/permissions';
 const router = Router();
 
 router.use(authenticate);
+
+// S2-02 - Xem hồ sơ cá nhân
+router.get(
+  "/me",
+  UserController.getProfile,
+);
+
+// S2-02 - Cập nhật hồ sơ cá nhân
+router.put(
+  "/me",
+  validateBody(updateProfileSchema),
+  UserController.updateProfile,
+);
 
 /*
  * DANH SÁCH TÀI KHOẢN
