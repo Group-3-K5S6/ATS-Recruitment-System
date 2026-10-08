@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { FileSpreadsheet } from "lucide-react";
+import "./AccountManagement.css";
 
 import EmployeeImportModal from "../components/EmployeeImportModal";
 
-const API_URL =
-  import.meta.env.VITE_ATS_API_URL || "http://localhost:4000";
+const API_URL = import.meta.env.VITE_ATS_API_URL || "http://localhost:4000";
 
 type AccountStatus = "Hoạt động" | "Đã khóa";
 
@@ -104,10 +104,7 @@ function roleLabel(role: string) {
   return ROLE_LABELS[role] || role;
 }
 
-function getApiMessage(
-  result: ApiResponse<unknown>,
-  fallback: string,
-) {
+function getApiMessage(result: ApiResponse<unknown>, fallback: string) {
   return result.error?.message || result.message || fallback;
 }
 
@@ -123,9 +120,7 @@ const AccountManagement = () => {
   const [statusFilter, setStatusFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
 
-  const [formMode, setFormMode] = useState<
-    "create" | "edit" | null
-  >(null);
+  const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
 
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -139,12 +134,11 @@ const AccountManagement = () => {
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const [selectedAccount, setSelectedAccount] =
-    useState<Account | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
 
-  const [accountAction, setAccountAction] = useState<
-    "lock" | "unlock" | null
-  >(null);
+  const [accountAction, setAccountAction] = useState<"lock" | "unlock" | null>(
+    null,
+  );
 
   const [lockError, setLockError] = useState("");
 
@@ -169,34 +163,23 @@ const AccountManagement = () => {
       },
     });
 
-    const result =
-      (await response.json()) as ApiResponse<BackendUser[]>;
+    const result = (await response.json()) as ApiResponse<BackendUser[]>;
 
-    if (
-      !response.ok ||
-      !result.success ||
-      !Array.isArray(result.data)
-    ) {
+    if (!response.ok || !result.success || !Array.isArray(result.data)) {
       throw new Error(
-        getApiMessage(
-          result,
-          "Không tải được danh sách tài khoản.",
-        ),
+        getApiMessage(result, "Không tải được danh sách tài khoản."),
       );
     }
 
     const mapped: Account[] = result.data.map((user) => {
-      const roles = Array.isArray(user.roles)
-        ? user.roles
-        : [];
+      const roles = Array.isArray(user.roles) ? user.roles : [];
 
       return {
         id: user.id,
         name: user.fullName,
         email: user.email,
 
-        department:
-          user.department?.name || "Chưa gán phòng ban",
+        department: user.department?.name || "Chưa gán phòng ban",
 
         roles,
 
@@ -205,9 +188,7 @@ const AccountManagement = () => {
             ? roles.map(roleLabel).join(", ")
             : "Chưa có vai trò",
 
-        status: user.isActive
-          ? "Hoạt động"
-          : "Đã khóa",
+        status: user.isActive ? "Hoạt động" : "Đã khóa",
       };
     });
 
@@ -223,9 +204,7 @@ const AccountManagement = () => {
         await loadAccounts();
       } catch (error) {
         setPageError(
-          error instanceof Error
-            ? error.message
-            : "Không tải được dữ liệu.",
+          error instanceof Error ? error.message : "Không tải được dữ liệu.",
         );
       } finally {
         setLoading(false);
@@ -248,19 +227,12 @@ const AccountManagement = () => {
       account.email.toLowerCase().includes(keyword) ||
       account.department.toLowerCase().includes(keyword);
 
-    const matchesRole =
-      roleFilter === "" ||
-      account.roles.includes(roleFilter);
+    const matchesRole = roleFilter === "" || account.roles.includes(roleFilter);
 
     const matchesStatus =
-      statusFilter === "" ||
-      account.status === statusFilter;
+      statusFilter === "" || account.status === statusFilter;
 
-    return (
-      matchesKeyword &&
-      matchesRole &&
-      matchesStatus
-    );
+    return matchesKeyword && matchesRole && matchesStatus;
   });
 
   const totalPages = Math.max(
@@ -270,14 +242,12 @@ const AccountManagement = () => {
 
   const page = Math.min(currentPage, totalPages);
 
-  const startIndex =
-    (page - 1) * PAGE_SIZE;
+  const startIndex = (page - 1) * PAGE_SIZE;
 
-  const displayedAccounts =
-    filteredAccounts.slice(
-      startIndex,
-      startIndex + PAGE_SIZE,
-    );
+  const displayedAccounts = filteredAccounts.slice(
+    startIndex,
+    startIndex + PAGE_SIZE,
+  );
 
   /* =====================================================
      FORM
@@ -325,23 +295,17 @@ const AccountManagement = () => {
     setFormError("");
   };
 
-  const handleSearchChange = (
-    event: ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handleSearchChange = (event: ChangeEvent<HTMLInputElement>) => {
     setSearchText(event.target.value);
     setCurrentPage(1);
   };
 
-  const handleRoleChange = (
-    event: ChangeEvent<HTMLSelectElement>,
-  ) => {
+  const handleRoleChange = (event: ChangeEvent<HTMLSelectElement>) => {
     setRoleFilter(event.target.value);
     setCurrentPage(1);
   };
 
-  const handleStatusChange = (
-    event: ChangeEvent<HTMLSelectElement>,
-  ) => {
+  const handleStatusChange = (event: ChangeEvent<HTMLSelectElement>) => {
     setStatusFilter(event.target.value);
     setCurrentPage(1);
   };
@@ -370,22 +334,14 @@ const AccountManagement = () => {
         password: form.password,
         fullName: form.name.trim(),
 
-        roles: [
-          form.role,
-        ],
+        roles: [form.role],
       }),
     });
 
-    const result =
-      (await response.json()) as ApiResponse<BackendUser>;
+    const result = (await response.json()) as ApiResponse<BackendUser>;
 
     if (!response.ok || !result.success) {
-      throw new Error(
-        getApiMessage(
-          result,
-          "Không tạo được tài khoản.",
-        ),
-      );
+      throw new Error(getApiMessage(result, "Không tạo được tài khoản."));
     }
   };
 
@@ -393,42 +349,31 @@ const AccountManagement = () => {
      UPDATE ACCOUNT
   ===================================================== */
 
-  const updateAccount = async (
-    id: string,
-  ) => {
+  const updateAccount = async (id: string) => {
     const token = getAccessToken();
 
     if (!token) {
       throw new Error("Phiên đăng nhập không tồn tại.");
     }
 
-    const response = await fetch(
-      `${API_URL}/api/users/${id}`,
-      {
-        method: "PUT",
+    const response = await fetch(`${API_URL}/api/users/${id}`, {
+      method: "PUT",
 
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-
-        body: JSON.stringify({
-          email: form.email.trim().toLowerCase(),
-          fullName: form.name.trim(),
-        }),
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
       },
-    );
 
-    const result =
-      (await response.json()) as ApiResponse<BackendUser>;
+      body: JSON.stringify({
+        email: form.email.trim().toLowerCase(),
+        fullName: form.name.trim(),
+      }),
+    });
+
+    const result = (await response.json()) as ApiResponse<BackendUser>;
 
     if (!response.ok || !result.success) {
-      throw new Error(
-        getApiMessage(
-          result,
-          "Không cập nhật được tài khoản.",
-        ),
-      );
+      throw new Error(getApiMessage(result, "Không cập nhật được tài khoản."));
     }
   };
 
@@ -436,53 +381,41 @@ const AccountManagement = () => {
      SUBMIT
   ===================================================== */
 
-  const handleSubmit = async (
-    event: FormEvent<HTMLFormElement>,
-  ) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     setFormError("");
 
     const name = form.name.trim();
 
-    const email =
-      form.email.trim().toLowerCase();
+    const email = form.email.trim().toLowerCase();
 
     if (!name || !email) {
-      setFormError(
-        "Vui lòng nhập đầy đủ họ tên và email.",
-      );
+      setFormError("Vui lòng nhập đầy đủ họ tên và email.");
 
       return;
     }
 
     const duplicateEmail = accounts.some(
       (account) =>
-        account.email.toLowerCase() === email &&
-        account.id !== editingId,
+        account.email.toLowerCase() === email && account.id !== editingId,
     );
 
     if (duplicateEmail) {
-      setFormError(
-        `Email "${email}" đã tồn tại trong hệ thống.`,
-      );
+      setFormError(`Email "${email}" đã tồn tại trong hệ thống.`);
 
       return;
     }
 
     if (formMode === "create") {
       if (!form.password || !form.role) {
-        setFormError(
-          "Vui lòng nhập mật khẩu và chọn vai trò.",
-        );
+        setFormError("Vui lòng nhập mật khẩu và chọn vai trò.");
 
         return;
       }
 
       if (form.password.length < 6) {
-        setFormError(
-          "Mật khẩu phải có ít nhất 6 ký tự.",
-        );
+        setFormError("Mật khẩu phải có ít nhất 6 ký tự.");
 
         return;
       }
@@ -495,10 +428,7 @@ const AccountManagement = () => {
         await createAccount();
       }
 
-      if (
-        formMode === "edit" &&
-        editingId
-      ) {
+      if (formMode === "edit" && editingId) {
         await updateAccount(editingId);
       }
 
@@ -506,11 +436,7 @@ const AccountManagement = () => {
 
       closeForm();
     } catch (error) {
-      setFormError(
-        error instanceof Error
-          ? error.message
-          : "Có lỗi xảy ra.",
-      );
+      setFormError(error instanceof Error ? error.message : "Có lỗi xảy ra.");
     } finally {
       setSubmitting(false);
     }
@@ -520,9 +446,7 @@ const AccountManagement = () => {
      LOCK
   ===================================================== */
 
-  const openLockDialog = (
-    account: Account,
-  ) => {
+  const openLockDialog = (account: Account) => {
     setSelectedAccount(account);
 
     setAccountAction("lock");
@@ -530,9 +454,7 @@ const AccountManagement = () => {
     setLockError("");
   };
 
-  const openUnlockDialog = (
-    account: Account,
-  ) => {
+  const openUnlockDialog = (account: Account) => {
     setSelectedAccount(account);
 
     setAccountAction("unlock");
@@ -547,199 +469,124 @@ const AccountManagement = () => {
     setLockError("");
   };
 
-  const confirmLockAccount =
-    async () => {
-      if (!selectedAccount) {
-        return;
-      }
+  const confirmLockAccount = async () => {
+    if (!selectedAccount) {
+      return;
+    }
 
-      const token = getAccessToken();
+    const token = getAccessToken();
 
-      if (!token) {
-        setLockError(
-          "Phiên đăng nhập không tồn tại.",
-        );
+    if (!token) {
+      setLockError("Phiên đăng nhập không tồn tại.");
 
-        return;
-      }
+      return;
+    }
 
-      try {
-        const response = await fetch(
-          `${API_URL}/api/users/${selectedAccount.id}/disable`,
-          {
-            method: "PATCH",
+    try {
+      const response = await fetch(
+        `${API_URL}/api/users/${selectedAccount.id}/disable`,
+        {
+          method: "PATCH",
 
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
+          headers: {
+            Authorization: `Bearer ${token}`,
           },
-        );
+        },
+      );
 
-        const result =
-          (await response.json()) as ApiResponse<unknown>;
+      const result = (await response.json()) as ApiResponse<unknown>;
 
-        if (!response.ok || !result.success) {
-          throw new Error(
-            getApiMessage(
-              result,
-              "Không khóa được tài khoản.",
-            ),
-          );
-        }
-
-        await loadAccounts();
-
-        closeAccountAction();
-      } catch (error) {
-        setLockError(
-          error instanceof Error
-            ? error.message
-            : "Không khóa được tài khoản.",
-        );
+      if (!response.ok || !result.success) {
+        throw new Error(getApiMessage(result, "Không khóa được tài khoản."));
       }
-    };
+
+      await loadAccounts();
+
+      closeAccountAction();
+    } catch (error) {
+      setLockError(
+        error instanceof Error ? error.message : "Không khóa được tài khoản.",
+      );
+    }
+  };
 
   /* =====================================================
      UNLOCK
   ===================================================== */
 
-  const confirmUnlockAccount =
-    async () => {
-      if (!selectedAccount) {
-        return;
-      }
+  const confirmUnlockAccount = async () => {
+    if (!selectedAccount) {
+      return;
+    }
 
-      const token = getAccessToken();
+    const token = getAccessToken();
 
-      if (!token) {
-        setLockError(
-          "Phiên đăng nhập không tồn tại.",
-        );
+    if (!token) {
+      setLockError("Phiên đăng nhập không tồn tại.");
 
-        return;
-      }
+      return;
+    }
 
-      try {
-        const response = await fetch(
-          `${API_URL}/api/users/${selectedAccount.id}/enable`,
-          {
-            method: "PATCH",
+    try {
+      const response = await fetch(
+        `${API_URL}/api/users/${selectedAccount.id}/enable`,
+        {
+          method: "PATCH",
 
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
+          headers: {
+            Authorization: `Bearer ${token}`,
           },
-        );
+        },
+      );
 
-        const result =
-          (await response.json()) as ApiResponse<unknown>;
+      const result = (await response.json()) as ApiResponse<unknown>;
 
-        if (!response.ok || !result.success) {
-          throw new Error(
-            getApiMessage(
-              result,
-              "Không mở khóa được tài khoản.",
-            ),
-          );
-        }
-
-        await loadAccounts();
-
-        closeAccountAction();
-      } catch (error) {
-        setLockError(
-          error instanceof Error
-            ? error.message
-            : "Không mở khóa được tài khoản.",
-        );
+      if (!response.ok || !result.success) {
+        throw new Error(getApiMessage(result, "Không mở khóa được tài khoản."));
       }
-    };
+
+      await loadAccounts();
+
+      closeAccountAction();
+    } catch (error) {
+      setLockError(
+        error instanceof Error
+          ? error.message
+          : "Không mở khóa được tài khoản.",
+      );
+    }
+  };
 
   /* =====================================================
      UI
   ===================================================== */
 
   return (
-    <div
-      style={{
-        padding: "24px",
-        fontFamily: "Arial, sans-serif",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "20px",
-          gap: "16px",
-          flexWrap: "wrap",
-        }}
-      >
+    <div className="account-page">
+      {/* HEADER */}
+      <div className="account-header">
         <div>
-          <h2
-            style={{
-              margin: 0,
-              color: "#172B4D",
-            }}
-          >
-            Quản lý tài khoản nội bộ
-          </h2>
-
-          <p
-            style={{
-              margin: "6px 0 0",
-              color: "#5E6C84",
-              fontSize: "13px",
-            }}
-          >
-            Quản lý thông tin và trạng thái tài khoản.
-            Phân quyền được thực hiện tại mục Vai trò & quyền.
+          <h1>Quản lý tài khoản nội bộ</h1>
+          <p>
+            Quản lý thông tin và trạng thái tài khoản. Phân quyền được thực hiện
+            tại mục Vai trò & quyền.
           </p>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            gap: "8px",
-            flexWrap: "wrap",
-          }}
-        >
+        <div className="account-header-actions">
           <button
             type="button"
-            onClick={() =>
-              setIsImportModalOpen(true)
-            }
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "8px",
-              padding: "10px 14px",
-              backgroundColor: "#FFFFFF",
-              color: "#236C54",
-              border: "1px solid #B9CFC5",
-              borderRadius: "5px",
-              cursor: "pointer",
-              fontWeight: 600,
-            }}
+            className="account-btn account-btn-outline"
+            onClick={() => setIsImportModalOpen(true)}
           >
-            <FileSpreadsheet size={16} />
-
+            <FileSpreadsheet size={17} />
             Nhập từ Excel
           </button>
 
           <button
             type="button"
+            className="account-btn account-btn-primary"
             onClick={openCreateForm}
-            style={{
-              padding: "10px 16px",
-              backgroundColor: "#0052CC",
-              color: "#FFFFFF",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontWeight: 600,
-            }}
           >
             + Thêm tài khoản
           </button>
@@ -747,106 +594,57 @@ const AccountManagement = () => {
       </div>
 
       {isImportModalOpen && (
-  <EmployeeImportModal
-    onClose={() => {
-      setIsImportModalOpen(false);
-    }}
-    onImportSuccess={async () => {
-      await loadAccounts();
-    }}
-  />
-)}
-
-      {pageError && (
-        <div
-          style={{
-            padding: "12px 14px",
-            marginBottom: "16px",
-            background: "#FFEBE6",
-            color: "#BF2600",
-            borderRadius: "6px",
-          }}
-        >
-          {pageError}
-        </div>
+        <EmployeeImportModal onClose={() => setIsImportModalOpen(false)} />
       )}
 
-      <div
-        style={{
-          display: "flex",
-          gap: "10px",
-          flexWrap: "wrap",
-          marginBottom: "16px",
-        }}
-      >
+      {pageError && (
+        <div className="account-alert account-alert-error">{pageError}</div>
+      )}
+
+      {/* FILTER */}
+      <div className="account-toolbar">
         <input
+          className="account-control"
           type="text"
           value={searchText}
           onChange={handleSearchChange}
           placeholder="Tìm theo tên, email hoặc phòng ban..."
-          style={{
-            width: "320px",
-            padding: "9px 12px",
-            border: "1px solid #DFE1E6",
-            borderRadius: "4px",
-          }}
         />
 
         <select
+          className="account-control"
           value={roleFilter}
           onChange={handleRoleChange}
-          style={{
-            padding: "9px 12px",
-            border: "1px solid #DFE1E6",
-            borderRadius: "4px",
-          }}
         >
-          <option value="">
-            Tất cả vai trò
-          </option>
+          <option value="">Tất cả vai trò</option>
 
           {ROLE_OPTIONS.map((role) => (
-            <option
-              key={role.value}
-              value={role.value}
-            >
+            <option key={role.value} value={role.value}>
               {role.label}
             </option>
           ))}
         </select>
 
         <select
+          className="account-control"
           value={statusFilter}
           onChange={handleStatusChange}
-          style={{
-            padding: "9px 12px",
-            border: "1px solid #DFE1E6",
-            borderRadius: "4px",
-          }}
         >
-          <option value="">
-            Tất cả trạng thái
-          </option>
-
-          <option value="Hoạt động">
-            Hoạt động
-          </option>
-
-          <option value="Đã khóa">
-            Đã khóa
-          </option>
+          <option value="">Tất cả trạng thái</option>
+          <option value="Hoạt động">Hoạt động</option>
+          <option value="Đã khóa">Đã khóa</option>
         </select>
 
         <button
           type="button"
+          className="account-btn account-btn-secondary"
           onClick={() => {
-            void loadAccounts().catch(
-              (error) =>
-                setPageError(
-                  error instanceof Error
-                    ? error.message
-                    : "Không tải được dữ liệu.",
-                ),
+            void loadAccounts().catch((error) =>
+              setPageError(
+                error instanceof Error
+                  ? error.message
+                  : "Không tải được dữ liệu.",
+              ),
             );
           }}
         >
@@ -854,393 +652,288 @@ const AccountManagement = () => {
         </button>
       </div>
 
+      {/* FORM THÊM / SỬA */}
       {formMode !== null && (
-        <div
-          style={{
-            padding: "18px",
-            marginBottom: "18px",
-            border: "1px solid #DFE1E6",
-            borderRadius: "6px",
-            backgroundColor: "#FFFFFF",
-          }}
-        >
-          <h3 style={{ marginTop: 0 }}>
-            {formMode === "create"
-              ? "Thêm tài khoản nội bộ"
-              : "Sửa tài khoản nội bộ"}
-          </h3>
+        <div className="account-modal-overlay">
+          <div className="account-modal">
+            <div className="account-modal-header">
+              <div>
+                <h2>
+                  {formMode === "create"
+                    ? "Thêm tài khoản mới"
+                    : "Sửa tài khoản"}
+                </h2>
+                <p>
+                  {formMode === "create"
+                    ? "Tạo tài khoản nội bộ và gán vai trò ban đầu."
+                    : "Cập nhật thông tin tài khoản."}
+                </p>
+              </div>
 
-          <form onSubmit={handleSubmit}>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "repeat(auto-fit, minmax(200px, 1fr))",
-                gap: "12px",
-              }}
-            >
-              <input
-                type="text"
-                placeholder="Họ tên"
-                value={form.name}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    name: event.target.value,
-                  })
-                }
-              />
+              <button
+                type="button"
+                className="account-modal-close"
+                onClick={closeForm}
+              >
+                ×
+              </button>
+            </div>
 
-              <input
-                type="email"
-                placeholder="Email"
-                value={form.email}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    email: event.target.value,
-                  })
-                }
-              />
+            <form onSubmit={handleSubmit}>
+              <div className="account-modal-body">
+                <div className="account-field">
+                  <label>
+                    Họ và tên <span>*</span>
+                  </label>
 
-              {formMode === "create" && (
-                <>
                   <input
-                    type="password"
-                    placeholder="Mật khẩu (ít nhất 6 ký tự)"
-                    value={form.password}
+                    className="account-control"
+                    type="text"
+                    placeholder="Nguyễn Văn A"
+                    value={form.name}
                     onChange={(event) =>
                       setForm({
                         ...form,
-                        password: event.target.value,
+                        name: event.target.value,
                       })
                     }
                   />
+                </div>
 
-                  <select
-                    value={form.role}
+                <div className="account-field">
+                  <label>
+                    Email công ty <span>*</span>
+                  </label>
+
+                  <input
+                    className="account-control"
+                    type="email"
+                    placeholder="user@company.local"
+                    value={form.email}
                     onChange={(event) =>
                       setForm({
                         ...form,
-                        role: event.target.value,
+                        email: event.target.value,
                       })
                     }
-                  >
-                    {ROLE_OPTIONS.map((role) => (
-                      <option
-                        key={role.value}
-                        value={role.value}
+                  />
+                </div>
+
+                {formMode === "create" && (
+                  <>
+                    <div className="account-field">
+                      <label>
+                        Mật khẩu <span>*</span>
+                      </label>
+
+                      <input
+                        className="account-control"
+                        type="password"
+                        placeholder="Ít nhất 6 ký tự"
+                        value={form.password}
+                        onChange={(event) =>
+                          setForm({
+                            ...form,
+                            password: event.target.value,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div className="account-field">
+                      <label>
+                        Vai trò phân quyền <span>*</span>
+                      </label>
+
+                      <select
+                        className="account-control"
+                        value={form.role}
+                        onChange={(event) =>
+                          setForm({
+                            ...form,
+                            role: event.target.value,
+                          })
+                        }
                       >
-                        {role.label}
-                      </option>
-                    ))}
-                  </select>
-                </>
-              )}
-            </div>
+                        {ROLE_OPTIONS.map((role) => (
+                          <option key={role.value} value={role.value}>
+                            {role.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                )}
 
-            {formMode === "create" && (
-              <p
-                style={{
-                  fontSize: "12px",
-                  color: "#5E6C84",
-                }}
-              >
-                Vai trò ban đầu được chọn khi tạo tài khoản.
-                Muốn thay đổi vai trò sau đó, sử dụng mục Vai trò & quyền.
-              </p>
-            )}
+                {formError && (
+                  <div className="account-alert account-alert-error">
+                    {formError}
+                  </div>
+                )}
+              </div>
 
-            {formError && (
-              <div
-                style={{
-                  marginTop: "10px",
-                  color: "#BF2600",
-                }}
-              >
-                {formError}
+              <div className="account-modal-footer">
+                <button
+                  type="button"
+                  className="account-btn account-btn-secondary"
+                  onClick={closeForm}
+                >
+                  Hủy
+                </button>
+
+                <button
+                  type="submit"
+                  className="account-btn account-btn-primary"
+                  disabled={submitting}
+                >
+                  {submitting
+                    ? "Đang lưu..."
+                    : formMode === "create"
+                      ? "✓ Tạo tài khoản"
+                      : "Lưu thay đổi"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL KHÓA */}
+      {accountAction === "lock" && selectedAccount && (
+        <div className="account-confirm-overlay">
+          <div className="account-confirm">
+            <h3>Khóa tài khoản</h3>
+
+            <p>
+              Bạn có chắc muốn khóa tài khoản{" "}
+              <strong>{selectedAccount.name}</strong>?
+            </p>
+
+            <p className="account-confirm-email">{selectedAccount.email}</p>
+
+            {lockError && (
+              <div className="account-alert account-alert-error">
+                {lockError}
               </div>
             )}
 
-            <div
-              style={{
-                marginTop: "14px",
-                display: "flex",
-                gap: "8px",
-              }}
-            >
+            <div className="account-confirm-actions">
               <button
-                type="submit"
-                disabled={submitting}
+                type="button"
+                className="account-btn account-btn-secondary"
+                onClick={closeAccountAction}
               >
-                {submitting
-                  ? "Đang lưu..."
-                  : formMode === "create"
-                    ? "Tạo tài khoản"
-                    : "Lưu thay đổi"}
+                Hủy
               </button>
 
               <button
                 type="button"
-                onClick={closeForm}
+                className="account-btn account-btn-danger"
+                onClick={() => void confirmLockAccount()}
+              >
+                Xác nhận khóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL MỞ KHÓA */}
+      {accountAction === "unlock" && selectedAccount && (
+        <div className="account-confirm-overlay">
+          <div className="account-confirm">
+            <h3>Mở khóa tài khoản</h3>
+
+            <p>
+              Bạn có chắc muốn mở khóa tài khoản{" "}
+              <strong>{selectedAccount.name}</strong>?
+            </p>
+
+            <p className="account-confirm-email">{selectedAccount.email}</p>
+
+            {lockError && (
+              <div className="account-alert account-alert-error">
+                {lockError}
+              </div>
+            )}
+
+            <div className="account-confirm-actions">
+              <button
+                type="button"
+                className="account-btn account-btn-secondary"
+                onClick={closeAccountAction}
               >
                 Hủy
               </button>
+
+              <button
+                type="button"
+                className="account-btn account-btn-success"
+                onClick={() => void confirmUnlockAccount()}
+              >
+                Xác nhận mở khóa
+              </button>
             </div>
-          </form>
+          </div>
         </div>
       )}
 
-      {accountAction === "lock" && selectedAccount && (
-        <div
-          style={{
-            padding: "20px",
-            marginBottom: "18px",
-            border: "1px solid #DFE1E6",
-            borderRadius: "8px",
-            backgroundColor: "#FFFFFF",
-          }}
-        >
-          <h3 style={{ marginTop: 0 }}>
-            Khóa tài khoản
-          </h3>
-
-          <p>
-            Bạn có chắc muốn khóa tài khoản{" "}
-            <strong>{selectedAccount.name}</strong>?
-          </p>
-
-          <p style={{ color: "#5E6C84" }}>
-            {selectedAccount.email}
-          </p>
-
-          {lockError && (
-            <div
-              style={{
-                color: "#BF2600",
-                marginBottom: "10px",
-              }}
-            >
-              {lockError}
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={() =>
-              void confirmLockAccount()
-            }
-            style={{
-              backgroundColor: "#DE350B",
-              color: "#FFFFFF",
-              border: "none",
-              padding: "9px 14px",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            Xác nhận khóa
-          </button>
-
-          <button
-            type="button"
-            onClick={closeAccountAction}
-            style={{
-              marginLeft: "8px",
-            }}
-          >
-            Hủy
-          </button>
-        </div>
-      )}
-
-      {accountAction === "unlock" && selectedAccount && (
-        <div
-          style={{
-            padding: "20px",
-            marginBottom: "18px",
-            border: "1px solid #DFE1E6",
-            borderRadius: "8px",
-            backgroundColor: "#FFFFFF",
-          }}
-        >
-          <h3 style={{ marginTop: 0 }}>
-            Mở khóa tài khoản
-          </h3>
-
-          <p>
-            Bạn có chắc muốn mở khóa tài khoản{" "}
-            <strong>{selectedAccount.name}</strong>?
-          </p>
-
-          {lockError && (
-            <div
-              style={{
-                color: "#BF2600",
-                marginBottom: "10px",
-              }}
-            >
-              {lockError}
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={() =>
-              void confirmUnlockAccount()
-            }
-            style={{
-              backgroundColor: "#00875A",
-              color: "#FFFFFF",
-              border: "none",
-              padding: "9px 14px",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            Xác nhận mở khóa
-          </button>
-
-          <button
-            type="button"
-            onClick={closeAccountAction}
-            style={{
-              marginLeft: "8px",
-            }}
-          >
-            Hủy
-          </button>
-        </div>
-      )}
-
-      <div
-        style={{
-          overflowX: "auto",
-        }}
-      >
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            backgroundColor: "#FFFFFF",
-            textAlign: "left",
-          }}
-        >
-          <thead>
-            <tr
-              style={{
-                backgroundColor: "#F4F5F7",
-              }}
-            >
-              <th style={{ padding: "12px" }}>
-                STT
-              </th>
-
-              <th style={{ padding: "12px" }}>
-                Họ tên
-              </th>
-
-              <th style={{ padding: "12px" }}>
-                Email
-              </th>
-
-              <th style={{ padding: "12px" }}>
-                Phòng ban
-              </th>
-
-              <th style={{ padding: "12px" }}>
-                Vai trò
-              </th>
-
-              <th style={{ padding: "12px" }}>
-                Trạng thái
-              </th>
-
-              <th style={{ padding: "12px" }}>
-                Thao tác
-              </th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {loading && (
+      {/* TABLE */}
+      <div className="account-card account-table-card">
+        <div className="account-table-scroll">
+          <table className="account-table">
+            <thead>
               <tr>
-                <td
-                  colSpan={7}
-                  style={{
-                    padding: "24px",
-                    textAlign: "center",
-                  }}
-                >
-                  Đang tải dữ liệu...
-                </td>
+                <th>STT</th>
+                <th>Họ tên</th>
+                <th>Email</th>
+                <th>Phòng ban</th>
+                <th>Vai trò</th>
+                <th>Trạng thái</th>
+                <th>Thao tác</th>
               </tr>
-            )}
+            </thead>
 
-            {!loading &&
-              displayedAccounts.map(
-                (account, index) => (
-                  <tr
-                    key={account.id}
-                    style={{
-                      borderBottom:
-                        "1px solid #DFE1E6",
-                    }}
-                  >
-                    <td style={{ padding: "12px" }}>
-                      {startIndex + index + 1}
-                    </td>
+            <tbody>
+              {loading && (
+                <tr>
+                  <td colSpan={7} className="account-empty">
+                    Đang tải dữ liệu...
+                  </td>
+                </tr>
+              )}
 
-                    <td style={{ padding: "12px" }}>
-                      {account.name}
-                    </td>
+              {!loading &&
+                displayedAccounts.map((account, index) => (
+                  <tr key={account.id}>
+                    <td>{startIndex + index + 1}</td>
 
-                    <td style={{ padding: "12px" }}>
-                      {account.email}
-                    </td>
+                    <td className="account-name">{account.name}</td>
 
-                    <td style={{ padding: "12px" }}>
-                      {account.department}
-                    </td>
+                    <td className="account-email">{account.email}</td>
 
-                    <td style={{ padding: "12px" }}>
-                      {account.role}
-                    </td>
+                    <td>{account.department}</td>
 
-                    <td style={{ padding: "12px" }}>
+                    <td>{account.role}</td>
+
+                    <td>
                       <span
-                        style={{
-                          padding: "5px 9px",
-                          borderRadius: "12px",
-
-                          backgroundColor:
-                            account.status === "Hoạt động"
-                              ? "#E3FCEF"
-                              : "#FFEBE6",
-
-                          color:
-                            account.status === "Hoạt động"
-                              ? "#006644"
-                              : "#BF2600",
-                        }}
+                        className={`account-status ${
+                          account.status === "Hoạt động"
+                            ? "account-status-active"
+                            : "account-status-locked"
+                        }`}
                       >
                         {account.status}
                       </span>
                     </td>
 
-                    <td style={{ padding: "12px" }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: "8px",
-                          flexWrap: "wrap",
-                        }}
-                      >
+                    <td>
+                      <div className="account-actions">
                         <button
                           type="button"
-                          onClick={() =>
-                            openEditForm(account)
-                          }
+                          className="account-btn account-btn-secondary account-action-btn"
+                          onClick={() => openEditForm(account)}
                         >
                           Sửa
                         </button>
@@ -1248,34 +941,16 @@ const AccountManagement = () => {
                         {account.status === "Hoạt động" ? (
                           <button
                             type="button"
-                            onClick={() =>
-                              openLockDialog(account)
-                            }
-                            style={{
-                              backgroundColor: "#DE350B",
-                              color: "#FFFFFF",
-                              border: "none",
-                              borderRadius: "4px",
-                              padding: "7px 10px",
-                              cursor: "pointer",
-                            }}
+                            className="account-btn account-btn-danger account-action-btn"
+                            onClick={() => openLockDialog(account)}
                           >
                             Khóa
                           </button>
                         ) : (
                           <button
                             type="button"
-                            onClick={() =>
-                              openUnlockDialog(account)
-                            }
-                            style={{
-                              backgroundColor: "#00875A",
-                              color: "#FFFFFF",
-                              border: "none",
-                              borderRadius: "4px",
-                              padding: "7px 10px",
-                              cursor: "pointer",
-                            }}
+                            className="account-btn account-btn-success account-action-btn"
+                            onClick={() => openUnlockDialog(account)}
                           >
                             Mở khóa
                           </button>
@@ -1283,85 +958,54 @@ const AccountManagement = () => {
                       </div>
                     </td>
                   </tr>
-                ),
-              )}
+                ))}
 
-            {!loading &&
-              displayedAccounts.length === 0 && (
+              {!loading && displayedAccounts.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={7}
-                    style={{
-                      padding: "20px",
-                      textAlign: "center",
-                    }}
-                  >
+                  <td colSpan={7} className="account-empty">
                     Không tìm thấy tài khoản phù hợp.
                   </td>
                 </tr>
               )}
-          </tbody>
-        </table>
-      </div>
+            </tbody>
+          </table>
+        </div>
 
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginTop: "16px",
-          gap: "12px",
-          flexWrap: "wrap",
-        }}
-      >
-        <span>
-          Hiển thị{" "}
-          {filteredAccounts.length === 0
-            ? 0
-            : startIndex + 1}{" "}
-          -{" "}
-          {Math.min(
-            startIndex + PAGE_SIZE,
-            filteredAccounts.length,
-          )}{" "}
-          / {filteredAccounts.length} tài khoản
-        </span>
-
-        <div>
-          <button
-            type="button"
-            disabled={page === 1}
-            onClick={() =>
-              setCurrentPage((current) =>
-                Math.max(1, current - 1),
-              )
-            }
-          >
-            Trước
-          </button>
-
-          <span
-            style={{
-              margin: "0 8px",
-            }}
-          >
-            Trang {page} / {totalPages}
+        {/* PAGINATION */}
+        <div className="account-pagination">
+          <span>
+            Hiển thị {filteredAccounts.length === 0 ? 0 : startIndex + 1} -{" "}
+            {Math.min(startIndex + PAGE_SIZE, filteredAccounts.length)} /{" "}
+            {filteredAccounts.length} tài khoản
           </span>
 
-          <button
-            type="button"
-            disabled={page >= totalPages}
-            onClick={() =>
-              setCurrentPage((current) =>
-                Math.min(
-                  totalPages,
-                  current + 1,
-                ),
-              )
-            }
-          >
-            Sau
-          </button>
+          <div className="account-pagination-controls">
+            <button
+              type="button"
+              className="account-btn account-btn-secondary account-action-btn"
+              disabled={page === 1}
+              onClick={() =>
+                setCurrentPage((current) => Math.max(1, current - 1))
+              }
+            >
+              Trước
+            </button>
+
+            <span className="account-page-number">
+              Trang {page} / {totalPages}
+            </span>
+
+            <button
+              type="button"
+              className="account-btn account-btn-secondary account-action-btn"
+              disabled={page >= totalPages}
+              onClick={() =>
+                setCurrentPage((current) => Math.min(totalPages, current + 1))
+              }
+            >
+              Sau
+            </button>
+          </div>
         </div>
       </div>
     </div>

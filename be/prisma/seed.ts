@@ -328,6 +328,77 @@ if (resetTestEmail) {
     },
   });
 
+  // 9.5 Seed Competency Framework & Interview Questions
+  console.log('Seeding Competency Framework & Interview Questions...');
+  const framework1 = await prisma.competencyFramework.upsert({
+    where: { id: 'cf-backend-001' },
+    update: {},
+    create: {
+      id: 'cf-backend-001',
+      name: 'Khung năng lực Lập trình viên Backend',
+      description: 'Đánh giá kỹ năng chuyên môn và mềm cho vị trí Backend Developer',
+    },
+  });
+
+  const criterion1 = await prisma.competencyCriterion.upsert({
+    where: { id: 'cc-tech-001' },
+    update: {},
+    create: {
+      id: 'cc-tech-001',
+      frameworkId: framework1.id,
+      name: 'Kiến thức Node.js & TypeScript',
+      description: 'Hiểu biết sâu về event loop, typing, và ecosystem Node.js',
+      weight: 40,
+    },
+  });
+
+  const criterion2 = await prisma.competencyCriterion.upsert({
+    where: { id: 'cc-arch-001' },
+    update: {},
+    create: {
+      id: 'cc-arch-001',
+      frameworkId: framework1.id,
+      name: 'Thiết kế Hệ thống (System Design)',
+      description: 'Khả năng thiết kế hệ thống phân tán, microservices',
+      weight: 30,
+    },
+  });
+
+  await prisma.jobCompetencyFramework.upsert({
+    where: { jobId_frameworkId: { jobId: jobEng.id, frameworkId: framework1.id } },
+    update: {},
+    create: {
+      jobId: jobEng.id,
+      frameworkId: framework1.id,
+    },
+  });
+
+  await prisma.interviewQuestion.upsert({
+    where: { id: 'iq-node-001' },
+    update: {},
+    create: {
+      id: 'iq-node-001',
+      question: 'Event Loop trong Node.js hoạt động như thế nào?',
+      difficulty: 'HARD',
+      suggestedAnswer: 'Ứng viên cần giải thích được các phase: timers, pending callbacks, idle/prepare, poll, check, close callbacks. Hiểu về microtasks.',
+      competencyCriterionId: criterion1.id,
+      jobId: jobEng.id,
+    },
+  });
+
+  await prisma.interviewQuestion.upsert({
+    where: { id: 'iq-sys-001' },
+    update: {},
+    create: {
+      id: 'iq-sys-001',
+      question: 'Làm thế nào để đảm bảo tính nhất quán dữ liệu trong Microservices?',
+      difficulty: 'HARD',
+      suggestedAnswer: 'Ứng viên đề cập đến các pattern như Saga, 2PC, Event Sourcing, Outbox Pattern.',
+      competencyCriterionId: criterion2.id,
+      jobId: jobEng.id,
+    },
+  });
+
   // 11. Seed Offer
   await prisma.offer.upsert({
     where: { id: 'offer-001' },

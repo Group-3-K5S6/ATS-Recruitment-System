@@ -10,6 +10,7 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:seed": "ts-node prisma/seed.ts",
+    "setup": "npm run prisma:generate && npm run prisma:push && npm run prisma:seed",
     "test": "node scripts/run-tests.js"
   },
   "dependencies": {

@@ -23,6 +23,7 @@ import ChangePassword from "./pages/ChangePassword";
 import DepartmentManagement from "./pages/DepartmentManagement";
 import JobTitleSalaryManagement from "./pages/JobTitleSalaryManagement";
 import UserProfilePage from "./pages/UserProfilePage";
+import CompanyProfilePage from "./pages/CompanyProfilePage";
 
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./components/Dashboard";
@@ -1117,6 +1118,18 @@ function RootRoute() {
   );
 }
 
+function CompanyProfileRoute() {
+  const user = getSessionUser();
+  if (!user) return <Navigate to="/login" replace />;
+  const role = resolveRole(user.roles);
+  if (role !== "HRManager" && role !== "Admin") return <Navigate to="/403" replace />;
+  const handleLogout = async () => {
+    await logoutFromBackend();
+    clearSession();
+    window.location.assign("/login");
+  };
+  return <CompanyProfilePage role={role} userName={user.fullName} onLogout={handleLogout} />;
+}
 
 /* =========================================================
    APP
@@ -1324,6 +1337,7 @@ function App() {
             <InterviewQuestionBankRoute />
             }
 />
+        <Route path="/company-profile" element={<CompanyProfileRoute />} />
 
 <Route
   path="/recruitment-shared-categories"
