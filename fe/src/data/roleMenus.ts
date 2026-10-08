@@ -51,6 +51,7 @@ export const roleMenus: Record<Role, MenuItem[]> = {
     { label: "Khung năng lực" },
     { label: "Ngân hàng câu hỏi phỏng vấn" },
     { label: "Danh mục dùng chung tuyển dụng" },
+    { label: "Trang giới thiệu công ty" },
   ],
 
   Approver: [
@@ -66,6 +67,7 @@ export const roleMenus: Record<Role, MenuItem[]> = {
     { label: "Quản lý tài khoản" },
     { label: "Vai trò & quyền" },
     { label: "Danh mục hệ thống" },
+    { label: "Trang giới thiệu công ty" },
     { label: "Nhật ký hệ thống" },
     { label: "Cấu hình" },
     {
