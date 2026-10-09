@@ -4,6 +4,7 @@ import CompetencyFrameworkManagement from "./pages/CompetencyFrameworkManagement
 import InterviewQuestionBank from "./pages/InterviewQuestionBank";
 import RecruitmentSharedCategories from "./pages/RecruitmentSharedCategories";
 import { CompanyConfig } from "./pages/CompanyConfig";
+import CreateRecruitmentRequest from "./pages/CreateRecruitmentRequest";
 
 import {
   BrowserRouter,
@@ -1374,6 +1375,10 @@ function App() {
           element={
             <NotFoundPage />
           }
+        />
+        <Route
+          path="/recruitment-requests/create"
+          element={<CreateRecruitmentRequest />}
         />
 
 
