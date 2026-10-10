@@ -230,7 +230,7 @@ export const MENU_REGISTRY: MenuItemConfig[] = [
 },
 ],
   },
-  
+
 
   // 10. Audit Logs (System audit & compliance tracking)
   {

@@ -142,7 +142,7 @@ const AccountManagement = () => {
 
   const [lockError, setLockError] = useState("");
   const [lockReason, setLockReason] = useState("");
-const [handoverWarning, setHandoverWarning] = useState(""); 
+const [handoverWarning, setHandoverWarning] = useState("");
 
   /* =====================================================
      LOAD ACCOUNT
