@@ -4,7 +4,7 @@ import Sidebar from "./Sidebar";
 
 import AccountManagement from "../pages/AccountManagement";
 
-import RoleAssignment from "../pages/RoleAssignment";
+import RoleAndPermissionManagement from "../pages/RoleAndPermissionManagement";
 
 import UserProfilePage from "../pages/UserProfilePage";
 
@@ -64,8 +64,9 @@ function Dashboard({ role, userName, onLogout }: DashboardProps) {
 
       <main className="dashboard-content">
         {selectedMenu === "Quản lý tài khoản" && <AccountManagement />}
-
-        {selectedMenu === "Vai trò & quyền" && <RoleAssignment />}
+{selectedMenu === "Vai trò & quyền" && (
+  <RoleAndPermissionManagement />
+)}
 
         {selectedMenu === "Hồ sơ cá nhân" && <UserProfilePage />}
 

@@ -8,6 +8,7 @@ import {
   assignRolesSchema,
   importPayloadSchema,
   updateProfileSchema,
+  disableUserSchema,
 } from "./user.controller";
 
 import { authenticate } from '../../middleware/authenticate';
@@ -110,8 +111,9 @@ router.put(
  * S1-10 - KHÓA
  */
 router.patch(
-  '/:id/disable',
+  "/:id/disable",
   requirePermission(PermissionCode.USERS_DISABLE),
+  validateBody(disableUserSchema),
   UserController.disable
 );
 
