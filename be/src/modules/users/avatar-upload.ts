@@ -27,13 +27,13 @@ export const uploadAvatar: RequestHandler = (req, res, next) => {
       return;
     }
     if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
-      errorResponse(res, 'Avatar file must be 2 MB or smaller.', 413, 'AVATAR_TOO_LARGE');
+      errorResponse(res, 'Ảnh đại diện không được vượt quá 2 MB.', 413, 'AVATAR_TOO_LARGE');
       return;
     }
     if (error instanceof Error && error.message === 'INVALID_AVATAR_TYPE') {
-      errorResponse(res, 'Only JPG and PNG images are accepted.', 415, 'INVALID_AVATAR_TYPE');
+      errorResponse(res, 'Chỉ chấp nhận ảnh JPG hoặc PNG.', 415, 'INVALID_AVATAR_TYPE');
       return;
     }
-    errorResponse(res, 'Invalid avatar upload request.', 400, 'INVALID_UPLOAD');
+    errorResponse(res, 'Yêu cầu tải ảnh đại diện không hợp lệ.', 400, 'INVALID_UPLOAD');
   });
 };

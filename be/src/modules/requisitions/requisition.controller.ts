@@ -23,13 +23,17 @@ const optionalDate = z.preprocess(
   z.coerce.date().optional()
 );
 
+// CSDL có thể chứa khóa String cũ không theo chuẩn UUID sau khi migrate.
+// Chỉ kiểm tra định dạng đầu vào ở đây; quyền và tồn tại được kiểm tra bên dưới.
+const dbRecordId = z.string().trim().min(1).max(191);
+
 const requisitionFields = {
   title: optionalText,
-  departmentId: z.string().uuid().optional(),
+  departmentId: dbRecordId.optional(),
   headcount: z.coerce.number().int().positive().optional(),
   budget: z.coerce.number().positive().optional(),
   approverId: z.string().uuid().optional(),
-  jobTitleId: z.string().uuid().optional(),
+  jobTitleId: dbRecordId.optional(),
   reason: z.enum(['NEW', 'REPLACEMENT']).optional(),
   proposedSalaryMin: optionalNumber,
   proposedSalaryMax: optionalNumber,
@@ -70,13 +74,21 @@ export class RequisitionController {
     const user = req.user!;
 
     let whereClause = {};
-    if (user.roles.includes(RoleType.HIRING_MANAGER)) {
+    if (user.roles.includes(RoleType.ADMIN) || user.roles.includes(RoleType.HR_MANAGER) || user.roles.includes(RoleType.RECRUITER)) {
+      // Full list only for roles granted organization-wide requisition visibility.
+      whereClause = {};
+    } else if (user.roles.includes(RoleType.HIRING_MANAGER)) {
       whereClause = {
         OR: [
           { hiringManagerId: user.id },
-          user.departmentId ? { departmentId: user.departmentId } : {},
+          ...(user.departmentId ? [{ departmentId: user.departmentId }] : []),
         ],
       };
+    } else if (user.roles.includes(RoleType.APPROVER)) {
+      whereClause = { approverId: user.id };
+    } else {
+      errorResponse(res, 'Bạn không có quyền xem danh sách yêu cầu tuyển dụng.', 403, 'FORBIDDEN_SCOPE');
+      return;
     }
 
     const requisitions = await prisma.requisition.findMany({
@@ -102,13 +114,13 @@ export class RequisitionController {
       if (exists) {
         errorResponse(
           res,
-          'Access denied. Requisition is outside your department or assigned scope.',
+          'Bạn không có quyền xem yêu cầu tuyển dụng ngoài phạm vi được phân công.',
           403,
           'FORBIDDEN_SCOPE'
         );
         return;
       }
-      errorResponse(res, 'Requisition not found.', 404, 'NOT_FOUND');
+      errorResponse(res, 'Không tìm thấy yêu cầu tuyển dụng.', 404, 'NOT_FOUND');
       return;
     }
 
@@ -143,7 +155,7 @@ export class RequisitionController {
     if (!canCreate) {
       errorResponse(
         res,
-        'Access denied. You can only create recruitment requests within your authorized scope.',
+        'Bạn chỉ được tạo yêu cầu tuyển dụng trong phạm vi được phân công.',
         403,
         'FORBIDDEN_SCOPE'
       );
@@ -167,6 +179,12 @@ export class RequisitionController {
           ],
         },
       });
+    }
+
+    // Không âm thầm bỏ qua mã chức danh không tồn tại, kể cả khi lưu nháp.
+    if (data.jobTitleId && !jobTitleRecord) {
+      errorResponse(res, 'Chức danh đã chọn không còn tồn tại. Vui lòng chọn lại.', 400, 'INVALID_JOB_TITLE');
+      return;
     }
 
     const title = jobTitleRecord?.name || rawJobTitle;
@@ -245,6 +263,7 @@ export class RequisitionController {
       if (!title || title.length < 3) missingFields.push('jobTitle');
       if (!jobTitleRecord) missingFields.push('jobTitleId');
       if (!reason) missingFields.push('reason');
+      if (data.headcount === undefined && data.quantity === undefined) missingFields.push('headcount');
       if (salaryMin === undefined) missingFields.push('proposedSalaryMin');
       if (salaryMax === undefined) missingFields.push('proposedSalaryMax');
       if (!targetDate) missingFields.push('targetDate');
@@ -272,7 +291,7 @@ export class RequisitionController {
       if (outsideSalaryBand && !salaryExplanation) {
         errorResponse(
           res,
-          'An explanation is required when the proposed salary range is outside the standard salary band.',
+          'Dải lương đề xuất vượt mức chuẩn của chức danh. Vui lòng nhập giải trình.',
           400,
           'SALARY_EXPLANATION_REQUIRED'
         );
@@ -347,7 +366,7 @@ export class RequisitionController {
     if (!canUpdate) {
       errorResponse(
         res,
-        'Access denied. You cannot modify requisitions outside your scope.',
+        'Bạn không có quyền sửa yêu cầu tuyển dụng ngoài phạm vi được phân công.',
         403,
         'FORBIDDEN_SCOPE'
       );
@@ -356,7 +375,7 @@ export class RequisitionController {
 
     const existing = await prisma.requisition.findUnique({ where: { id } });
     if (!existing) {
-      errorResponse(res, 'Requisition not found.', 404, 'NOT_FOUND');
+      errorResponse(res, 'Không tìm thấy yêu cầu tuyển dụng.', 404, 'NOT_FOUND');
       return;
     }
 
@@ -521,7 +540,7 @@ export class RequisitionController {
       if (outsideSalaryBand && !String(salaryExplanation).trim()) {
         errorResponse(
           res,
-          'An explanation is required when salary is outside the standard band.',
+          'Dải lương đề xuất vượt mức chuẩn của chức danh. Vui lòng nhập giải trình.',
           400,
           'SALARY_EXPLANATION_REQUIRED'
         );
@@ -595,7 +614,7 @@ export class RequisitionController {
     if (!canApprove) {
       errorResponse(
         res,
-        'Access denied. You do not have approval authorization for this requisition.',
+        'Bạn không được phân công phê duyệt yêu cầu tuyển dụng này.',
         403,
         'FORBIDDEN_SCOPE'
       );

@@ -8,6 +8,7 @@ import { comparePassword, hashPassword } from '../../utils/password';
 import {
   signAccessToken,
   signRefreshToken,
+  verifyAccessToken,
   verifyRefreshToken,
   revokeToken,
   isTokenRevoked,
@@ -481,19 +482,30 @@ for (const userRole of user.roles) {
        TOKEN
     ===================================================== */
 
-    const payload = {
+   // S1-02 - Tao phien dang nhap moi
+const sessionId = crypto.randomUUID();
 
-      userId:
-        user.id,
+const sessionCreatedAt = new Date();
 
-      email:
-        user.email,
+await prisma.authSession.create({
+  data: {
+    id: sessionId,
+    userId: user.id,
+    createdAt: sessionCreatedAt,
+    lastActivityAt: sessionCreatedAt,
+    expiresAt: new Date(
+      sessionCreatedAt.getTime() + 20 * 60 * 1000
+    ),
+  },
+});
 
-      tokenVersion:
-        user.tokenVersion,
-
-    };
-
+// Gan ma phien vao token
+const payload = {
+  userId: user.id,
+  email: user.email,
+  tokenVersion: user.tokenVersion,
+  sessionId,
+};
 
     const accessToken =
       signAccessToken(
@@ -734,6 +746,85 @@ for (const userRole of user.roles) {
 
   }
 
+/* =========================================================
+   S1-02 - GHI NHAN HOAT DONG NGUOI DUNG
+========================================================= */
+
+static async activity(
+  req: Request,
+  res: Response
+): Promise<void> {
+  if (!req.user || !req.token) {
+    errorResponse(
+      res,
+      'Vui lòng đăng nhập.',
+      401,
+      'UNAUTHORIZED'
+    );
+    return;
+  }
+
+  const payload = verifyAccessToken(req.token);
+  const sessionId = payload?.sessionId;
+
+  if (
+    typeof sessionId !== 'string' ||
+    !sessionId ||
+    payload?.userId !== req.user.id
+  ) {
+    errorResponse(
+      res,
+      'Phiên đăng nhập không hợp lệ.',
+      401,
+      'SESSION_INVALIDATED'
+    );
+    return;
+  }
+
+  const now = new Date();
+  const idleTimeoutMs = 20 * 60 * 1000;
+
+  const updated = await prisma.authSession.updateMany({
+    where: {
+      id: sessionId,
+      userId: req.user.id,
+      revokedAt: null,
+      expiresAt: {
+        gt: now,
+      },
+      lastActivityAt: {
+        gt: new Date(now.getTime() - idleTimeoutMs),
+      },
+    },
+    data: {
+      lastActivityAt: now,
+      expiresAt: new Date(now.getTime() + idleTimeoutMs),
+    },
+  });
+
+  if (updated.count !== 1) {
+    errorResponse(
+      res,
+      'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+      401,
+      'SESSION_EXPIRED'
+    );
+    return;
+  }
+
+  successResponse(
+    res,
+    {
+      lastActivityAt: now.toISOString(),
+      expiresAt: new Date(
+        now.getTime() + idleTimeoutMs
+      ).toISOString(),
+    },
+    200,
+    'Session activity recorded'
+  );
+}
+
 
   /* =========================================================
      S1-02 - LOGOUT
@@ -758,6 +849,27 @@ for (const userRole of user.roles) {
 
         : null;
 
+        // S1-02 - Thu hoi phien hien tai
+const logoutPayload = accessToken
+  ? verifyAccessToken(accessToken)
+  : null;
+
+if (
+  logoutPayload &&
+  typeof logoutPayload.sessionId === 'string' &&
+  logoutPayload.userId === req.user?.id
+) {
+  await prisma.authSession.updateMany({
+    where: {
+      id: logoutPayload.sessionId,
+      userId: logoutPayload.userId,
+      revokedAt: null,
+    },
+    data: {
+      revokedAt: new Date(),
+    },
+  });
+}
 
     if (accessToken) {
 
@@ -768,23 +880,18 @@ for (const userRole of user.roles) {
     }
 
 
-    if (refreshToken) {
+   if (refreshToken) {
+  const refreshPayload = verifyRefreshToken(refreshToken);
 
-      const refreshPayload =
-        verifyRefreshToken(
-          refreshToken
-        );
-
-
-      if (refreshPayload) {
-
-        await revokeToken(
-          refreshToken
-        );
-
-      }
-
-    }
+  if (
+    refreshPayload &&
+    logoutPayload &&
+    refreshPayload.userId === logoutPayload.userId &&
+    refreshPayload.sessionId === logoutPayload.sessionId
+  ) {
+    await revokeToken(refreshToken);
+  }
+}
 
 
     if (req.user) {
@@ -927,21 +1034,49 @@ for (const userRole of user.roles) {
       return;
     }
 
+// S1-02 - Kiem tra phien truoc khi lam moi token
+const refreshSessionId = payload.sessionId;
 
-    const newAccessToken =
-      signAccessToken({
+if (!refreshSessionId) {
+  errorResponse(
+    res,
+    'Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.',
+    401,
+    'SESSION_INVALIDATED'
+  );
+  return;
+}
 
-        userId:
-          user.id,
+const refreshSession = await prisma.authSession.findUnique({
+  where: {
+    id: refreshSessionId,
+  },
+});
 
-        email:
-          user.email,
+const refreshNow = Date.now();
 
-        tokenVersion:
-          user.tokenVersion,
+if (
+  !refreshSession ||
+  refreshSession.userId !== user.id ||
+  refreshSession.revokedAt !== null ||
+  refreshSession.expiresAt.getTime() <= refreshNow ||
+  refreshSession.lastActivityAt.getTime() + 20 * 60 * 1000 <= refreshNow
+) {
+  errorResponse(
+    res,
+    'Phiên đăng nhập đã hết hạn do không hoạt động trong 20 phút.',
+    401,
+    'SESSION_EXPIRED'
+  );
+  return;
+}
 
-      });
-
+    const newAccessToken = signAccessToken({
+  userId: user.id,
+  email: user.email,
+  tokenVersion: user.tokenVersion,
+  sessionId: refreshSessionId,
+});
 
     successResponse(
       res,
@@ -1086,7 +1221,49 @@ for (const userRole of user.roles) {
 
       return;
     }
+// S1-02 - Xac dinh phien dang nhap hien tai
+const currentTokenPayload = req.token
+  ? verifyAccessToken(req.token)
+  : null;
 
+const passwordSessionId = currentTokenPayload?.sessionId;
+
+if (
+  !passwordSessionId ||
+  currentTokenPayload?.userId !== req.user.id
+) {
+  errorResponse(
+    res,
+    'Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.',
+    401,
+    'SESSION_INVALIDATED'
+  );
+  return;
+}
+
+const passwordSession = await prisma.authSession.findUnique({
+  where: {
+    id: passwordSessionId,
+  },
+});
+
+const passwordSessionNow = Date.now();
+
+if (
+  !passwordSession ||
+  passwordSession.userId !== req.user.id ||
+  passwordSession.revokedAt !== null ||
+  passwordSession.expiresAt.getTime() <= passwordSessionNow ||
+  passwordSession.lastActivityAt.getTime() + 20 * 60 * 1000 <= passwordSessionNow
+) {
+  errorResponse(
+    res,
+    'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+    401,
+    'SESSION_EXPIRED'
+  );
+  return;
+}
 
     /* =====================================================
        KHÔNG DÙNG LẠI 5 PASSWORD GẦN NHẤT
@@ -1209,19 +1386,12 @@ for (const userRole of user.roles) {
       transactionResult[1];
 
 
-    const newTokenPayload = {
-
-      userId:
-        updatedUser.id,
-
-      email:
-        updatedUser.email,
-
-      tokenVersion:
-        updatedUser
-          .tokenVersion,
-
-    };
+   const newTokenPayload = {
+  userId: updatedUser.id,
+  email: updatedUser.email,
+  tokenVersion: updatedUser.tokenVersion,
+  sessionId: passwordSessionId,
+};
 
 
     const accessToken =
