@@ -333,7 +333,7 @@ const [handoverWarning, setHandoverWarning] = useState("");
 
       body: JSON.stringify({
         email: form.email.trim().toLowerCase(),
-        password: form.password,
+
         fullName: form.name.trim(),
 
         roles: [form.role],
@@ -409,19 +409,10 @@ const [handoverWarning, setHandoverWarning] = useState("");
       return;
     }
 
-    if (formMode === "create") {
-      if (!form.password || !form.role) {
-        setFormError("Vui lòng nhập mật khẩu và chọn vai trò.");
-
-        return;
-      }
-
-      if (form.password.length < 6) {
-        setFormError("Mật khẩu phải có ít nhất 6 ký tự.");
-
-        return;
-      }
-    }
+  if (formMode === "create" && !form.role) {
+  setFormError("Vui lòng chọn vai trò phân quyền.");
+  return;
+}
 
     try {
       setSubmitting(true);
@@ -762,24 +753,6 @@ const confirmUnlockAccount = async () => {
 
                 {formMode === "create" && (
                   <>
-                    <div className="account-field">
-                      <label>
-                        Mật khẩu <span>*</span>
-                      </label>
-
-                      <input
-                        className="account-control"
-                        type="password"
-                        placeholder="Ít nhất 6 ký tự"
-                        value={form.password}
-                        onChange={(event) =>
-                          setForm({
-                            ...form,
-                            password: event.target.value,
-                          })
-                        }
-                      />
-                    </div>
 
                     <div className="account-field">
                       <label>

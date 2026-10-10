@@ -360,15 +360,4 @@ export const MENU_REGISTRY: MenuItemConfig[] = [
     requiredRoles: [RoleType.HR_MANAGER, RoleType.ADMIN],
     children: [],
   },
-
-  // 21. Cấu hình hệ thống
-  {
-    key: 'company-config',
-    label: 'Cấu hình',
-    path: '/company-config',
-    icon: 'settings',
-    order: 36,
-    requiredRoles: [RoleType.ADMIN],
-    children: [],
-  },
 ];

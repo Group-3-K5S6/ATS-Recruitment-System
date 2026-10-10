@@ -175,6 +175,7 @@ export default function EmployeeImportModal({
   const [isImporting, setIsImporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
+  const [defaultRole, setDefaultRole] = useState("INTERVIEWER");
   const inputRef = useRef<HTMLInputElement>(null);
 
 
@@ -352,6 +353,7 @@ export default function EmployeeImportModal({
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
+          defaultRole,
           employees: employees.map((row) => ({
             HoTen: row.HoTen,
             Email: row.Email,
@@ -447,6 +449,17 @@ export default function EmployeeImportModal({
           {fileError && <div className="employee-import-file-error" role="alert"><AlertCircle size={16} /><span>{fileError}</span></div>}
           <div className="employee-import-help"><CircleHelp size={15} /><span>Tệp cần có các cột <b>HoTen, Email, PhongBan, ChucVu, SoDienThoai</b>.</span><button aria-label="Tải file mẫu" className="employee-import-help-chevron" onClick={downloadTemplate} title="Tải file mẫu" type="button"><Download size={14} /></button></div>
 
+          <label style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", margin: "12px 0", color: "#34423c", fontSize: 12 }}>
+            Vai trò mặc định của nhân sự sau khi nhập:
+            <select value={defaultRole} disabled={isImporting} onChange={e => setDefaultRole(e.target.value)} style={{ border: "1px solid #cbd5e1", borderRadius: 7, padding: 7 }}>
+              <option value="INTERVIEWER">Người phỏng vấn</option>
+              <option value="RECRUITER">Nhân viên tuyển dụng</option>
+              <option value="HIRING_MANAGER">Trưởng bộ phận</option>
+              <option value="HR_MANAGER">Trưởng phòng Nhân sự</option>
+              <option value="APPROVER">Người duyệt</option>
+            </select>
+          </label>
+          <div className="employee-import-help">Tài khoản hợp lệ sẽ được gửi mật khẩu tạm qua email. Dòng gửi mail thất bại sẽ bị bỏ qua.</div>
           <div className="employee-import-step-label preview-label"><span className="employee-import-step">02</span><span>Xem trước dữ liệu</span><span className="employee-import-source">{sourceLabel}</span></div>
           <div aria-label="Thống kê dữ liệu nhập" className="employee-import-stats">
             <div className="employee-import-stat"><span className="employee-import-stat-icon neutral"><Users size={17} /></span><div><strong>{employees.length}</strong><span>Tổng số dòng</span></div></div>

@@ -257,6 +257,13 @@ function Sidebar({
   };
 
   const handleMenuClick = (item: SidebarItem) => {
+    // S2-10: HiringManager goes to the existing create-request route.
+    if (item.key === "requisitions" && role === "HiringManager") {
+      navigate("/recruitment-requests/create");
+      setOpen(false);
+      return;
+    }
+
     /*
      * Các trang có route React thật.
      */

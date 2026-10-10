@@ -1,0 +1,70 @@
+/* Ô lương dùng chung S2-05 và S2-10; không thay đổi định dạng dữ liệu gửi API. */
+.ats-vnd-field { width: 100%; min-width: 0; }
+.ats-vnd-control {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  border: 1px solid #d6dfeb;
+  border-radius: 9px;
+  background: #fff;
+  overflow: hidden;
+  transition: border-color .18s, box-shadow .18s;
+}
+.ats-vnd-control:hover { border-color: #9fb8e5; }
+.ats-vnd-control:focus-within {
+  border-color: #3c73e6;
+  box-shadow: 0 0 0 3px rgba(56, 111, 225, .13);
+}
+.ats-vnd-control > input,
+.ats-req-field .ats-vnd-control > input {
+  box-sizing: border-box;
+  display: block;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  outline: 0;
+  box-shadow: none;
+  padding: 10px 12px;
+  color: #1d304d;
+  font: 600 14px/1.4 "Segoe UI", Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.ats-vnd-control > input:focus,
+.ats-vnd-control > input:hover,
+.ats-req-field .ats-vnd-control > input:focus,
+.ats-req-field .ats-vnd-control > input:hover {
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+}
+.ats-vnd-control > input::placeholder {
+  color: #a1aec0;
+  font-weight: 400;
+}
+.ats-vnd-unit {
+  flex-shrink: 0;
+  margin-right: 10px;
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: #eff4ff;
+  color: #245dcb;
+  font: 700 11px/1.3 "Segoe UI", Arial, sans-serif;
+}
+.ats-vnd-hint {
+  display: block;
+  margin-top: 6px;
+  color: #657b96;
+  font: 500 12px/1.4 "Segoe UI", Arial, sans-serif;
+}
+.ats-vnd-field--green .ats-vnd-control { border-radius: 7px; border-color: #ccd7d1; }
+.ats-vnd-field--green .ats-vnd-control:hover { border-color: #87b4a0; }
+.ats-vnd-field--green .ats-vnd-control:focus-within { border-color: #2a7b58; box-shadow: 0 0 0 3px rgba(38, 117, 83, .13); }
+.ats-vnd-field--green .ats-vnd-unit { background: #eaf5ef; color: #267553; }
+.ats-vnd-field--green .ats-vnd-hint { color: #567467; }

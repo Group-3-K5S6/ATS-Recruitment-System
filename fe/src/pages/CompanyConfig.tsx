@@ -1,4 +1,5 @@
-import React, { useState, ChangeEvent, FormEvent } from 'react';
+import React, { useState } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
 import { Upload, Eye, Save, X, Building, Globe, Mail, MapPin } from 'lucide-react';
 
 interface CompanyData {

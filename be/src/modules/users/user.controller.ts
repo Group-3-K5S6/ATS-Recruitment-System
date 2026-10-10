@@ -7,7 +7,7 @@ import { UserPolicy } from '../../policies/user.policy';
 
 import { hashPassword } from '../../utils/password';
 
-import { randomUUID } from 'crypto';
+import { randomUUID, randomBytes } from 'crypto';
 
 import { sendAccountActivationEmail } from '../../utils/email';
 
@@ -34,7 +34,6 @@ import { RoleType } from '../../rbac/roles';
 
 export const createUserSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(6), 
   fullName: z.string().min(2),
 
   departmentId: z
@@ -58,6 +57,11 @@ export const importEmployeeRowSchema = z.object({
 
 export const importPayloadSchema = z.object({
   employees: z.array(importEmployeeRowSchema).min(1),
+  // Không tự cấp quyền Admin/Candidate khi nhập hàng loạt nhân sự nội bộ.
+  defaultRole: z.enum([
+    RoleType.INTERVIEWER, RoleType.HIRING_MANAGER, RoleType.RECRUITER,
+    RoleType.HR_MANAGER, RoleType.APPROVER,
+  ]).optional().default(RoleType.INTERVIEWER),
 });
 
 export const updateProfileSchema = z
@@ -468,7 +472,7 @@ static async updateProfile(
 
       errorResponse(
         res,
-        'Access denied. Only HR Managers and Admins can view users.',
+        'Bạn không có quyền xem danh sách tài khoản.',
         403,
         'FORBIDDEN_ROLE'
       );
@@ -612,8 +616,11 @@ static async updateProfile(
  * Backend hash mật khẩu, tạo tài khoản
  * và gửi mật khẩu tạm qua email.
  */
+const temporaryPassword =
+  randomBytes(16).toString('hex') + 'Aa1!';
+
 const passwordHash =
-  await hashPassword(data.password);
+  await hashPassword(temporaryPassword);
 
 try {
   const newUser =
@@ -656,10 +663,10 @@ try {
    */
   try {
     await sendAccountActivationEmail(
-      newUser.email,
-      newUser.fullName,
-      data.password
-    );
+  newUser.email,
+  newUser.fullName,
+  temporaryPassword
+);
   } catch (emailError) {
     console.error(
       'Không gửi được email tài khoản mới:',
@@ -740,7 +747,7 @@ try {
 
       errorResponse(
         res,
-        'Access denied. Only Admins can update internal user accounts.',
+        'Chỉ quản trị viên mới có quyền cập nhật tài khoản nội bộ.',
         403,
         'FORBIDDEN_ROLE'
       );
@@ -765,7 +772,7 @@ try {
 
       errorResponse(
         res,
-        'User not found.',
+        'Không tìm thấy tài khoản.',
         404,
         'NOT_FOUND'
       );
@@ -774,15 +781,10 @@ try {
     }
 
 
+    const normalizedEmail = String(data.email).trim().toLowerCase();
     const emailOwner =
       await prisma.user.findUnique({
-
-        where: {
-
-          email: data.email,
-
-        },
-
+        where: { email: normalizedEmail },
       });
 
 
@@ -793,7 +795,7 @@ try {
 
       errorResponse(
         res,
-        'Email already in use.',
+        'Email này đã tồn tại trong hệ thống.',
         409,
         'EMAIL_EXISTS'
       );
@@ -814,11 +816,8 @@ try {
 
         data: {
 
-          email:
-            data.email,
-
-          fullName:
-            data.fullName,
+          email: normalizedEmail,
+          fullName: data.fullName.trim(),
 
         },
 
@@ -846,7 +845,7 @@ try {
       res,
       updated,
       200,
-      'User account updated successfully.'
+      'Cập nhật tài khoản thành công.'
     );
   }
 
@@ -877,7 +876,7 @@ try {
 
       errorResponse(
         res,
-        'Access denied. Only Admins can modify user roles.',
+        'Chỉ quản trị viên mới có quyền thay đổi vai trò.',
         403,
         'FORBIDDEN_ROLE'
       );
@@ -917,7 +916,7 @@ try {
 
       errorResponse(
         res,
-        'User not found.',
+        'Không tìm thấy tài khoản.',
         404,
         'NOT_FOUND'
       );
@@ -959,7 +958,7 @@ try {
 
       errorResponse(
         res,
-        'Admin cannot revoke their own ADMIN role.',
+        'Bạn không thể tự thu hồi vai trò quản trị của mình.',
         403,
         'CANNOT_REVOKE_OWN_ADMIN_ROLE'
       );
@@ -1034,7 +1033,7 @@ try {
       {
 
         message:
-          'Roles updated successfully',
+          'Cập nhật vai trò thành công',
 
         roles,
 
@@ -1179,7 +1178,7 @@ try {
 
       errorResponse(
         res,
-        'Access denied. Only Admins can enable user accounts.',
+        'Chỉ quản trị viên mới có quyền mở khóa tài khoản.',
         403,
         'FORBIDDEN_ACTION'
       );
@@ -1204,7 +1203,7 @@ try {
 
       errorResponse(
         res,
-        'User not found.',
+        'Không tìm thấy tài khoản.',
         404,
         'NOT_FOUND'
       );
@@ -1337,8 +1336,6 @@ try {
           );
         } else if (seenEmails.has(email)) {
           errors.push("Email bị trùng trong tệp");
-        } else {
-          seenEmails.add(email);
         }
 
         if (!departmentName) {
@@ -1362,6 +1359,9 @@ try {
             "Số điện thoại không hợp lệ"
           );
         }
+
+        // Giữ quy tắc trùng email giống bước nhập thật: dòng sai không giữ chỗ.
+        if (errors.length === 0) seenEmails.add(email);
 
         return {
           rowNumber,
@@ -1409,7 +1409,12 @@ try {
       return;
     }
 
-    const { employees } = req.body;
+    const { employees, defaultRole } = req.body as z.infer<typeof importPayloadSchema>;
+    const role = await prisma.role.findUnique({ where: { name: defaultRole } });
+    if (!role) {
+      errorResponse(res, "Vai trò nhập nhân sự không tồn tại trong hệ thống.", 400, "INVALID_ROLE");
+      return;
+    }
 
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
     const phonePattern =
@@ -1555,8 +1560,11 @@ try {
               email,
               passwordHash,
               fullName,
+              phone,
+              jobTitle,
               departmentId: department!.id,
               isActive: true,
+              roles: { create: [{ roleId: role.id }] },
             },
             select: {
               id: true,
@@ -1565,6 +1573,19 @@ try {
               departmentId: true,
             },
           });
+
+        // S1-08/S2-01: tài khoản chỉ được coi là nhập thành công
+        // khi nhân viên thực sự nhận được mật khẩu tạm qua email.
+        try {
+          await sendAccountActivationEmail(email, fullName, temporaryPassword);
+        } catch {
+          await prisma.user.delete({ where: { id: newUser.id } });
+          failedRows.push({
+            rowNumber, email,
+            errors: ["Không gửi được email mật khẩu tạm, tài khoản chưa được nhập"],
+          });
+          continue;
+        }
 
         existingEmails.add(email);
         createdUsers.push(newUser);

@@ -27,3 +27,17 @@ node_modules/
 dist/
 **/prisma/ats.db
 **/.env
+
+# Local ATS secrets, SQLite working data and temporary artifacts
+**/.env
+**/.env.*
+!**/.env.example
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.bak
+*.s1-*-backup

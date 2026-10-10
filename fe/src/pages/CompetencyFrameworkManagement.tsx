@@ -1342,28 +1342,6 @@ function CompetencyFrameworkManagement({
                   )
                 }
 
-
-                <p
-                  style={{
-                    marginTop:
-                      "22px",
-                    padding:
-                      "12px 14px",
-                    background:
-                      "#f8fafc",
-                    borderLeft:
-                      "4px solid #2563eb",
-                    color:
-                      "#475569",
-                  }}
-                >
-                  Bộ tiêu chí và trọng số
-                  của khung năng lực này
-                  sẽ được dùng để sinh
-                  phiếu đánh giá phỏng vấn
-                  ở Sprint 6.
-                </p>
-
               </div>
 
             </section>

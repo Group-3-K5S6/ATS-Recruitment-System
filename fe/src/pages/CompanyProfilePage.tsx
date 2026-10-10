@@ -15,6 +15,8 @@ type Profile = {
   contactEmail: string;
   location: string;
   isPublished: boolean;
+  logoData?: string | null;
+  bannerData?: string | null;
 };
 type Props = { role: Role; userName: string; onLogout: () => Promise<void> };
 const API = import.meta.env.VITE_ATS_API_URL || "http://localhost:4000";
@@ -58,6 +60,29 @@ export default function CompanyProfilePage({ role, userName, onLogout }: Props) 
     catch (e) { setError(e instanceof Error ? e.message : "Không lưu được cấu hình."); }
     finally { setSaving(false); }
   };
+  const uploadImage = async (kind: "logo" | "banner", file?: File) => {
+    if (!file) return;
+    if (!["image/jpeg", "image/png"].includes(file.type) || file.size > 3 * 1024 * 1024) {
+      setError("Chỉ chấp nhận ảnh JPG/PNG dung lượng không quá 3 MB.");
+      return;
+    }
+    setSaving(true); setError(""); setNotice("");
+    const form = new FormData(); form.append("image", file);
+    try {
+      const response = await fetch(`${API}/api/company-profile/media/${kind}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${sessionStorage.getItem("accessToken") || ""}` },
+        body: form,
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.error?.message || "Không thể tải ảnh.");
+      setProfile(old => ({ ...old, ...result.data }));
+      setNotice(kind === "logo" ? "Đã lưu logo công ty." : "Đã lưu ảnh giới thiệu công ty.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không thể tải ảnh.");
+    } finally { setSaving(false); }
+  };
+
   const handleMenu = (label: string) => {
     if (label === "Tổng quan") navigate("/dashboard");
     if (label === "Danh mục tuyển dụng") navigate("/recruitment-catalog");
@@ -76,6 +101,19 @@ export default function CompanyProfilePage({ role, userName, onLogout }: Props) 
       {notice && <div className="company-profile-alert success"><Check size={16}/>{notice}</div>}
       {loading ? <div className="company-profile-loading">Đang tải cấu hình...</div> : <div className={`company-profile-layout ${preview ? "with-preview" : ""}`}>
         <form className="company-profile-form" onSubmit={save}>
+          <section className="company-profile-card">
+            <div className="company-profile-section-heading"><div><h2>Ảnh và logo công ty</h2><p>JPG hoặc PNG, tối đa 3 MB. Ảnh được xử lý và lưu trong hệ thống.</p></div></div>
+            <div className="company-profile-fields">
+              <label>Logo công ty
+                <input type="file" accept="image/jpeg,image/png" disabled={saving} onChange={e => { void uploadImage("logo", e.target.files?.[0]); e.target.value = ""; }}/>
+                {profile.logoData && <img src={profile.logoData} alt="Logo công ty" style={{ width: 76, height: 76, objectFit: "cover", borderRadius: 12 }}/>}
+              </label>
+              <label>Ảnh giới thiệu / ảnh bìa
+                <input type="file" accept="image/jpeg,image/png" disabled={saving} onChange={e => { void uploadImage("banner", e.target.files?.[0]); e.target.value = ""; }}/>
+                {profile.bannerData && <img src={profile.bannerData} alt="Ảnh bìa công ty" style={{ maxWidth: 240, maxHeight: 100, objectFit: "cover" }}/>}
+              </label>
+            </div>
+          </section>
           <section className="company-profile-card"><div className="company-profile-section-heading"><span className="company-profile-section-icon"><Building2 size={17}/></span><div><h2>Thông tin doanh nghiệp</h2><p>Thông tin cơ bản xuất hiện trên trang tuyển dụng.</p></div></div>
             <div className="company-profile-fields"><label className="wide">Tên công ty <b>*</b><input required minLength={2} maxLength={120} value={profile.companyName} onChange={e => update("companyName", e.target.value)} placeholder="Ví dụ: Công ty Cổ phần ABC"/></label>
               <label className="wide">Thông điệp giới thiệu<input maxLength={180} value={profile.tagline} onChange={e => update("tagline", e.target.value)} placeholder="Một câu ngắn về môi trường và cơ hội tại công ty"/><small>{profile.tagline.length}/180 ký tự</small></label>
@@ -91,7 +129,7 @@ export default function CompanyProfilePage({ role, userName, onLogout }: Props) 
           </section>
           <div className="company-profile-form-footer"><span>Các thay đổi chỉ có hiệu lực sau khi lưu.</span><button type="submit" className="catalog-primary" disabled={saving}><Save size={16}/>{saving ? "Đang lưu..." : "Lưu cấu hình"}</button></div>
         </form>
-        {preview && <aside className="company-profile-preview"><div className="company-profile-preview-top"><span>TRANG TUYỂN DỤNG</span><span className={profile.isPublished ? "published" : "draft"}>{profile.isPublished ? "Đang đăng" : "Bản nháp"}</span></div><div className="company-profile-preview-hero"><div className="company-profile-preview-logo">{profile.companyName ? profile.companyName.charAt(0).toUpperCase() : "C"}</div><p>VỀ CHÚNG TÔI</p><h2>{profile.companyName || "Tên công ty"}</h2><strong>{profile.tagline || "Thông điệp giới thiệu sẽ xuất hiện tại đây"}</strong></div><div className="company-profile-preview-body"><h3>Câu chuyện của chúng tôi</h3><p>{profile.introduction || "Nội dung giới thiệu công ty sẽ hiển thị tại đây."}</p>{profile.culture && <><h3>Văn hóa</h3><p>{profile.culture}</p></>}{profile.benefits && <><h3>Quyền lợi</h3><p>{profile.benefits}</p></>}<div className="company-profile-preview-contact">{profile.location && <span>{profile.location}</span>}{profile.contactEmail && <span>{profile.contactEmail}</span>}{profile.website && <span>{profile.website}</span>}</div></div></aside>}
+        {preview && <aside className="company-profile-preview"><div className="company-profile-preview-top"><span>TRANG TUYỂN DỤNG</span><span className={profile.isPublished ? "published" : "draft"}>{profile.isPublished ? "Đang đăng" : "Bản nháp"}</span></div><div className="company-profile-preview-hero" style={profile.bannerData ? { backgroundImage: `linear-gradient(0deg, rgba(15,23,42,0.55), rgba(15,23,42,0.25)), url(${profile.bannerData})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}><div className="company-profile-preview-logo">{profile.logoData ? <img src={profile.logoData} alt="Logo công ty" style={{ width: "100%", height: "100%", borderRadius: "inherit", objectFit: "cover" }}/> : (profile.companyName ? profile.companyName.charAt(0).toUpperCase() : "C")}</div><p>VỀ CHÚNG TÔI</p><h2>{profile.companyName || "Tên công ty"}</h2><strong>{profile.tagline || "Thông điệp giới thiệu sẽ xuất hiện tại đây"}</strong></div><div className="company-profile-preview-body"><h3>Câu chuyện của chúng tôi</h3><p>{profile.introduction || "Nội dung giới thiệu công ty sẽ hiển thị tại đây."}</p>{profile.culture && <><h3>Văn hóa</h3><p>{profile.culture}</p></>}{profile.benefits && <><h3>Quyền lợi</h3><p>{profile.benefits}</p></>}<div className="company-profile-preview-contact">{profile.location && <span>{profile.location}</span>}{profile.contactEmail && <span>{profile.contactEmail}</span>}{profile.website && <span>{profile.website}</span>}</div></div></aside>}
       </div>}
     </main>
   </div>;

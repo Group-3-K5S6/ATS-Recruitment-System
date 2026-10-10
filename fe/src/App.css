@@ -2083,3 +2083,197 @@
     flex: 1 1 100%;
   }
 }
+
+/* =====================================================
+   S1-06 - SIDEBAR CUON DOC LAP
+   ===================================================== */
+
+/* Sidebar cố định toàn bộ chiều cao màn hình */
+.sidebar {
+  height: 100vh;
+  height: 100dvh;
+  box-sizing: border-box;
+
+  display: flex;
+  flex-direction: column;
+
+  overflow: hidden;
+}
+
+/* Logo và thông tin tài khoản không bị co */
+.sidebar-logo,
+.sidebar-user {
+  flex-shrink: 0;
+}
+
+/* Chỉ danh sách menu được cuộn */
+.sidebar-menu {
+  flex: 1 1 auto;
+  min-height: 0;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  overscroll-behavior: contain;
+
+  padding-right: 4px;
+
+  scrollbar-width: thin;
+  scrollbar-color: #6383a5 transparent;
+}
+
+/* Các mục menu giữ nguyên chiều cao */
+.sidebar-menu-item {
+  flex-shrink: 0;
+}
+
+/* Thanh cuộn cho Chrome và Edge */
+.sidebar-menu::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sidebar-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-menu::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.28);
+  border-radius: 10px;
+}
+
+.sidebar-menu::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* Nút đăng xuất luôn nằm ngoài vùng cuộn menu */
+.sidebar > .logout-button {
+  flex-shrink: 0;
+  margin-top: 12px;
+}
+
+/* Giữ Sidebar hoạt động trên điện thoại */
+@media (max-width: 768px) {
+  .sidebar {
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  .sidebar-menu {
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+/* S2 - Giao diện ngân hàng câu hỏi phỏng vấn */
+.interview-question-bank-content {
+  font-family: "Segoe UI", Arial, sans-serif;
+  min-width: 0;
+}
+
+.interview-question-bank-content button,
+.interview-question-bank-content input,
+.interview-question-bank-content select,
+.interview-question-bank-content textarea {
+  font-family: inherit;
+}
+/* ============================================
+   DASHBOARD - CAI THIEN GIAO DIEN TONG QUAN
+   ============================================ */
+
+.dashboard-overview {
+  font-family: "Segoe UI", Arial, sans-serif;
+}
+
+/* Tieu de */
+.dashboard-overview .dashboard-header h1 {
+  font-size: 30px;
+  line-height: 1.3;
+  font-weight: 700;
+}
+
+.dashboard-overview .dashboard-header p {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* Bon the thong ke tren cung mot hang */
+.dashboard-overview .dashboard-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+
+/* The thong ke */
+.dashboard-overview .dashboard-card {
+  min-width: 0;
+  padding: 20px;
+  border-radius: 12px;
+}
+
+.dashboard-overview .dashboard-card span {
+  font-size: 30px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.dashboard-overview .dashboard-card p {
+  margin-top: 8px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* Bang bao cao */
+.dashboard-overview .dashboard-panel {
+  margin-top: 20px;
+  overflow-x: auto;
+}
+
+.dashboard-overview .panel-title h2 {
+  font-family: inherit;
+  font-size: 22px;
+  line-height: 1.4;
+}
+
+.dashboard-overview .dashboard-table {
+  width: 100%;
+}
+
+.dashboard-overview .dashboard-table th,
+.dashboard-overview .dashboard-table td {
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 14px 16px;
+}
+
+/* Man hinh vua */
+@media (max-width: 1359px) {
+  .dashboard-overview .dashboard-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Dien thoai */
+@media (max-width: 600px) {
+  .dashboard-overview .dashboard-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-overview .dashboard-card {
+    padding: 18px;
+  }
+
+  .dashboard-overview .dashboard-header h1 {
+    font-size: 26px;
+  }
+
+  .dashboard-overview .panel-title h2 {
+    font-size: 19px;
+  }
+}
+
+/* Dashboard - hien thi ngan sach */
+.dashboard-overview .dashboard-budget-value {
+  font-size: clamp(20px, 2vw, 30px);
+  overflow-wrap: anywhere;
+}
