@@ -1,3 +1,4 @@
+import './create-recruitment-layout.css';
 import { useEffect, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -57,6 +58,15 @@ function flattenDepartments(nodes: Department[]): Department[] {
 
 export default function CreateRecruitmentRequest() {
   const navigate = useNavigate();
+  // S3-05: nut sao chep chi hien cho Truong bo phan; BE van kiem tra quyen thuc.
+  const canCopyExisting = (() => {
+    try {
+      const stored = sessionStorage.getItem('atsUser');
+      const account = stored ? JSON.parse(stored) as { roles?: string[] } : null;
+      return Array.isArray(account?.roles) && account.roles.includes('HIRING_MANAGER');
+    } catch { return false; }
+  })();
+
   const [form, setForm] = useState<FormData>(initialData);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [titles, setTitles] = useState<JobTitle[]>([]);
@@ -226,34 +236,9 @@ export default function CreateRecruitmentRequest() {
             <h1>Tạo yêu cầu tuyển dụng</h1>
             <p>Điền thông tin vị trí cần tuyển. Bạn có thể lưu bản nháp hoặc gửi yêu cầu phê duyệt.</p>
           </div>
-          <div className="ats-req-header-icon" aria-hidden="true"><ClipboardList size={29} strokeWidth={1.8} /></div>
+          <button className="ats-req-btn ats-req-btn--back ats-req-header-back" type="button" onClick={() => navigate(-1)}><ArrowLeft size={17} aria-hidden="true" /> Quay lại</button>
         </header>
 
-        <section className="ats-req-draft-area" aria-label="Bản nháp yêu cầu tuyển dụng">
-          <div className="ats-req-draft-toolbar">
-            <div>
-              <strong>{editingDraftId ? 'Đang chỉnh sửa bản nháp' : 'Bản nháp đã lưu'}</strong>
-              <p>{editingDraftId ? `Mã yêu cầu: ${editingDraftId}` : 'Mở bản nháp cũ để bổ sung thông tin và gửi phê duyệt mà không tạo yêu cầu trùng.'}</p>
-            </div>
-            <div className="ats-req-draft-buttons">
-              {editingDraftId && <button type="button" className="ats-req-btn" onClick={startNewRequest}>Tạo mới</button>}
-              <button type="button" className="ats-req-btn ats-req-btn--draft" disabled={loadingDrafts || saving || loading || !currentUserId} onClick={() => void showSavedDrafts()}>
-                {loadingDrafts ? 'Đang tải...' : 'Xem bản nháp đã lưu'}
-              </button>
-            </div>
-          </div>
-          {showDrafts && (
-            <div className="ats-req-draft-list">
-              {loadingDrafts ? <p>Đang tải danh sách bản nháp...</p> : drafts.length === 0 ?
-                <p>Không tìm thấy bản nháp của bạn.</p> : drafts.map(draft => (
-                  <div className="ats-req-draft-row" key={draft.id}>
-                    <div><strong>{draft.title || 'Yêu cầu tuyển dụng'}</strong><span>{draft.department?.name || 'Chưa có phòng ban'} · {draft.id}</span></div>
-                    <button type="button" className="ats-req-btn ats-req-btn--draft" disabled={loadingDrafts} onClick={() => void openDraft(draft.id)}>Mở bản nháp</button>
-                  </div>
-                ))}
-            </div>
-          )}
-        </section>
 
         {error && <div className="ats-req-alert ats-req-alert--error" role="alert"><Info size={19} aria-hidden="true" /><span>{error}</span></div>}
         {notice && <div className="ats-req-alert ats-req-alert--success" role="status"><CheckCircle2 size={19} aria-hidden="true" /><span>{notice}</span></div>}
@@ -262,6 +247,7 @@ export default function CreateRecruitmentRequest() {
           <div className="ats-req-loading" role="status">Đang tải danh mục chức danh và phòng ban...</div>
         ) : (
           <form onSubmit={e => { e.preventDefault(); void submit(false); }}>
+
             <div className="ats-req-content">
               <div className="ats-req-form-column">
                 <section className="ats-req-card">
@@ -342,6 +328,36 @@ export default function CreateRecruitmentRequest() {
               </div>
 
               <aside className="ats-req-aside" aria-label="Hướng dẫn lập yêu cầu">
+                <section className="ats-req-draft-area" aria-label="Bản nháp yêu cầu tuyển dụng">
+                  <div className="ats-req-draft-toolbar">
+                    <div>
+                      <strong>{editingDraftId ? 'Đang chỉnh sửa bản nháp' : 'Bản nháp đã lưu'}</strong>
+                      <p>{editingDraftId ? `Mã yêu cầu: ${editingDraftId}` : 'Mở bản nháp cũ để bổ sung thông tin và gửi phê duyệt mà không tạo yêu cầu trùng.'}</p>
+                    </div>
+                    <div className="ats-req-draft-buttons">
+                      {canCopyExisting && (
+                        <button type="button" className="ats-req-btn ats-req-btn--draft" onClick={() => navigate('/recruitment-requests/copy')}>
+                          Sao chép yêu cầu đã có
+                        </button>
+                      )}
+                      {editingDraftId && <button type="button" className="ats-req-btn" onClick={startNewRequest}>Tạo mới</button>}
+                      <button type="button" className="ats-req-btn ats-req-btn--draft" disabled={loadingDrafts || saving || loading || !currentUserId} onClick={() => void showSavedDrafts()}>
+                        {loadingDrafts ? 'Đang tải...' : 'Xem bản nháp đã lưu'}
+                      </button>
+                    </div>
+                  </div>
+                  {showDrafts && (
+                    <div className="ats-req-draft-list">
+                      {loadingDrafts ? <p>Đang tải danh sách bản nháp...</p> : drafts.length === 0 ?
+                        <p>Không tìm thấy bản nháp của bạn.</p> : drafts.map(draft => (
+                          <div className="ats-req-draft-row" key={draft.id}>
+                            <div><strong>{draft.title || 'Yêu cầu tuyển dụng'}</strong><span>{draft.department?.name || 'Chưa có phòng ban'} · {draft.id}</span></div>
+                            <button type="button" className="ats-req-btn ats-req-btn--draft" disabled={loadingDrafts} onClick={() => void openDraft(draft.id)}>Mở bản nháp</button>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </section>
                 <div className="ats-req-guide-card">
                   <span className="ats-req-guide-icon"><Info size={20} aria-hidden="true" /></span>
                   <h2>Lưu ý trước khi gửi</h2>
@@ -353,17 +369,17 @@ export default function CreateRecruitmentRequest() {
                   </ul>
                   <div className="ats-req-guide-note"><Save size={17} aria-hidden="true" /><span><strong>Chưa hoàn tất?</strong> Bạn có thể lưu nháp để tiếp tục xử lý sau.</span></div>
                 </div>
-              </aside>
-            </div>
-
-            <footer className="ats-req-footer">
+              <footer className="ats-req-footer">
               <div className="ats-req-footer-copy"><strong>Hoàn tất yêu cầu</strong><span>Kiểm tra thông tin trước khi gửi phê duyệt.</span></div>
               <div className="ats-req-actions">
-                <button className="ats-req-btn ats-req-btn--back" type="button" onClick={() => navigate(-1)}><ArrowLeft size={17} aria-hidden="true" /> Quay lại</button>
+
                 <button className="ats-req-btn ats-req-btn--draft" type="button" disabled={saving} onClick={() => void submit(true)}><Save size={17} aria-hidden="true" /> {saving ? 'Đang lưu...' : 'Lưu nháp'}</button>
                 <button className="ats-req-btn ats-req-btn--submit" type="submit" disabled={saving}><Send size={17} aria-hidden="true" /> {saving ? 'Đang lưu...' : 'Gửi yêu cầu phê duyệt'}</button>
               </div>
             </footer>
+              </aside>
+            </div>
+
           </form>
         )}
       </div>

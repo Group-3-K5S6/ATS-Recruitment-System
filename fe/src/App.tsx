@@ -16,6 +16,7 @@ import {
 } from "react-router-dom";
 
 import "./App.css";
+import CopyRequisition from "./features/sprint3/CopyRequisition";
 import ApprovalWorkflowConfig from "./features/sprint3/ApprovalWorkflowConfig";
 import Sprint3RouteGuard from "./features/sprint3/Sprint3RouteGuard";
 
@@ -1126,13 +1127,37 @@ function RootRoute() {
 }
 
 function RecruitmentRequestCreateRoute() {
+  const navigate = useNavigate();
   const user = getSessionUser();
   if (!user) return <Navigate to="/login" replace />;
   const role = resolveRole(user.roles);
   if (!["HiringManager", "Recruiter", "HRManager", "Admin"].includes(role)) {
     return <Navigate to="/403" replace />;
   }
-  return <CreateRecruitmentRequest />;
+  const handleLogout = async () => {
+    try {
+      await logoutFromBackend();
+      clearSession();
+      navigate("/login", { replace: true });
+    } catch (error) {
+      console.error("Logout failed:", error);
+      window.alert(error instanceof Error ? error.message : "Không thể đăng xuất. Vui lòng thử lại.");
+    }
+  };
+  return (
+    <div className="dashboard-layout">
+      <Sidebar
+        role={role}
+        userName={user.fullName}
+        onLogout={handleLogout}
+        selectedMenu="Yêu cầu tuyển dụng"
+        onMenuSelect={() => navigate("/dashboard")}
+      />
+      <main className="dashboard-content">
+        <CreateRecruitmentRequest />
+      </main>
+    </div>
+  );
 }
 
 function CompanyProfileRoute() {
@@ -1541,6 +1566,37 @@ function Sprint3ApprovalWithSidebar() {
   );
 }
 
+
+/* SCRUM-40 / S3-05: use the existing ATS sidebar; HIRING_MANAGER only via route guard. */
+function Sprint3CopyWithSidebar() {
+  const navigate = useNavigate();
+  const user = getSessionUser();
+  if (!user) return <Navigate to="/login" replace />;
+
+  const handleLogout = async () => {
+    try {
+      await logoutFromBackend();
+      clearSession();
+      navigate("/login", { replace: true });
+    } catch (error) {
+      console.error("Logout failed:", error);
+      window.alert(error instanceof Error ? error.message : "Không thể đăng xuất. Vui lòng thử lại.");
+    }
+  };
+  return (
+    <div className="dashboard-layout">
+      <Sidebar
+        role={resolveRole(user.roles)}
+        userName={user.fullName}
+        onLogout={handleLogout}
+        selectedMenu="Yêu cầu tuyển dụng"
+        onMenuSelect={() => navigate("/dashboard")}
+      />
+      <div className="dashboard-content"><CopyRequisition /></div>
+    </div>
+  );
+}
+
 function App() {
 
   return (
@@ -1663,6 +1719,10 @@ function App() {
           element={
             <NotFoundPage />
           }
+        />
+        <Route
+          path="/recruitment-requests/copy"
+          element={<Sprint3RouteGuard allowedRole="HIRING_MANAGER"><Sprint3CopyWithSidebar /></Sprint3RouteGuard>}
         />
         <Route
           path="/recruitment-requests/create"
