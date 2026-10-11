@@ -1,0 +1,140 @@
+/* SCRUM-40 -- Only rearranges the existing create-request UI. */
+.ats-req-aside.ats-req-aside {
+  display: flex;
+  flex-direction: column;
+  align-self: start;
+  gap: 16px;
+  min-width: 0;
+}
+.ats-req-aside .ats-req-draft-area {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 20px;
+  background: #ffffff;
+  border: 1px solid #dae5f5;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgb(20 60 120 / 4%);
+}
+.ats-req-aside .ats-req-draft-toolbar {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+}
+.ats-req-aside .ats-req-draft-toolbar > div:first-child {
+  width: 100%;
+  min-width: 0;
+}
+.ats-req-aside .ats-req-draft-toolbar p {
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+}
+.ats-req-aside .ats-req-draft-buttons {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+.ats-req-aside .ats-req-draft-buttons > .ats-req-btn {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  box-sizing: border-box;
+  justify-content: center;
+  text-align: center;
+  white-space: normal;
+}
+.ats-req-aside .ats-req-draft-list {
+  margin-top: 12px;
+  width: 100%;
+  min-width: 0;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.ats-req-aside .ats-req-draft-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+  gap: 8px;
+}
+.ats-req-aside .ats-req-draft-row > div { min-width: 0; }
+.ats-req-aside .ats-req-draft-row span { overflow-wrap: anywhere; }
+.ats-req-aside .ats-req-draft-row > button { width: 100%; }
+.ats-req-aside .ats-req-guide-card { box-sizing: border-box; width: 100%; }
+
+/* Move original Save/Submit/Back controls to the beginning of the form. */
+.ats-req-footer.ats-req-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 0 0 20px;
+  padding: 18px 20px;
+  background: #ffffff;
+  border: 1px solid #d9e5f7;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgb(20 60 120 / 4%);
+}
+.ats-req-footer .ats-req-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+@media (max-width: 760px) {
+  .ats-req-footer.ats-req-footer { padding: 14px; }
+  .ats-req-footer .ats-req-actions { width: 100%; justify-content: stretch; }
+  .ats-req-footer .ats-req-actions .ats-req-btn { flex: 1 1 145px; }
+  .ats-req-aside .ats-req-draft-area { padding: 16px; }
+}
+
+/* SCRUM-40 -- Footer at bottom of right sidebar */
+.ats-req-content > .ats-req-aside {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.ats-req-aside .ats-req-footer.ats-req-footer {
+  width: 100%;
+  box-sizing: border-box;
+  margin: auto 0 0;
+  padding: 20px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+}
+
+.ats-req-aside .ats-req-actions {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.ats-req-aside .ats-req-actions .ats-req-btn {
+  width: 100%;
+  min-height: 44px;
+  flex: none;
+  justify-content: center;
+}
+
+.ats-req-header .ats-req-header-back {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .ats-req-aside .ats-req-footer.ats-req-footer {
+    margin-top: 16px;
+  }
+}
