@@ -360,4 +360,14 @@ export const MENU_REGISTRY: MenuItemConfig[] = [
     requiredRoles: [RoleType.HR_MANAGER, RoleType.ADMIN],
     children: [],
   },
+  // S3-01: Cau hinh luong phe duyet
+  {
+    key: 'approval-workflows',
+    label: 'Luồng phê duyệt',
+    path: '/approval-workflows',
+    icon: 'git-branch',
+    order: 36,
+    requiredRoles: [RoleType.HR_MANAGER],
+    children: [],
+  },
 ];

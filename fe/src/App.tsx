@@ -16,6 +16,8 @@ import {
 } from "react-router-dom";
 
 import "./App.css";
+import ApprovalWorkflowConfig from "./features/sprint3/ApprovalWorkflowConfig";
+import Sprint3RouteGuard from "./features/sprint3/Sprint3RouteGuard";
 
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
@@ -1501,6 +1503,44 @@ void refreshAccessTokenIfNeeded();
   return null;
 }
 
+
+/* SCRUM-36: Su dung chung sidebar cua ATS, giu co che phan quyen route. */
+function Sprint3ApprovalWithSidebar() {
+  const navigate = useNavigate();
+  const user = getSessionUser();
+  if (!user) return <Navigate to="/login" replace />;
+
+  const handleLogout = async () => {
+    try {
+      await logoutFromBackend();
+      clearSession();
+      navigate("/login", { replace: true });
+    } catch (error) {
+      console.error("Logout failed:", error);
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Khong the dang xuat an toan. Vui long thu lai."
+      );
+    }
+  };
+
+  return (
+    <div className="dashboard-layout">
+      <Sidebar
+        role={resolveRole(user.roles)}
+        userName={user.fullName}
+        onLogout={handleLogout}
+        selectedMenu="Luồng phê duyệt"
+        onMenuSelect={() => navigate("/dashboard")}
+      />
+      <main className="dashboard-content">
+        <ApprovalWorkflowConfig />
+      </main>
+    </div>
+  );
+}
+
 function App() {
 
   return (
@@ -1645,6 +1685,8 @@ function App() {
           }
         />
 
+
+        <Route path="/approval-workflows" element={<Sprint3RouteGuard allowedRole="HR_MANAGER"><Sprint3ApprovalWithSidebar /></Sprint3RouteGuard>} />
       </Routes>
 
     </BrowserRouter>
