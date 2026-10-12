@@ -9,6 +9,12 @@ const router = Router();
 router.use(authenticate);
 
 router.get(
+  '/admin-overview',
+  requirePermission(PermissionCode.REPORTS_READ),
+  ReportController.getAdminOverview
+);
+
+router.get(
   '/dashboard',
   requirePermission(PermissionCode.REPORTS_READ),
   ReportController.getDashboard

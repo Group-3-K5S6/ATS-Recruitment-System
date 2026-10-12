@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import Sidebar from "./Sidebar";
 
 import AccountManagement from "../pages/AccountManagement";
 
-import RoleAssignment from "../pages/RoleAssignment";
+import RoleAndPermissionManagement from "../pages/RoleAndPermissionManagement";
 
 import UserProfilePage from "../pages/UserProfilePage";
 
@@ -20,10 +20,322 @@ type DashboardProps = {
   onLogout: () => Promise<void>;
 };
 
+type DashboardMetrics = {
+  totalJobs: number;
+  totalCandidates: number;
+  totalInterviews: number;
+  totalOffers: number;
+  totalRecruiters: number | null;
+  approvedBudget: number | null;
+};
+
+type AdminOverview = {
+  totalUsers: number;
+  totalRoles: number;
+  totalCategories: number | null;
+  totalAuditLogs: number;
+  categoryWarning: string | null;
+  roleStats: {
+    role: string;
+    count: number;
+    activeCount: number;
+  }[];
+  recentLogs: {
+    id: string;
+    createdAt: string;
+    actorName: string;
+    action: string;
+    ipAddress: string | null;
+  }[];
+};
+
+type AdminOverviewResponse = {
+  success: boolean;
+  data?: AdminOverview;
+  error?: { message?: string };
+};
+
+const ROLE_NAMES: Record<string, string> = {
+  CANDIDATE: "Ứng viên",
+  RECRUITER: "Nhân viên tuyển dụng",
+  HIRING_MANAGER: "Trưởng bộ phận",
+  INTERVIEWER: "Người phỏng vấn",
+  HR_MANAGER: "Trưởng phòng Nhân sự",
+  APPROVER: "Người duyệt",
+  ADMIN: "Quản trị hệ thống",
+};
+
+type DepartmentStat = {
+  departmentId: string;
+  departmentName: string;
+  publishedJobs: number;
+  candidateCount: number;
+  acceptedOffers: number;
+  status: string;
+};
+
+type RecruiterStat = {
+  recruiterId: string;
+  recruiterName: string;
+  assignedJobs: number;
+  publishedJobs: number;
+  candidateCount: number;
+  acceptedOffers: number;
+};
+
+type RecruiterJob = {
+  id: string;
+  title: string;
+  department: {
+    name: string;
+  } | null;
+  candidateCount: number;
+  status: string;
+};
+
+type RecruiterJobsResponse = {
+  success: boolean;
+  data?: RecruiterJob[];
+  error?: {
+    message?: string;
+  };
+};
+
+type DashboardReportResponse = {
+  success: boolean;
+  data?: {
+    metrics: DashboardMetrics;
+    departmentStats: DepartmentStat[] | null;
+    recruiterStats: RecruiterStat[] | null;
+  };
+  error?: {
+    message?: string;
+  };
+};
+
+
 function Dashboard({ role, userName, onLogout }: DashboardProps) {
   const navigate = useNavigate();
 
   const [selectedMenu, setSelectedMenu] = useState("Tổng quan");
+
+  const [dashboardMetrics, setDashboardMetrics] =
+  useState<DashboardMetrics | null>(null);
+
+const [departmentStats, setDepartmentStats] =
+  useState<DepartmentStat[] | null>(null);
+
+  const [recruiterStats, setRecruiterStats] =
+  useState<RecruiterStat[] | null>(null);
+
+const [dashboardLoading, setDashboardLoading] = useState(false);
+const [dashboardError, setDashboardError] = useState("");
+const [recruiterJobs, setRecruiterJobs] = useState<RecruiterJob[]>([]);
+const [recruiterJobsLoading, setRecruiterJobsLoading] = useState(true);
+const [recruiterJobsError, setRecruiterJobsError] = useState("");
+const [adminOverview, setAdminOverview] = useState<AdminOverview | null>(null);
+const [adminLoading, setAdminLoading] = useState(false);
+const [adminError, setAdminError] = useState("");
+
+
+
+useEffect(() => {
+  if (
+     !["HRManager", "Recruiter", "HiringManager"].includes(role) ||
+    selectedMenu !== "Tổng quan"
+  ) {
+    return;
+  }
+  const controller = new AbortController();
+
+  const loadDashboard = async () => {
+    setDashboardLoading(true);
+    setDashboardError("");
+    setDashboardMetrics(null);
+setDepartmentStats(null);
+setRecruiterStats(null);
+
+
+    try {
+      const token = sessionStorage.getItem("accessToken");
+
+      if (!token) {
+        throw new Error("Không tìm thấy phiên đăng nhập.");
+      }
+
+      const API_URL =
+        import.meta.env.VITE_ATS_API_URL ||
+        "http://localhost:4000";
+
+      const response = await fetch(
+        `${API_URL}/api/reports/dashboard`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          cache: "no-store",
+          signal: controller.signal,
+        }
+      );
+
+      const result =
+        (await response.json()) as DashboardReportResponse;
+
+      const metrics = result.data?.metrics;
+
+      if (
+        !response.ok ||
+        !result.success ||
+        !metrics ||
+        !Number.isFinite(metrics.totalJobs) ||
+        !Number.isFinite(metrics.totalCandidates)
+      ) {
+        throw new Error(
+          result.error?.message ||
+          "Không thể tải số liệu Dashboard."
+        );
+      }
+
+      if (!controller.signal.aborted) {
+        setDashboardMetrics(metrics);
+setDepartmentStats(
+  Array.isArray(result.data?.departmentStats)
+    ? result.data.departmentStats
+    : null
+);
+
+setRecruiterStats(
+  Array.isArray(result.data?.recruiterStats)
+    ? result.data.recruiterStats
+    : null
+);
+
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setDashboardError(
+          error instanceof Error
+            ? error.message
+            : "Không thể tải số liệu Dashboard."
+        );
+      }
+    } finally {
+      if (!controller.signal.aborted) {
+        setDashboardLoading(false);
+      }
+    }
+  };
+
+  void loadDashboard();
+
+  return () => controller.abort();
+}, [role, selectedMenu]);
+
+useEffect(() => {
+  if (
+  !["Recruiter", "HiringManager"].includes(role) ||
+  selectedMenu !== "Tổng quan"
+) {
+  return;
+}
+
+  const controller = new AbortController();
+
+  const loadRecruiterJobs = async () => {
+    setRecruiterJobsLoading(true);
+    setRecruiterJobsError("");
+    setRecruiterJobs([]);
+
+    try {
+      const token = sessionStorage.getItem("accessToken");
+
+      if (!token) {
+        throw new Error("Không tìm thấy phiên đăng nhập.");
+      }
+
+      const API_URL =
+        import.meta.env.VITE_ATS_API_URL ||
+        "http://localhost:4000";
+
+      const response = await fetch(`${API_URL}/api/jobs`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
+        signal: controller.signal,
+      });
+
+      const result =
+        (await response.json()) as RecruiterJobsResponse;
+
+      if (
+        !response.ok ||
+        !result.success ||
+        !Array.isArray(result.data)
+      ) {
+        throw new Error(
+          result.error?.message ||
+            "Không thể tải danh sách vị trí tuyển dụng."
+        );
+      }
+
+      if (!controller.signal.aborted) {
+        setRecruiterJobs(result.data);
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setRecruiterJobsError(
+          error instanceof Error
+            ? error.message
+            : "Không thể tải danh sách vị trí tuyển dụng."
+        );
+      }
+    } finally {
+      if (!controller.signal.aborted) {
+        setRecruiterJobsLoading(false);
+      }
+    }
+  };
+
+  void loadRecruiterJobs();
+
+  return () => controller.abort();
+}, [role, selectedMenu]);
+
+useEffect(() => {
+  if (role !== "Admin" || selectedMenu !== "Tổng quan") return;
+
+  const controller = new AbortController();
+  const loadAdminOverview = async () => {
+    setAdminLoading(true);
+    setAdminError("");
+    setAdminOverview(null);
+    try {
+      const token = sessionStorage.getItem("accessToken");
+      if (!token) throw new Error("Bạn cần đăng nhập lại để xem thống kê.");
+      const API_URL = import.meta.env.VITE_ATS_API_URL || "http://localhost:4000";
+      const response = await fetch(`${API_URL}/api/reports/admin-overview`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      const payload = (await response.json()) as AdminOverviewResponse;
+      if (!response.ok || !payload.success || !payload.data) {
+        throw new Error(payload.error?.message || "Không thể tải thống kê quản trị.");
+      }
+      if (!controller.signal.aborted) setAdminOverview(payload.data);
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setAdminError(error instanceof Error ? error.message : "Không thể tải thống kê quản trị.");
+      }
+    } finally {
+      if (!controller.signal.aborted) setAdminLoading(false);
+    }
+  };
+  void loadAdminOverview();
+  return () => controller.abort();
+}, [role, selectedMenu]);
 
   const handleMenuSelect = (label: string) => {
     if (label === "Chức danh & dải lương") {
@@ -33,6 +345,10 @@ function Dashboard({ role, userName, onLogout }: DashboardProps) {
 
     if (label === "Phòng ban & tổ chức") {
       navigate("/departments");
+      return;
+    }
+    if (label === "Trang giới thiệu công ty") {
+      navigate("/company-profile");
       return;
     }
     if (label === "Hồ sơ cá nhân") {
@@ -60,12 +376,14 @@ function Dashboard({ role, userName, onLogout }: DashboardProps) {
 
       <main className="dashboard-content">
         {selectedMenu === "Quản lý tài khoản" && <AccountManagement />}
-
-        {selectedMenu === "Vai trò & quyền" && <RoleAssignment />}
+{selectedMenu === "Vai trò & quyền" && (
+  <RoleAndPermissionManagement />
+)}
 
         {selectedMenu === "Hồ sơ cá nhân" && <UserProfilePage />}
 
         <div
+            className="dashboard-overview"
           style={{
             display:
               selectedMenu === "Quản lý tài khoản" ||
@@ -90,87 +408,104 @@ function Dashboard({ role, userName, onLogout }: DashboardProps) {
 
           {role === "Recruiter" && (
             <>
+                {dashboardError && (
+      <p role="alert" style={{ color: "#b91c1c" }}>
+        {dashboardError}
+      </p>
+    )}
               <section className="dashboard-cards">
                 <div className="dashboard-card">
-                  <span>8</span>
+                  <span>
+  {dashboardLoading ? "..." : (dashboardMetrics?.totalJobs ?? "—")}
+</span>
 
                   <p>Vị trí tuyển dụng</p>
                 </div>
 
                 <div className="dashboard-card">
-                  <span>56</span>
-
+<span>
+  {dashboardLoading ? "..." : (dashboardMetrics?.totalCandidates ?? "—")}
+</span>
                   <p>Ứng viên</p>
                 </div>
 
                 <div className="dashboard-card">
-                  <span>12</span>
+                  <span>
+  {dashboardLoading ? "..." : (dashboardMetrics?.totalInterviews ?? "—")}
+</span>
 
                   <p>Lịch phỏng vấn</p>
                 </div>
               </section>
 
-              <section className="dashboard-panel">
-                <div className="panel-title">
-                  <h2>Vị trí tuyển dụng gần đây</h2>
+             <section className="dashboard-panel">
+  <div className="panel-title">
+    <h2>Vị trí tuyển dụng gần đây</h2>
+  </div>
 
-                  <a href="#">Xem tất cả</a>
-                </div>
+  <table className="dashboard-table">
+    <thead>
+      <tr>
+        <th>Vị trí</th>
+        <th>Phòng ban</th>
+        <th>Ứng viên</th>
+        <th>Trạng thái</th>
+      </tr>
+    </thead>
 
-                <table className="dashboard-table">
-                  <thead>
-                    <tr>
-                      <th>Vị trí</th>
+    <tbody>
+      {recruiterJobsLoading ? (
+        <tr>
+          <td colSpan={4}>Đang tải dữ liệu...</td>
+        </tr>
+      ) : recruiterJobsError ? (
+        <tr>
+          <td colSpan={4} role="alert">
+            {recruiterJobsError}
+          </td>
+        </tr>
+      ) : recruiterJobs.length === 0 ? (
+        <tr>
+          <td colSpan={4}>
+            Chưa có vị trí tuyển dụng được phân công.
+          </td>
+        </tr>
+      ) : (
+        recruiterJobs.slice(0, 5).map((job) => (
+          <tr key={job.id}>
+            <td>{job.title}</td>
 
-                      <th>Phòng ban</th>
+            <td>{job.department?.name ?? "Chưa xác định"}</td>
 
-                      <th>Ứng viên</th>
+            <td>{job.candidateCount ?? "—"}</td>
 
-                      <th>Trạng thái</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    <tr>
-                      <td>Lập trình viên Frontend</td>
-
-                      <td>Công nghệ</td>
-
-                      <td>24</td>
-
-                      <td>
-                        <span className="status-blue">Đang tuyển</span>
-                      </td>
-                    </tr>
-
-                    <tr>
-                      <td>Nhân viên nhân sự</td>
-
-                      <td>Nhân sự</td>
-
-                      <td>18</td>
-
-                      <td>
-                        <span className="status-blue">Đang tuyển</span>
-                      </td>
-                    </tr>
-
-                    <tr>
-                      <td>Chuyên viên thiết kế</td>
-
-                      <td>Marketing</td>
-
-                      <td>12</td>
-
-                      <td>
-                        <span className="status-red">Đã đóng</span>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </section>
-            </>
-          )}
+            <td>
+              <span
+                className={
+                  job.status === "PUBLISHED"
+                    ? "status-blue"
+                    : job.status === "CLOSED"
+                    ? "status-red"
+                    : ""
+                }
+              >
+                {job.status === "PUBLISHED"
+                  ? "Đang tuyển"
+                  : job.status === "DRAFT"
+                  ? "Bản nháp"
+                  : job.status === "CLOSED"
+                  ? "Đã đóng"
+                  : job.status}
+              </span>
+            </td>
+          </tr>
+        ))
+      )}
+    </tbody>
+  </table>
+</section>
+              </>
+           )}
 
           {/* =========================
 
@@ -180,131 +515,128 @@ function Dashboard({ role, userName, onLogout }: DashboardProps) {
 
           {role === "HiringManager" && (
             <>
-              <section className="dashboard-cards">
-                <div className="dashboard-card">
-                  <span>5</span>
+              {dashboardError && (
+  <p role="alert" style={{ color: "#b91c1c" }}>
+    {dashboardError}
+  </p>
+)}
 
-                  <p>Vị trí của tôi</p>
-                </div>
+<section className="dashboard-cards">
+  <div className="dashboard-card">
+    <span>
+      {dashboardLoading
+        ? "..."
+        : (dashboardMetrics?.totalJobs ?? "—")}
+    </span>
+    <p>Vị trí phòng ban</p>
+  </div>
 
-                <div className="dashboard-card">
-                  <span>32</span>
+  <div className="dashboard-card">
+    <span>
+      {dashboardLoading
+        ? "..."
+        : (dashboardMetrics?.totalCandidates ?? "—")}
+    </span>
+    <p>Ứng viên</p>
+  </div>
 
-                  <p>Ứng viên</p>
-                </div>
+  <div className="dashboard-card">
+    <span>
+      {dashboardLoading
+        ? "..."
+        : (dashboardMetrics?.totalInterviews ?? "—")}
+    </span>
+    <p>Lịch phỏng vấn</p>
+  </div>
 
-                <div className="dashboard-card">
-                  <span>6</span>
-
-                  <p>Lịch phỏng vấn</p>
-                </div>
-
-                <div className="dashboard-card">
-                  <span>2</span>
-
-                  <p>Chờ quyết định</p>
-                </div>
-              </section>
-
-              <section className="dashboard-panel">
-                <div className="panel-title">
-                  <h2>Vị trí tuyển dụng của tôi</h2>
-
-                  <a href="#">Xem tất cả</a>
-                </div>
-
-                <table className="dashboard-table">
-                  <thead>
-                    <tr>
-                      <th>Vị trí</th>
-
-                      <th>Phòng ban</th>
-
-                      <th>Ứng viên</th>
-
-                      <th>Trạng thái</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    <tr>
-                      <td>Trưởng nhóm Backend</td>
-
-                      <td>Công nghệ</td>
-
-                      <td>15</td>
-
-                      <td>
-                        <span className="status-blue">Đang tuyển</span>
-                      </td>
-                    </tr>
-
-                    <tr>
-                      <td>Nhân viên phân tích</td>
-
-                      <td>Công nghệ</td>
-
-                      <td>8</td>
-
-                      <td>
-                        <span className="status-blue">Đang tuyển</span>
-                      </td>
-                    </tr>
-
-                    <tr>
-                      <td>Chuyên viên Marketing</td>
-
-                      <td>Marketing</td>
-
-                      <td>6</td>
-
-                      <td>
-                        <span className="status-orange">Đang duyệt</span>
-                      </td>
-                    </tr>
-
-                    <tr>
-                      <td>Nhân viên kinh doanh</td>
-
-                      <td>Kinh doanh</td>
-
-                      <td>3</td>
-
-                      <td>
-                        <span className="status-red">Đã đóng</span>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </section>
+  <div className="dashboard-card">
+    <span>—</span>
+    <p>Chờ quyết định</p>
+  </div>
+</section>
 
               <section className="dashboard-panel">
-                <div className="panel-title">
-                  <h2>Quyết định tuyển gần đây</h2>
-                </div>
+  <div className="panel-title">
+    <h2>Vị trí tuyển dụng của tôi</h2>
+  </div>
 
-                <div className="decision-list">
-                  <div className="decision-item">
-                    <div>
-                      <strong>Nguyễn Thị Mai</strong>
+  <table className="dashboard-table">
+    <thead>
+      <tr>
+        <th>Vị trí</th>
+        <th>Phòng ban</th>
+        <th>Ứng viên</th>
+        <th>Trạng thái</th>
+      </tr>
+    </thead>
 
-                      <p>Marketing</p>
-                    </div>
+    <tbody>
+      {recruiterJobsLoading ? (
+        <tr>
+          <td colSpan={4}>Đang tải dữ liệu...</td>
+        </tr>
+      ) : recruiterJobsError ? (
+        <tr>
+          <td colSpan={4} role="alert">
+            {recruiterJobsError}
+          </td>
+        </tr>
+      ) : recruiterJobs.length === 0 ? (
+        <tr>
+          <td colSpan={4}>
+            Chưa có vị trí tuyển dụng trong phạm vi quản lý.
+          </td>
+        </tr>
+      ) : (
+        recruiterJobs.slice(0, 5).map((job) => (
+          <tr key={job.id}>
+            <td>{job.title}</td>
 
-                    <button className="approve-button">Đồng ý</button>
-                  </div>
+            <td>
+              {job.department?.name ?? "Chưa xác định"}
+            </td>
 
-                  <div className="decision-item">
-                    <div>
-                      <strong>Trần Văn Long</strong>
+            <td>
+              {Number.isInteger(job.candidateCount)
+                ? job.candidateCount
+                : "—"}
+            </td>
 
-                      <p>Kinh doanh</p>
-                    </div>
+            <td>
+              <span
+                className={
+                  job.status === "PUBLISHED"
+                    ? "status-blue"
+                    : job.status === "CLOSED"
+                    ? "status-red"
+                    : ""
+                }
+              >
+                {job.status === "PUBLISHED"
+                  ? "Đang tuyển"
+                  : job.status === "DRAFT"
+                  ? "Bản nháp"
+                  : job.status === "CLOSED"
+                  ? "Đã đóng"
+                  : job.status}
+              </span>
+            </td>
+          </tr>
+        ))
+      )}
+    </tbody>
+  </table>
+</section>
 
-                    <button className="reject-button">Từ chối</button>
-                  </div>
-                </div>
-              </section>
+              <section className="dashboard-panel">
+  <div className="panel-title">
+    <h2>Quyết định tuyển gần đây</h2>
+  </div>
+
+  <p style={{ color: "#64748b" }}>
+    Danh sách quyết định tuyển chưa được kết nối với dữ liệu hệ thống.
+  </p>
+</section>
             </>
           )}
 
@@ -444,28 +776,45 @@ function Dashboard({ role, userName, onLogout }: DashboardProps) {
             <>
               <section className="dashboard-cards">
                 <div className="dashboard-card">
-                  <span>24</span>
+                  <span>
+  {dashboardLoading
+    ? "..."
+    : dashboardMetrics?.totalJobs ?? "—"}
+</span>
 
                   <p>Vị trí tuyển dụng</p>
                 </div>
 
                 <div className="dashboard-card">
-                  <span>328</span>
+                  <span>
+  {dashboardLoading
+    ? "..."
+    : dashboardMetrics?.totalCandidates ?? "—"}
+</span>
 
                   <p>Tổng ứng viên</p>
                 </div>
 
-                <div className="dashboard-card">
-                  <span>8</span>
+               <div className="dashboard-card">
+  <span>
+    {dashboardLoading
+      ? "..."
+      : dashboardMetrics?.totalRecruiters ?? "—"}
+  </span>
+  <p>Recruiter đang hoạt động</p>
+</div>
 
-                  <p>Recruiter</p>
-                </div>
+               <div className="dashboard-card">
+  <span className="dashboard-budget-value">
+    {dashboardLoading
+      ? "..."
+      : dashboardMetrics?.approvedBudget != null
+        ? `${dashboardMetrics.approvedBudget.toLocaleString("vi-VN")} ₫`
+        : "—"}
+  </span>
+  <p>Ngân sách đã duyệt</p>
+</div>
 
-                <div className="dashboard-card">
-                  <span>4.2 tỷ</span>
-
-                  <p>Ngân sách tuyển dụng</p>
-                </div>
               </section>
 
               <section className="dashboard-panel">
@@ -475,93 +824,55 @@ function Dashboard({ role, userName, onLogout }: DashboardProps) {
                   <a href="#">Xem chi tiết</a>
                 </div>
 
-                <table className="dashboard-table">
-                  <thead>
-                    <tr>
-                      <th>Phòng ban</th>
+                {dashboardLoading ? (
+  <p>Đang tải thống kê phòng ban...</p>
+) : dashboardError ? (
+  <p role="alert">
+    Không thể tải thống kê phòng ban.
+  </p>
+) : departmentStats === null ? (
+  <p>API chưa trả dữ liệu thống kê phòng ban.</p>
+) : departmentStats.length === 0 ? (
+  <p>Chưa có phòng ban đang hoạt động.</p>
+) : (
+  <table className="dashboard-table">
+    <thead>
+      <tr>
+        <th>Phòng ban</th>
+        <th>Vị trí đang tuyển</th>
+        <th>Ứng viên</th>
+        <th>Hồ sơ có Offer chấp nhận</th>
+        <th>Trạng thái</th>
+      </tr>
+    </thead>
 
-                      <th>Vị trí đang tuyển</th>
+    <tbody>
+      {departmentStats.map((department) => (
+        <tr key={department.departmentId}>
+          <td>{department.departmentName}</td>
 
-                      <th>Ứng viên</th>
+          <td>{department.publishedJobs}</td>
 
-                      <th>Đã tuyển</th>
+          <td>{department.candidateCount}</td>
 
-                      <th>Trạng thái</th>
-                    </tr>
-                  </thead>
+          <td>{department.acceptedOffers}</td>
 
-                  <tbody>
-                    <tr>
-                      <td>Công nghệ</td>
-
-                      <td>8</td>
-
-                      <td>128</td>
-
-                      <td>12</td>
-
-                      <td>
-                        <span className="status-blue">Đang tuyển</span>
-                      </td>
-                    </tr>
-
-                    <tr>
-                      <td>Marketing</td>
-
-                      <td>5</td>
-
-                      <td>74</td>
-
-                      <td>8</td>
-
-                      <td>
-                        <span className="status-blue">Đang tuyển</span>
-                      </td>
-                    </tr>
-
-                    <tr>
-                      <td>Kinh doanh</td>
-
-                      <td>6</td>
-
-                      <td>82</td>
-
-                      <td>10</td>
-
-                      <td>
-                        <span className="status-orange">Cần theo dõi</span>
-                      </td>
-                    </tr>
-
-                    <tr>
-                      <td>Nhân sự</td>
-
-                      <td>3</td>
-
-                      <td>28</td>
-
-                      <td>5</td>
-
-                      <td>
-                        <span className="status-blue">Đang tuyển</span>
-                      </td>
-                    </tr>
-
-                    <tr>
-                      <td>Tài chính</td>
-
-                      <td>2</td>
-
-                      <td>16</td>
-
-                      <td>4</td>
-
-                      <td>
-                        <span className="status-red">Sắp quá hạn</span>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+          <td>
+            <span
+              className={
+                department.status === "Đang tuyển"
+                  ? "status-blue"
+                  : "status-orange"
+              }
+            >
+              {department.status}
+            </span>
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+)}
               </section>
 
               <section className="dashboard-panel">
@@ -571,61 +882,41 @@ function Dashboard({ role, userName, onLogout }: DashboardProps) {
                   <a href="#">Xem tất cả</a>
                 </div>
 
-                <table className="dashboard-table">
-                  <thead>
-                    <tr>
-                      <th>Recruiter</th>
+               {dashboardLoading ? (
+  <p>Đang tải hiệu suất Recruiter...</p>
+) : dashboardError ? (
+  <p role="alert">Không thể tải hiệu suất Recruiter.</p>
+) : recruiterStats === null ? (
+  <p>API chưa trả dữ liệu hiệu suất Recruiter.</p>
+) : recruiterStats.length === 0 ? (
+  <p>Chưa có Recruiter đang hoạt động.</p>
+) : (
+  <table className="dashboard-table">
+    <thead>
+      <tr>
+        <th>Recruiter</th>
+        <th>Vị trí phụ trách</th>
+        <th>Ứng viên được giao</th>
+        <th>Offer đã chấp nhận</th>
+      </tr>
+    </thead>
 
-                      <th>Vị trí phụ trách</th>
+    <tbody>
+      {recruiterStats.map((recruiter) => (
+        <tr key={recruiter.recruiterId}>
+          <td>{recruiter.recruiterName}</td>
 
-                      <th>Ứng viên</th>
+          <td>{recruiter.assignedJobs}</td>
 
-                      <th>Đã tuyển</th>
-                    </tr>
-                  </thead>
+          <td>{recruiter.candidateCount}</td>
 
-                  <tbody>
-                    <tr>
-                      <td>Nguyễn Thị A</td>
+          <td>{recruiter.acceptedOffers}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+)}
 
-                      <td>12</td>
-
-                      <td>86</td>
-
-                      <td>6</td>
-                    </tr>
-
-                    <tr>
-                      <td>Trần Văn B</td>
-
-                      <td>10</td>
-
-                      <td>74</td>
-
-                      <td>4</td>
-                    </tr>
-
-                    <tr>
-                      <td>Lê Thị C</td>
-
-                      <td>8</td>
-
-                      <td>61</td>
-
-                      <td>3</td>
-                    </tr>
-
-                    <tr>
-                      <td>Phạm Thị D</td>
-
-                      <td>8</td>
-
-                      <td>55</td>
-
-                      <td>3</td>
-                    </tr>
-                  </tbody>
-                </table>
               </section>
             </>
           )}
@@ -637,7 +928,15 @@ function Dashboard({ role, userName, onLogout }: DashboardProps) {
         ========================== */}
 
           {role === "Approver" && (
+
             <>
+
+ {dashboardError && (
+               <p role="alert" style={{ color: "#b42318" }}>
+                   Không thể cập nhật thống kê: {dashboardError}
+                    </p>
+                       )}
+
               <section className="dashboard-cards">
                 <div className="dashboard-card">
                   <span>4</span>
@@ -826,28 +1125,25 @@ function Dashboard({ role, userName, onLogout }: DashboardProps) {
 
           {role === "Admin" && (
             <>
+              {adminError && <p role="alert" style={{ color: "#b91c1c" }}>{adminError}</p>}
+              {adminOverview?.categoryWarning && (
+                <p role="alert" style={{ color: "#92400e" }}>{adminOverview.categoryWarning}</p>
+              )}
               <section className="dashboard-cards">
                 <div className="dashboard-card">
-                  <span>24</span>
-
+                  <span>{adminLoading ? "..." : (adminOverview?.totalUsers ?? "—")}</span>
                   <p>Tài khoản</p>
                 </div>
-
                 <div className="dashboard-card">
-                  <span>6</span>
-
+                  <span>{adminLoading ? "..." : (adminOverview?.totalRoles ?? "—")}</span>
                   <p>Vai trò hệ thống</p>
                 </div>
-
                 <div className="dashboard-card">
-                  <span>12</span>
-
+                  <span>{adminLoading ? "..." : (adminOverview?.totalCategories ?? "—")}</span>
                   <p>Danh mục dùng chung</p>
                 </div>
-
                 <div className="dashboard-card">
-                  <span>1.240</span>
-
+                  <span>{adminLoading ? "..." : (adminOverview?.totalAuditLogs ?? "—")}</span>
                   <p>Nhật ký hệ thống</p>
                 </div>
               </section>
@@ -855,157 +1151,67 @@ function Dashboard({ role, userName, onLogout }: DashboardProps) {
               <section className="dashboard-panel">
                 <div className="panel-title">
                   <h2>Thống kê tài khoản theo vai trò</h2>
-
-                  <a href="#">Xem chi tiết</a>
                 </div>
-
-                <table className="dashboard-table">
-                  <thead>
-                    <tr>
-                      <th>Vai trò</th>
-
-                      <th>Số tài khoản</th>
-
-                      <th>Trạng thái</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    <tr>
-                      <td>Nhân viên tuyển dụng</td>
-
-                      <td>8</td>
-
-                      <td>
-                        <span className="status-green">Hoạt động</span>
-                      </td>
-                    </tr>
-
-                    <tr>
-                      <td>Trưởng bộ phận</td>
-
-                      <td>6</td>
-
-                      <td>
-                        <span className="status-green">Hoạt động</span>
-                      </td>
-                    </tr>
-
-                    <tr>
-                      <td>Người phỏng vấn</td>
-
-                      <td>10</td>
-
-                      <td>
-                        <span className="status-green">Hoạt động</span>
-                      </td>
-                    </tr>
-
-                    <tr>
-                      <td>Trưởng phòng Nhân sự</td>
-
-                      <td>2</td>
-
-                      <td>
-                        <span className="status-green">Hoạt động</span>
-                      </td>
-                    </tr>
-
-                    <tr>
-                      <td>Người duyệt</td>
-
-                      <td>4</td>
-
-                      <td>
-                        <span className="status-green">Hoạt động</span>
-                      </td>
-                    </tr>
-
-                    <tr>
-                      <td>Quản trị hệ thống</td>
-
-                      <td>2</td>
-
-                      <td>
-                        <span className="status-green">Hoạt động</span>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                {adminLoading ? <p>Đang tải thống kê...</p> : adminOverview ? (
+                  <>
+                    <table className="dashboard-table">
+                      <thead>
+                        <tr>
+                          <th>Vai trò</th>
+                          <th>Số tài khoản</th>
+                          <th>Trạng thái</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {adminOverview.roleStats.length === 0 ? (
+                          <tr><td colSpan={3}>Chưa có vai trò nào trong hệ thống.</td></tr>
+                        ) : adminOverview.roleStats.map((item) => (
+                          <tr key={item.role}>
+                            <td>{ROLE_NAMES[item.role] ?? item.role}</td>
+                            <td>{item.count}</td>
+                            <td>
+                              <span className="status-green">{item.activeCount} hoạt động</span>
+                              {item.count > item.activeCount && ` · ${item.count - item.activeCount} đã khóa`}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <p style={{ color: "#64748b", fontSize: 13 }}>
+                      Một tài khoản có thể mang nhiều vai trò nên tổng theo vai trò có thể lớn hơn tổng số tài khoản.
+                    </p>
+                  </>
+                ) : <p>Chưa tải được thống kê tài khoản.</p>}
               </section>
 
               <section className="dashboard-panel">
                 <div className="panel-title">
                   <h2>Hoạt động hệ thống gần đây</h2>
-
-                  <a href="#">Xem tất cả</a>
                 </div>
-
-                <table className="dashboard-table">
-                  <thead>
-                    <tr>
-                      <th>Thời gian</th>
-
-                      <th>Người dùng</th>
-
-                      <th>Hành động</th>
-
-                      <th>Địa chỉ IP</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    <tr>
-                      <td>25/09/2026 10:25</td>
-
-                      <td>Nguyễn Văn An</td>
-
-                      <td>Tạo tài khoản mới</td>
-
-                      <td>192.168.1.10</td>
-                    </tr>
-
-                    <tr>
-                      <td>25/09/2026 09:18</td>
-
-                      <td>Trần Thị C</td>
-
-                      <td>Cập nhật vai trò</td>
-
-                      <td>192.168.1.12</td>
-                    </tr>
-
-                    <tr>
-                      <td>25/09/2026 09:05</td>
-
-                      <td>Lê Văn D</td>
-
-                      <td>Tạo tài khoản</td>
-
-                      <td>192.168.1.18</td>
-                    </tr>
-
-                    <tr>
-                      <td>24/09/2026 08:42</td>
-
-                      <td>Phạm Thị E</td>
-
-                      <td>Cập nhật danh mục</td>
-
-                      <td>192.168.1.20</td>
-                    </tr>
-
-                    <tr>
-                      <td>24/09/2026 08:30</td>
-
-                      <td>Nguyễn Văn An</td>
-
-                      <td>Cấu hình hệ thống</td>
-
-                      <td>192.168.1.10</td>
-                    </tr>
-                  </tbody>
-                </table>
+                {adminLoading ? <p>Đang tải nhật ký...</p> : adminOverview ? (
+                  <table className="dashboard-table">
+                    <thead>
+                      <tr>
+                        <th>Thời gian</th>
+                        <th>Người dùng</th>
+                        <th>Hành động</th>
+                        <th>Địa chỉ IP</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {adminOverview.recentLogs.length === 0 ? (
+                        <tr><td colSpan={4}>Chưa có nhật ký hoạt động.</td></tr>
+                      ) : adminOverview.recentLogs.map((entry) => (
+                        <tr key={entry.id}>
+                          <td>{new Date(entry.createdAt).toLocaleString("vi-VN")}</td>
+                          <td>{entry.actorName}</td>
+                          <td>{entry.action}</td>
+                          <td>{entry.ipAddress ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : <p>Chưa tải được nhật ký hệ thống.</p>}
               </section>
             </>
           )}

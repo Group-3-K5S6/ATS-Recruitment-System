@@ -190,10 +190,47 @@ if (resetTestEmail) {
     },
   });
 
+  // Job Titles dùng cho dữ liệu mẫu S2-05/S2-06
+  const backendJobTitle = await prisma.jobTitle.upsert({
+    where: { code: 'IT-BE-03' },
+    update: {
+      name: 'Lập trình viên Backend',
+      level: 'Chuyên viên cao cấp',
+      minSalary: 30000000,
+      maxSalary: 45000000,
+    },
+    create: {
+      code: 'IT-BE-03',
+      name: 'Lập trình viên Backend',
+      level: 'Chuyên viên cao cấp',
+      minSalary: 30000000,
+      maxSalary: 45000000,
+    },
+  });
+
+  const marketingJobTitle = await prisma.jobTitle.upsert({
+    where: { code: 'MKT-SPE-02' },
+    update: {
+      name: 'Chuyên viên Marketing',
+      level: 'Chuyên viên',
+      minSalary: 15000000,
+      maxSalary: 25000000,
+    },
+    create: {
+      code: 'MKT-SPE-02',
+      name: 'Chuyên viên Marketing',
+      level: 'Chuyên viên',
+      minSalary: 15000000,
+      maxSalary: 25000000,
+    },
+  });
+
   // 7. Seed Sample Jobs
   const jobEng = await prisma.job.upsert({
     where: { id: 'job-eng-001' },
-    update: {},
+    update: {
+  jobTitleId: backendJobTitle.id,
+},
     create: {
       id: 'job-eng-001',
       title: 'Senior Backend Engineer (NodeJS/TypeScript)',
@@ -201,6 +238,7 @@ if (resetTestEmail) {
       departmentId: engDept.id,
       hiringManagerId: hmEng.id,
       recruiterId: recruiter1.id,
+      jobTitleId: backendJobTitle.id,
       status: 'PUBLISHED',
       description: 'Phát triển backend microservices và hệ thống RBAC an toàn.',
       location: 'Hanoi',
@@ -209,7 +247,9 @@ if (resetTestEmail) {
 
   const jobMkt = await prisma.job.upsert({
     where: { id: 'job-mkt-001' },
-    update: {},
+    update: {
+  jobTitleId: marketingJobTitle.id,
+},
     create: {
       id: 'job-mkt-001',
       title: 'Marketing Campaign Lead',
@@ -217,6 +257,7 @@ if (resetTestEmail) {
       departmentId: mktDept.id,
       hiringManagerId: hmMkt.id,
       recruiterId: recruiter2.id,
+      jobTitleId: marketingJobTitle.id,
       status: 'DRAFT',
       description: 'Lập chiến lược truyền thông và tuyển dụng nội bộ.',
       location: 'Hanoi',
@@ -313,6 +354,83 @@ if (resetTestEmail) {
       recommendation: 'STRONG_HIRE',
     },
   });
+
+  // 9.5 Seed Competency Framework & Interview Questions
+  console.log('Seeding Competency Framework & Interview Questions...');
+  const framework1 = await prisma.competencyFramework.upsert({
+    where: { id: 'cf-backend-001' },
+    update: {},
+    create: {
+      id: 'cf-backend-001',
+      name: 'Khung năng lực Lập trình viên Backend',
+      description: 'Đánh giá kỹ năng chuyên môn và mềm cho vị trí Backend Developer',
+    },
+  });
+
+  const criterion1 = await prisma.competencyCriterion.upsert({
+    where: { id: 'cc-tech-001' },
+    update: {},
+    create: {
+      id: 'cc-tech-001',
+      frameworkId: framework1.id,
+      name: 'Kiến thức Node.js & TypeScript',
+      description: 'Hiểu biết sâu về event loop, typing, và ecosystem Node.js',
+      weight: 40,
+    },
+  });
+
+  const criterion2 = await prisma.competencyCriterion.upsert({
+    where: { id: 'cc-arch-001' },
+    update: {},
+    create: {
+      id: 'cc-arch-001',
+      frameworkId: framework1.id,
+      name: 'Thiết kế Hệ thống (System Design)',
+      description: 'Khả năng thiết kế hệ thống phân tán, microservices',
+      weight: 30,
+    },
+  });
+
+  await prisma.jobTitleCompetencyFramework.upsert({
+  where: {
+    jobTitleId_frameworkId: {
+      jobTitleId: jobEng.jobTitleId!,
+      frameworkId: framework1.id,
+    },
+  },
+  update: {},
+  create: {
+    jobTitleId: jobEng.jobTitleId!,
+    frameworkId: framework1.id,
+  },
+});
+
+  await prisma.interviewQuestion.upsert({
+    where: { id: 'iq-node-001' },
+    update: {},
+    create: {
+      id: 'iq-node-001',
+      question: 'Event Loop trong Node.js hoạt động như thế nào?',
+      difficulty: 'HARD',
+      suggestedAnswer: 'Ứng viên cần giải thích được các phase: timers, pending callbacks, idle/prepare, poll, check, close callbacks. Hiểu về microtasks.',
+      competencyCriterionId: criterion1.id,
+      jobId: jobEng.id,
+    },
+  });
+
+ await prisma.interviewQuestion.upsert({
+  where: { id: 'iq-sys-001' },
+  update: {},
+  create: {
+    id: 'iq-sys-001',
+    question: 'Làm thế nào để đảm bảo tính nhất quán dữ liệu trong Microservices?',
+    difficulty: 'HARD',
+    suggestedAnswer:
+      'Ứng viên đề cập đến các pattern như Saga, 2PC, Event Sourcing, Outbox Pattern.',
+    competencyCriterionId: criterion2.id,
+    jobId: jobEng.id,
+  },
+});
 
   // 10. Seed Offer
   await prisma.offer.upsert({

@@ -8,14 +8,17 @@ generator client {
 }
 
 model User {
-  id           String  @id @default(uuid())
-  email        String  @unique
-  passwordHash String
-  fullName     String
-  phone        String?
-  jobTitle     String?
-  departmentId String?
-  isActive     Boolean @default(true)
+  id              String  @id @default(uuid())
+  email           String  @unique
+  passwordHash    String
+  fullName        String
+  phone           String?
+  jobTitle        String?
+  // S2-03 - Ảnh đại diện nhân viên
+  avatarImage     Bytes?
+  avatarThumbnail Bytes?
+  departmentId    String?
+  isActive        Boolean @default(true)
 
   // S1-01 - khóa tạm sau 5 lần đăng nhập sai liên tiếp
   failedLoginAttempts Int       @default(0)
@@ -45,7 +48,11 @@ model User {
 
   // S1-03 / S1-04
   passwordHistories PasswordHistory[]
+   // S1-02 - Cac phien dang nhap cua nguoi dung
+  authSessions AuthSession[]
 }
+
+
 
 model Role {
   id          String           @id @default(uuid())
@@ -102,12 +109,35 @@ model Department {
   jobs         Job[]
 }
 
+model JobTitle {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  level     String
+  minSalary Float
+  maxSalary Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  jobs                 Job[]
+  requisitions         Requisition[]
+  competencyFrameworks JobTitleCompetencyFramework[]
+}
+
 model Requisition {
   id              String   @id @default(uuid())
   title           String
   departmentId    String
   hiringManagerId String
   approverId      String?
+  jobTitleId         String?
+  reason             String?
+  proposedSalaryMin  Float?
+  proposedSalaryMax  Float?
+  targetDate         DateTime?
+  description        String?
+  requirements       String?
+  salaryExplanation  String?
   status          String   @default("DRAFT")
   headcount       Int      @default(1)
   budget          Float?
@@ -117,6 +147,7 @@ model Requisition {
   department    Department @relation(fields: [departmentId], references: [id])
   hiringManager User       @relation("HiringManagerRequisitions", fields: [hiringManagerId], references: [id])
   approver      User?      @relation("ApproverRequisitions", fields: [approverId], references: [id])
+  jobTitle JobTitle? @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
   jobs          Job[]
 }
 
@@ -127,19 +158,20 @@ model Job {
   departmentId    String
   hiringManagerId String
   recruiterId     String?
+  jobTitleId      String?
   status          String   @default("DRAFT")
   description     String
   location        String   @default("Hanoi")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  requisition          Requisition?             @relation(fields: [requisitionId], references: [id])
-  department           Department               @relation(fields: [departmentId], references: [id])
-  hiringManager        User                     @relation("HiringManagerJobs", fields: [hiringManagerId], references: [id])
-  recruiter            User?                    @relation("RecruiterJobs", fields: [recruiterId], references: [id])
-  applications         Application[]
-  competencyFrameworks JobCompetencyFramework[]
-  interviewQuestions   InterviewQuestion[]
+  requisition        Requisition?        @relation(fields: [requisitionId], references: [id])
+  department         Department          @relation(fields: [departmentId], references: [id])
+  hiringManager      User                @relation("HiringManagerJobs", fields: [hiringManagerId], references: [id])
+  recruiter          User?               @relation("RecruiterJobs", fields: [recruiterId], references: [id])
+  jobTitle           JobTitle?           @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
+  applications       Application[]
+  interviewQuestions InterviewQuestion[]
 }
 
 model Candidate {
@@ -291,8 +323,8 @@ model CompetencyFramework {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  criteria    CompetencyCriterion[]
-  jobMappings JobCompetencyFramework[]
+  criteria         CompetencyCriterion[]
+  jobTitleMappings JobTitleCompetencyFramework[]
 }
 
 // S2-06 - Tiêu chí trong khung năng lực
@@ -312,15 +344,15 @@ model CompetencyCriterion {
 }
 
 // Liên kết chức danh với khung năng lực
-model JobCompetencyFramework {
-  jobId       String
+model JobTitleCompetencyFramework {
+  jobTitleId  String
   frameworkId String
   createdAt   DateTime @default(now())
 
-  job       Job                 @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobTitle  JobTitle            @relation(fields: [jobTitleId], references: [id], onDelete: Cascade)
   framework CompetencyFramework @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
 
-  @@id([jobId, frameworkId])
+  @@id([jobTitleId, frameworkId])
   @@index([frameworkId])
 }
 
@@ -340,4 +372,46 @@ model InterviewQuestion {
 
   @@index([competencyCriterionId])
   @@index([jobId])
+}
+
+model CompanyProfile {
+  id           String   @id @default("default")
+  companyName  String   @default("")
+  tagline      String   @default("")
+  introduction String   @default("")
+  culture      String   @default("")
+  benefits     String   @default("")
+  website      String   @default("")
+  contactEmail String   @default("")
+  location     String   @default("")
+  isPublished  Boolean  @default(false)
+  logoData     String?
+  bannerData   String?
+  updatedAt    DateTime @updatedAt
+}
+
+// S1-02 - Quan ly phien dang nhap
+model AuthSession {
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt      DateTime  @default(now())
+  lastActivityAt DateTime  @default(now())
+  expiresAt      DateTime
+  revokedAt      DateTime?
+
+  @@index([userId])
+}
+// S2-08 - Danh mục dùng chung của tuyển dụng
+model RecruitmentCategory {
+  id        String   @id @default(uuid())
+  category  String
+  name      String
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([category, name])
+  @@index([category, position])
 }

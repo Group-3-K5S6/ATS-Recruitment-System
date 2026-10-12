@@ -42,6 +42,15 @@ router.post(
   AuthController.refresh
 );
 
+/* =========================
+   S1-02 - USER ACTIVITY
+========================= */
+
+router.post(
+  '/activity',
+  authenticate,
+  AuthController.activity
+);
 
 router.post(
   '/logout',

@@ -3,7 +3,9 @@ import type { FormEvent } from "react";
 import CompetencyFrameworkManagement from "./pages/CompetencyFrameworkManagement";
 import InterviewQuestionBank from "./pages/InterviewQuestionBank";
 import RecruitmentSharedCategories from "./pages/RecruitmentSharedCategories";
+
 import RecruitmentRequestManagement from "./pages/RecruitmentRequestManagement";
+import CreateRecruitmentRequest from "./pages/CreateRecruitmentRequest";
 
 
 import {
@@ -17,6 +19,10 @@ import {
 } from "react-router-dom";
 
 import "./App.css";
+import CopyRequisition from "./features/sprint3/CopyRequisition";
+import JobPostingDraft from "./features/sprint3/JobPostingDraft";
+import ApprovalWorkflowConfig from "./features/sprint3/ApprovalWorkflowConfig";
+import Sprint3RouteGuard from "./features/sprint3/Sprint3RouteGuard";
 
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
@@ -24,6 +30,7 @@ import ChangePassword from "./pages/ChangePassword";
 import DepartmentManagement from "./pages/DepartmentManagement";
 import JobTitleSalaryManagement from "./pages/JobTitleSalaryManagement";
 import UserProfilePage from "./pages/UserProfilePage";
+import CompanyProfilePage from "./pages/CompanyProfilePage";
 
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./components/Dashboard";
@@ -143,6 +150,11 @@ function saveSession(
     "atsUser",
     JSON.stringify(data.user)
   );
+  // S1-02 - Ghi nhận thời điểm bắt đầu phiên
+   sessionStorage.setItem(
+  "atsLastActivityAt",
+  String(Date.now())
+   );
 }
 
 
@@ -379,7 +391,7 @@ function Login() {
 
 
     try {
-      
+
              const response =
         await fetch(
           `${API_URL}/api/auth/login`,
@@ -1135,11 +1147,57 @@ function RootRoute() {
   );
 }
 
+function RecruitmentRequestCreateRoute() {
+  const navigate = useNavigate();
+  const user = getSessionUser();
+  if (!user) return <Navigate to="/login" replace />;
+  const role = resolveRole(user.roles);
+  if (!["HiringManager", "Recruiter", "HRManager", "Admin"].includes(role)) {
+    return <Navigate to="/403" replace />;
+  }
+  const handleLogout = async () => {
+    try {
+      await logoutFromBackend();
+      clearSession();
+      navigate("/login", { replace: true });
+    } catch (error) {
+      console.error("Logout failed:", error);
+      window.alert(error instanceof Error ? error.message : "Không thể đăng xuất. Vui lòng thử lại.");
+    }
+  };
+  return (
+    <div className="dashboard-layout">
+      <Sidebar
+        role={role}
+        userName={user.fullName}
+        onLogout={handleLogout}
+        selectedMenu="Yêu cầu tuyển dụng"
+        onMenuSelect={() => navigate("/dashboard")}
+      />
+      <main className="dashboard-content">
+        <CreateRecruitmentRequest />
+      </main>
+    </div>
+  );
+}
+
+function CompanyProfileRoute() {
+  const user = getSessionUser();
+  if (!user) return <Navigate to="/login" replace />;
+  const role = resolveRole(user.roles);
+  if (role !== "HRManager" && role !== "Admin") return <Navigate to="/403" replace />;
+  const handleLogout = async () => {
+    await logoutFromBackend();
+    clearSession();
+    window.location.assign("/login");
+  };
+  return <CompanyProfilePage role={role} userName={user.fullName} onLogout={handleLogout} />;
+}
 
 /* =========================================================
    APP
 ========================================================= */
-const IDLE_TIMEOUT_MS = 10 * 1000;
+const IDLE_TIMEOUT_MS = 20 * 60 * 1000;
 
 function SessionIdleWatcher() {
   const navigate = useNavigate();
@@ -1158,8 +1216,29 @@ function SessionIdleWatcher() {
 
     let timerId:
       ReturnType<typeof setTimeout>;
+      const savedActivityAt = Number(
+  sessionStorage.getItem("atsLastActivityAt")
+);
+
+let lastActivityAt =
+  Number.isFinite(savedActivityAt) && savedActivityAt > 0
+    ? savedActivityAt
+    : Date.now();
+
+      let lastActivitySentAt = 0;
+      let activitySending = false;
+      let sessionExpiring = false;
+      let isRefreshing = false;
+      let disposed = false;
 
     const expireSession = async () => {
+
+if (disposed || sessionExpiring) {
+  return;
+}
+
+sessionExpiring = true;
+
       /*
        * Cố gắng vô hiệu hóa phiên phía Backend.
        * Nếu Backend lỗi thì vẫn phải logout
@@ -1182,6 +1261,8 @@ function SessionIdleWatcher() {
        */
       clearSession();
 
+       sessionStorage.removeItem("atsLastActivityAt");
+
       /*
        * Phải đánh dấu SAU clearSession(),
        * vì clearLocalSession() bên trong clearSession()
@@ -1197,15 +1278,122 @@ function SessionIdleWatcher() {
       );
     };
 
-    const resetTimer = () => {
-      clearTimeout(timerId);
+// S1-02 - Gửi hoạt động thực tế đến Backend
+const sendActivityToBackend = async () => {
+  if (disposed || activitySending || sessionExpiring) {
+    return;
+  }
 
-      timerId =
-        setTimeout(
-          expireSession,
-          IDLE_TIMEOUT_MS
-        );
-    };
+  const token = sessionStorage.getItem("accessToken");
+  const refreshTokenAtStart =
+    sessionStorage.getItem("refreshToken");
+
+  if (!token || !refreshTokenAtStart) {
+    return;
+  }
+
+  activitySending = true;
+
+  try {
+    const response = await fetch(
+      `${API_URL}/api/auth/activity`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (response.status === 401) {
+      // Chỉ xử lý nếu vẫn là phiên ban đầu.
+      if (
+        !disposed &&
+        !sessionExpiring &&
+        sessionStorage.getItem("refreshToken") ===
+          refreshTokenAtStart
+      ) {
+        sessionExpiring = true;
+        clearSession();
+        sessionStorage.removeItem("atsLastActivityAt");
+        markSessionExpired();
+        navigate("/login", { replace: true });
+      }
+
+      return;
+    }
+
+    if (!response.ok) {
+      console.error(
+        "Không thể ghi nhận hoạt động:",
+        response.status
+      );
+    }
+  } catch (error) {
+    console.error(
+      "Lỗi kết nối API hoạt động:",
+      error
+    );
+  } finally {
+    activitySending = false;
+  }
+};
+
+// S1-02 - Đếm thời gian còn lại,
+// không tự đặt lại khi chuyển trang
+const scheduleIdleTimer = () => {
+  clearTimeout(timerId);
+
+  const remainingMs =
+    IDLE_TIMEOUT_MS - (Date.now() - lastActivityAt);
+
+  if (remainingMs <= 0) {
+    void expireSession();
+    return;
+  }
+
+  timerId = setTimeout(() => {
+    void expireSession();
+  }, remainingMs);
+};
+
+    const resetTimer = () => {
+  if (disposed || sessionExpiring) {
+    return;
+  }
+
+  const currentTime = Date.now();
+
+  // Nếu đã không hoạt động đủ 20 phút,
+  // không cho thao tác mới khôi phục phiên cũ.
+  if (
+    currentTime - lastActivityAt >= IDLE_TIMEOUT_MS
+  ) {
+    void expireSession();
+    return;
+  }
+
+  // Ghi nhận hoạt động người dùng
+  lastActivityAt = currentTime;
+
+  sessionStorage.setItem(
+    "atsLastActivityAt",
+    String(lastActivityAt)
+  );
+
+  // Đếm lại 20 phút ở Frontend
+  scheduleIdleTimer();
+
+  // Giới hạn yêu cầu API: tối đa khoảng
+  // một lần mỗi 15 giây khi có hoạt động.
+  if (
+    currentTime - lastActivitySentAt >= 15 * 1000
+  ) {
+    lastActivitySentAt = currentTime;
+    void sendActivityToBackend();
+  }
+};
+
 
     const activityEvents = [
       "mousemove",
@@ -1226,29 +1414,249 @@ function SessionIdleWatcher() {
     );
 
     /*
-     * Bắt đầu đếm 10 giây ngay
+     * Bắt đầu đếm 20 phút ngay
      * sau khi vào phiên đăng nhập.
      */
-    resetTimer();
+    scheduleIdleTimer();
 
-    return () => {
-      clearTimeout(timerId);
+const refreshAccessTokenIfNeeded = async () => {
+  if (disposed || isRefreshing) {
+    return;
+  }
 
-      activityEvents.forEach(
-        (eventName) => {
-          window.removeEventListener(
-            eventName,
-            resetTimer
-          );
-        }
+  // Không gia hạn khi đã không hoạt động 20 phút.
+  if (Date.now() - lastActivityAt >= IDLE_TIMEOUT_MS) {
+    return;
+  }
+
+  const accessToken =
+    sessionStorage.getItem("accessToken");
+
+  const refreshToken =
+    sessionStorage.getItem("refreshToken");
+
+  if (!accessToken || !refreshToken) {
+    return;
+  }
+
+  try {
+    const tokenPart = accessToken.split(".")[1];
+
+    if (!tokenPart) {
+      return;
+    }
+
+    const payload = JSON.parse(
+      atob(
+        tokenPart
+          .replace(/-/g, "+")
+          .replace(/_/g, "/")
+      )
+    ) as { exp?: number };
+
+    if (typeof payload.exp !== "number") {
+      return;
+    }
+
+    // Chỉ gia hạn khi token còn tối đa 10 phút.
+    const remainingMs = payload.exp * 1000 - Date.now();
+
+    if (remainingMs > 10 * 60 * 1000) {
+      return;
+    }
+
+    isRefreshing = true;
+
+    const response = await fetch(
+      `${API_URL}/api/auth/refresh`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ refreshToken }),
+      }
+    );
+
+    if (response.status === 401) {
+      if (!disposed) {
+        clearSession();
+        markSessionExpired();
+        navigate("/login", { replace: true });
+      }
+      return;
+    }
+
+    if (!response.ok) {
+      throw new Error("Không thể gia hạn phiên.");
+    }
+
+    const result = (await response.json()) as
+      ApiResponse<{ accessToken: string }>;
+
+    if (!result.success || !result.data?.accessToken) {
+      throw new Error("Phản hồi gia hạn không hợp lệ.");
+    }
+
+    // Không khôi phục token sau khi người dùng đăng xuất.
+    if (
+      !disposed &&
+      sessionStorage.getItem("refreshToken") === refreshToken &&
+      Date.now() - lastActivityAt < IDLE_TIMEOUT_MS
+    ) {
+      sessionStorage.setItem(
+        "accessToken",
+        result.data.accessToken
       );
-    };
+    }
+  } catch (error) {
+    console.error("Gia hạn phiên thất bại:", error);
+  } finally {
+    isRefreshing = false;
+  }
+};
+
+// Kiểm tra thời hạn token mỗi phút.
+const refreshCheckId = window.setInterval(() => {
+  void refreshAccessTokenIfNeeded();
+}, 60 * 1000);
+
+// Kiểm tra ngay khi bộ theo dõi được khởi tạo.
+void refreshAccessTokenIfNeeded();
+
+   return () => {
+  disposed = true;
+
+  clearTimeout(timerId);
+  window.clearInterval(refreshCheckId);
+
+  activityEvents.forEach(
+    (eventName) => {
+      window.removeEventListener(
+        eventName,
+        resetTimer
+      );
+    }
+  );
+};
+
+
   }, [
     navigate,
     location.pathname,
   ]);
 
   return null;
+}
+
+
+/* SCRUM-36: Su dung chung sidebar cua ATS, giu co che phan quyen route. */
+function Sprint3ApprovalWithSidebar() {
+  const navigate = useNavigate();
+  const user = getSessionUser();
+  if (!user) return <Navigate to="/login" replace />;
+
+  const handleLogout = async () => {
+    try {
+      await logoutFromBackend();
+      clearSession();
+      navigate("/login", { replace: true });
+    } catch (error) {
+      console.error("Logout failed:", error);
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Khong the dang xuat an toan. Vui long thu lai."
+      );
+    }
+  };
+
+  return (
+    <div className="dashboard-layout">
+      <Sidebar
+        role={resolveRole(user.roles)}
+        userName={user.fullName}
+        onLogout={handleLogout}
+        selectedMenu="Luồng phê duyệt"
+        onMenuSelect={() => navigate("/dashboard")}
+      />
+      <main className="dashboard-content">
+        <ApprovalWorkflowConfig />
+      </main>
+    </div>
+  );
+}
+
+
+/* SCRUM-40 / S3-05: use the existing ATS sidebar; HIRING_MANAGER only via route guard. */
+function Sprint3CopyWithSidebar() {
+  const navigate = useNavigate();
+  const user = getSessionUser();
+  if (!user) return <Navigate to="/login" replace />;
+
+  const handleLogout = async () => {
+    try {
+      await logoutFromBackend();
+      clearSession();
+      navigate("/login", { replace: true });
+    } catch (error) {
+      console.error("Logout failed:", error);
+      window.alert(error instanceof Error ? error.message : "Không thể đăng xuất. Vui lòng thử lại.");
+    }
+  };
+  return (
+    <div className="dashboard-layout">
+      <Sidebar
+        role={resolveRole(user.roles)}
+        userName={user.fullName}
+        onLogout={handleLogout}
+        selectedMenu="Yêu cầu tuyển dụng"
+        onMenuSelect={() => navigate("/dashboard")}
+      />
+      <div className="dashboard-content"><CopyRequisition /></div>
+    </div>
+  );
+}
+
+
+/* SCRUM-44 / S3-09: Frontend soan tin tuyen dung */
+function Sprint3PostingWithSidebar() {
+  const navigate = useNavigate();
+  const user = getSessionUser();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const handleLogout = async () => {
+    try {
+      await logoutFromBackend();
+      clearSession();
+      navigate("/login", { replace: true });
+    } catch (error) {
+      console.error("Logout failed:", error);
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Không thể đăng xuất. Vui lòng thử lại."
+      );
+    }
+  };
+
+  return (
+    <div className="dashboard-layout">
+      <Sidebar
+        role={resolveRole(user.roles)}
+        userName={user.fullName}
+        onLogout={handleLogout}
+        selectedMenu="Soạn tin tuyển dụng"
+        onMenuSelect={() => navigate("/dashboard")}
+      />
+      <main className="dashboard-content">
+        <JobPostingDraft />
+      </main>
+    </div>
+  );
 }
 
 function App() {
@@ -1260,6 +1668,7 @@ function App() {
 
       <Routes>
         {/* ROOT */}
+
 
         <Route
           path="/"
@@ -1342,6 +1751,7 @@ function App() {
             <InterviewQuestionBankRoute />
             }
 />
+        <Route path="/company-profile" element={<CompanyProfileRoute />} />
 
 <Route
   path="/recruitment-shared-categories"
@@ -1377,6 +1787,24 @@ function App() {
             <NotFoundPage />
           }
         />
+        <Route
+          path="/recruitment-requests/copy"
+          element={<Sprint3RouteGuard allowedRole="HIRING_MANAGER"><Sprint3CopyWithSidebar /></Sprint3RouteGuard>}
+        />
+
+        <Route
+          path="/job-postings/draft"
+          element={
+            <Sprint3RouteGuard allowedRole="RECRUITER">
+              <Sprint3PostingWithSidebar />
+            </Sprint3RouteGuard>
+          }
+        />
+
+        <Route
+          path="/recruitment-requests/create"
+          element={<RecruitmentRequestCreateRoute />}
+        />
 
 
         <Route
@@ -1394,6 +1822,8 @@ function App() {
           }
         />
 
+
+        <Route path="/approval-workflows" element={<Sprint3RouteGuard allowedRole="HR_MANAGER"><Sprint3ApprovalWithSidebar /></Sprint3RouteGuard>} />
       </Routes>
 
     </BrowserRouter>
