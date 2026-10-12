@@ -44,6 +44,12 @@ describe('3. Resource Scope & Ownership Authorization', () => {
     });
 
     it('CAN create requisition for own department (ENG)', async () => {
+      const jobTitle = await prisma.jobTitle.findUnique({
+        where: { code: 'IT-BE-03' },
+      });
+
+      expect(jobTitle).not.toBeNull();
+
       const res = await request(app)
         .post('/api/requisitions')
         .set(authHeader(hmEngToken))
@@ -51,11 +57,20 @@ describe('3. Resource Scope & Ownership Authorization', () => {
           title: 'New Senior QA Engineer',
           isDraft: true,
           departmentId: engDeptId,
+          jobTitleId: jobTitle!.id,
+          reason: 'NEW',
+          proposedSalaryMin: 30000000,
+          proposedSalaryMax: 40000000,
+          targetDate: '2027-12-31',
+          description: 'Recruit a senior QA engineer for the ENG department.',
+          requirements: 'Experience in software testing and automation.',
           headcount: 1,
-          budget: 30000000,
+          budget: 40000000,
         });
+
       expect(res.status).toBe(201);
     });
+
 
     it('DENIED (403) from creating requisition for another department (MKT)', async () => {
       const res = await request(app)

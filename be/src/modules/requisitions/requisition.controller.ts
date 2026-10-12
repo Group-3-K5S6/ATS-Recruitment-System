@@ -765,6 +765,8 @@ export class RequisitionController {
       return;
     }
 
+    const fromStatus = existing.status;
+
     let newStatus = decision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
     let nextApproverId: string | null = existing.approverId;
     let updatedChainString = existing.approvalChain;
@@ -779,6 +781,11 @@ export class RequisitionController {
               user.roles.includes(RoleType.ADMIN) ||
               user.roles.includes(RoleType.HR_MANAGER))
         );
+
+        if (currentStepIndex === -1) {
+          errorResponse(res, 'Không tìm thấy cấp phê duyệt hợp lệ đang chờ.', 409, 'NO_PENDING_APPROVAL_STEP');
+          return;
+        }
 
         if (currentStepIndex !== -1) {
           if (decision === 'REJECT') {
@@ -806,18 +813,62 @@ export class RequisitionController {
           }
         }
       } catch {
-        // Fallback to legacy single-step
+        errorResponse(res, 'Dữ liệu chuỗi phê duyệt không hợp lệ.', 409, 'INVALID_APPROVAL_CHAIN');
+        return;
       }
     }
 
-    const updated = await prisma.requisition.update({
-      where: { id },
-      data: {
-        status: newStatus,
-        approverId: nextApproverId,
-        approvalChain: updatedChainString,
-      },
-    });
+    let updated;
+    try {
+      updated = await prisma.$transaction(async (tx) => {
+        const claimed = await tx.requisition.updateMany({
+          where: {
+            id,
+            status: fromStatus,
+            approverId: existing.approverId,
+            approvalChain: existing.approvalChain,
+          },
+          data: {
+            status: newStatus,
+            approverId: nextApproverId,
+            approvalChain: updatedChainString,
+          },
+        });
+
+        if (claimed.count !== 1) return null;
+
+        await tx.requisitionApprovalHistory.create({
+          data: {
+            requisitionId: id,
+            actorId: user.id,
+            fromStatus,
+            toStatus: newStatus,
+            decision,
+            notes: notes || null,
+          },
+        });
+
+        return tx.requisition.findUniqueOrThrow({ where: { id } });
+      });
+    } catch (error) {
+      const code = error && typeof error === 'object' && 'code' in error
+        ? String(error.code)
+        : '';
+
+      if (['P2034', 'P2028', 'P1008', 'SQLITE_BUSY'].includes(code)) {
+        errorResponse(res, 'Yêu cầu đã được xử lý hoặc đang được cập nhật. Vui lòng tải lại.', 409, 'APPROVAL_CONFLICT');
+        return;
+      }
+
+      console.error('[Requisition] Approval failed:', error);
+      errorResponse(res, 'Không thể xử lý phê duyệt.', 500, 'SERVER_ERROR');
+      return;
+    }
+
+    if (!updated) {
+      errorResponse(res, 'Yêu cầu đã thay đổi trạng thái. Vui lòng tải lại.', 409, 'APPROVAL_CONFLICT');
+      return;
+    }
 
     const action =
       decision === 'APPROVE'
@@ -827,6 +878,7 @@ export class RequisitionController {
     await recordRequestAudit(req, action, 'requisition', updated.id, {
       status: newStatus,
       stepDecision: decision,
+      notes: notes || null,
     });
 
     const message =
@@ -836,5 +888,87 @@ export class RequisitionController {
 
     successResponse(res, updated, 200, message);
   }
-}
 
+  /**
+   * GET /api/requisitions/:id/approval-history
+   * Trả về trạng thái hiện tại + toàn bộ lịch sử phê duyệt của một requisition.
+   * SCRUM-91: Lịch sử bất biến – chỉ đọc, không cho phép sửa/xóa.
+   */
+  static async getApprovalHistory(req: Request, res: Response): Promise<void> {
+    const { id } = req.params;
+    const user = req.user!;
+
+    // Kiểm tra quyền xem requisition (tái sử dụng policy hiện có)
+    const canView = await RequisitionPolicy.canView(user, id);
+    if (!canView) {
+      const exists = await prisma.requisition.findUnique({ where: { id } });
+      if (exists) {
+        errorResponse(
+          res,
+          'Access denied. Requisition is outside your department or assigned scope.',
+          403,
+          'FORBIDDEN_SCOPE'
+        );
+        return;
+      }
+      errorResponse(res, 'Requisition not found.', 404, 'NOT_FOUND');
+      return;
+    }
+
+    const requisition = await prisma.requisition.findUnique({
+      where: { id },
+      include: {
+        department: { select: { id: true, name: true, code: true } },
+        hiringManager: { select: { id: true, fullName: true, email: true } },
+        approver: { select: { id: true, fullName: true, email: true } },
+        approvalHistory: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            actor: { select: { id: true, fullName: true, email: true } },
+          },
+        },
+      },
+    });
+
+    if (!requisition) {
+      errorResponse(res, 'Requisition not found.', 404, 'NOT_FOUND');
+      return;
+    }
+
+    // Xác định cấp phê duyệt hiện tại và người đang cần xử lý tiếp theo
+    const isTerminal = ['APPROVED', 'REJECTED', 'CANCELLED'].includes(requisition.status);
+    const isDraft = requisition.status === 'DRAFT';
+
+    let currentApprover: { id: string; fullName: string; email: string } | null = null;
+    if (!isTerminal && !isDraft && requisition.approver) {
+      currentApprover = requisition.approver;
+    }
+
+    // Xây dựng response chuẩn hóa
+    const historySteps = requisition.approvalHistory.map((entry) => ({
+      id: entry.id,
+      decision: entry.decision,
+      fromStatus: entry.fromStatus,
+      toStatus: entry.toStatus,
+      actor: entry.actor,
+      notes: entry.notes,
+      processedAt: entry.createdAt,
+    }));
+
+    successResponse(
+      res,
+      {
+        requisitionId: requisition.id,
+        title: requisition.title,
+        currentStatus: requisition.status,
+        department: requisition.department,
+        hiringManager: requisition.hiringManager,
+        designatedApprover: requisition.approver,
+        currentPendingApprover: currentApprover,
+        totalSteps: historySteps.length,
+        history: historySteps,
+      },
+      200
+    );
+  }
+}
