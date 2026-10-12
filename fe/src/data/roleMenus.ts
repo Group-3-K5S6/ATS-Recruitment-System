@@ -40,6 +40,7 @@ export const roleMenus: Record<Role, MenuItem[]> = {
 
   HRManager: [
     { label: "Tổng quan" },
+    { label: "Yêu cầu tuyển dụng" },
     { label: "Tất cả vị trí tuyển dụng" },
     { label: "Phân công recruiter" },
     { label: "Headcount & ngân sách" },

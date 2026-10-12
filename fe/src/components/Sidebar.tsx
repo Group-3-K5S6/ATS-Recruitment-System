@@ -74,6 +74,12 @@ if (label === "Ngân hàng câu hỏi phỏng vấn") {
   return;
 }
 
+if (label === "Yêu cầu tuyển dụng") {
+  navigate("/recruitment-requests");
+  setOpen(false);
+  return;
+}
+
 if (label === "Danh mục dùng chung tuyển dụng") {
   navigate("/recruitment-shared-categories");
   setOpen(false);

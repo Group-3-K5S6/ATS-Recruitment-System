@@ -40,8 +40,8 @@ function Dashboard({ role, userName, onLogout }: DashboardProps) {
       return;
     }
 
-    if (label === "Hồ sơ cá nhân") {
-      navigate("/profile");
+    if (label === "Yêu cầu tuyển dụng") {
+      navigate("/recruitment-requests");
       return;
     }
 
