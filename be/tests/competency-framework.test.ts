@@ -1,37 +1,10 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import { app } from '../src/app';
-import { authHeader } from './test-helper';
+import { authHeader, loginAndGetToken } from './test-helper';
 import { prisma } from '../src/database/prisma';
-import { signAccessToken } from '../src/utils/token';
 
-async function loginAndGetToken(email: string): Promise<{ token: string; user: any }> {
-  const user = await prisma.user.findUnique({
-    where: { email },
-    include: {
-      roles: {
-        include: {
-          role: true,
-        },
-      },
-    },
-  });
 
-  if (!user) {
-    throw new Error(`Failed to find user with email ${email}`);
-  }
-
-  const token = signAccessToken({
-    userId: user.id,
-    email: user.email,
-    tokenVersion: user.tokenVersion,
-  });
-
-  return {
-    token,
-    user,
-  };
-}
 
 describe('[BE] S2-06 - Competency Framework Management & Authorization', () => {
   let hrManagerToken: string;
