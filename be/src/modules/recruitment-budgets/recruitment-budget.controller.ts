@@ -31,6 +31,11 @@ export const updateRecruitmentExpenseSchema = z.object({
   description: optionalText,
 }).refine((value) => Object.keys(value).length > 0, 'Cần có ít nhất một trường để cập nhật');
 
+export const upsertHeadcountBudgetSchema = z.object({
+  year: z.coerce.number().int().min(2000).max(9999),
+  headcount: z.coerce.number().int().min(0),
+});
+
 const expenseInclude = {
   createdBy: { select: { id: true, fullName: true, email: true } },
 } satisfies Prisma.RecruitmentExpenseInclude;
@@ -49,6 +54,77 @@ async function canManageRequisition(user: AuthenticatedUser, requisitionId: stri
 }
 
 export class RecruitmentBudgetController {
+  static async headcountBudgets(req: Request, res: Response): Promise<void> {
+    if (![RoleType.ADMIN, RoleType.HR_MANAGER, RoleType.RECRUITER].some((role) => req.user!.roles.includes(role))) {
+      errorResponse(res, 'Bạn không có quyền xem chỉ tiêu headcount toàn công ty.', 403, 'FORBIDDEN_SCOPE');
+      return;
+    }
+    const year = typeof req.query.year === 'string' ? Number(req.query.year) : new Date().getFullYear();
+    if (!Number.isInteger(year) || year < 2000 || year > 9999) {
+      errorResponse(res, 'year phải là năm hợp lệ (YYYY).', 400, 'VALIDATION_ERROR');
+      return;
+    }
+
+    const start = new Date(Date.UTC(year, 0, 1));
+    const end = new Date(Date.UTC(year + 1, 0, 1));
+    const [departments, budgets, approved] = await Promise.all([
+      prisma.department.findMany({ where: { isActive: true }, select: { id: true, code: true, name: true }, orderBy: { name: 'asc' } }),
+      prisma.departmentHeadcountBudget.findMany({ where: { year }, select: { departmentId: true, headcount: true } }),
+      prisma.requisition.findMany({
+        where: { status: 'APPROVED', targetDate: { gte: start, lt: end } },
+        select: { departmentId: true, headcount: true },
+      }),
+    ]);
+    const budgetByDepartment = new Map(budgets.map((item) => [item.departmentId, item.headcount]));
+    const approvedByDepartment = new Map<string, number>();
+    for (const item of approved) approvedByDepartment.set(item.departmentId, (approvedByDepartment.get(item.departmentId) ?? 0) + item.headcount);
+
+    successResponse(res, departments.map((department) => {
+      const approvedHeadcount = approvedByDepartment.get(department.id) ?? 0;
+      const allocatedHeadcount = budgetByDepartment.get(department.id) ?? null;
+      return {
+        department,
+        year,
+        allocatedHeadcount,
+        approvedHeadcount,
+        remainingHeadcount: allocatedHeadcount === null ? null : allocatedHeadcount - approvedHeadcount,
+      };
+    }));
+  }
+
+  static async upsertHeadcountBudget(req: Request, res: Response): Promise<void> {
+    if (![RoleType.ADMIN, RoleType.HR_MANAGER].some((role) => req.user!.roles.includes(role))) {
+      errorResponse(res, 'Chỉ Trưởng phòng Nhân sự hoặc Admin được thiết lập chỉ tiêu headcount.', 403, 'FORBIDDEN_SCOPE');
+      return;
+    }
+    const { departmentId } = req.params;
+    const { year, headcount } = req.body;
+    const department = await prisma.department.findUnique({ where: { id: departmentId }, select: { id: true } });
+    if (!department) {
+      errorResponse(res, 'Không tìm thấy phòng ban.', 404, 'NOT_FOUND');
+      return;
+    }
+    const start = new Date(Date.UTC(year, 0, 1));
+    const end = new Date(Date.UTC(year + 1, 0, 1));
+    const approved = await prisma.requisition.aggregate({
+      where: { departmentId, status: 'APPROVED', targetDate: { gte: start, lt: end } },
+      _sum: { headcount: true },
+    });
+    const approvedHeadcount = approved._sum.headcount ?? 0;
+    if (headcount < approvedHeadcount) {
+      errorResponse(res, `Chỉ tiêu không thể thấp hơn ${approvedHeadcount} headcount đã duyệt trong năm ${year}.`, 409, 'HEADCOUNT_BUDGET_BELOW_APPROVED');
+      return;
+    }
+
+    const budget = await prisma.departmentHeadcountBudget.upsert({
+      where: { departmentId_year: { departmentId, year } },
+      update: { headcount },
+      create: { departmentId, year, headcount },
+      include: { department: { select: { id: true, code: true, name: true } } },
+    });
+    successResponse(res, { ...budget, approvedHeadcount, remainingHeadcount: headcount - approvedHeadcount }, 200, 'Đã cập nhật chỉ tiêu headcount.');
+  }
+
   static async list(req: Request, res: Response): Promise<void> {
     const scope = requisitionScope(req.user!);
     if (scope === null) {

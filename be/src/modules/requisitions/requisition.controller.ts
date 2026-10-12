@@ -621,11 +621,56 @@ export class RequisitionController {
       return;
     }
 
-    const newStatus = decision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
-    const updated = await prisma.requisition.update({
-      where: { id },
-      data: { status: newStatus },
+    const result = await prisma.$transaction(async (tx) => {
+      const requisition = await tx.requisition.findUnique({ where: { id } });
+      if (!requisition) return { error: 'NOT_FOUND', message: 'Không tìm thấy yêu cầu tuyển dụng.' } as const;
+      if (requisition.status !== 'PENDING_APPROVAL') {
+        return { error: 'INVALID_STATUS', message: 'Chỉ có thể xử lý yêu cầu đang chờ phê duyệt.' } as const;
+      }
+
+      if (decision === 'REJECT') {
+        const updated = await tx.requisition.update({ where: { id }, data: { status: 'REJECTED' } });
+        return { updated, newStatus: 'REJECTED' as const };
+      }
+
+      if (!requisition.targetDate) {
+        return { error: 'TARGET_DATE_REQUIRED', message: 'Yêu cầu cần có ngày tuyển dụng để xác định năm ngân sách headcount.' } as const;
+      }
+      const year = requisition.targetDate.getUTCFullYear();
+      const budget = await tx.departmentHeadcountBudget.findUnique({
+        where: { departmentId_year: { departmentId: requisition.departmentId, year } },
+        select: { headcount: true },
+      });
+      if (!budget) {
+        return { error: 'HEADCOUNT_BUDGET_NOT_CONFIGURED', message: `Phòng ban chưa được thiết lập chỉ tiêu headcount năm ${year}.` } as const;
+      }
+
+      const start = new Date(Date.UTC(year, 0, 1));
+      const end = new Date(Date.UTC(year + 1, 0, 1));
+      const approved = await tx.requisition.aggregate({
+        where: { departmentId: requisition.departmentId, status: 'APPROVED', targetDate: { gte: start, lt: end } },
+        _sum: { headcount: true },
+      });
+      const approvedHeadcount = approved._sum.headcount ?? 0;
+      const requestedHeadcount = requisition.headcount;
+      if (approvedHeadcount + requestedHeadcount > budget.headcount) {
+        return {
+          error: 'HEADCOUNT_BUDGET_EXCEEDED',
+          message: `Không thể duyệt: phòng ban đã dùng ${approvedHeadcount}/${budget.headcount} headcount năm ${year}; yêu cầu thêm ${requestedHeadcount}.`,
+          details: { year, allocatedHeadcount: budget.headcount, approvedHeadcount, requestedHeadcount, remainingHeadcount: budget.headcount - approvedHeadcount },
+        } as const;
+      }
+
+      const updated = await tx.requisition.update({ where: { id }, data: { status: 'APPROVED' } });
+      return { updated, newStatus: 'APPROVED' as const };
     });
+
+    if (result.error) {
+      const statusCode = result.error === 'NOT_FOUND' ? 404 : result.error === 'INVALID_STATUS' ? 409 : 409;
+      errorResponse(res, result.message, statusCode, result.error, 'details' in result ? result.details : undefined);
+      return;
+    }
+    const { updated, newStatus } = result;
 
     const action =
       decision === 'APPROVE'

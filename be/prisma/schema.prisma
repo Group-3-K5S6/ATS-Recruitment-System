@@ -107,7 +107,22 @@ model Department {
 
   users        User[]
   requisitions Requisition[]
+  headcountBudgets DepartmentHeadcountBudget[]
   jobs         Job[]
+}
+
+model DepartmentHeadcountBudget {
+  id           String   @id @default(uuid())
+  departmentId String
+  year         Int
+  headcount    Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  @@unique([departmentId, year])
+  @@index([year])
 }
 
 model JobTitle {

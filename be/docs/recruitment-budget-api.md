@@ -2,6 +2,23 @@
 
 All endpoints are mounted at `/api/recruitment-budget` and require a Bearer access token. Requisition budgets use the existing `Requisition.budget` field; this module adds actual recruitment expenses and calculates spent/remaining totals.
 
+## Department headcount plans
+
+Headcount plans are stored by department and calendar year. The requisition `targetDate` determines which year's plan is checked when an approver approves the requisition. Only approved requisitions with a target date in that year consume the plan.
+
+| Method | Endpoint | Permission | Description |
+| --- | --- | --- | --- |
+| GET | `/api/recruitment-budget/headcount?year=YYYY` | `headcount_budgets:read` | List active departments with allocated, approved, and remaining headcount. Defaults to the current year. |
+| PUT | `/api/recruitment-budget/headcount/:departmentId` | `headcount_budgets:manage` | Create or replace a department's annual headcount plan. |
+
+Example request body for `PUT`:
+
+```json
+{ "year": 2026, "headcount": 12 }
+```
+
+HR Manager and Admin can manage plans. A plan cannot be reduced below the department's already approved headcount for that year. Approving a requisition requires a configured plan and is rejected with `HEADCOUNT_BUDGET_EXCEEDED` when the resulting approved total would exceed it. The approval and headcount check run in one database transaction.
+
 ## Endpoints
 
 | Method | Endpoint | Permission |

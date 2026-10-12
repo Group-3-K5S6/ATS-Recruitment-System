@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { RecruitmentBudgetController, createRecruitmentExpenseSchema, updateRecruitmentExpenseSchema } from './recruitment-budget.controller';
+import { RecruitmentBudgetController, createRecruitmentExpenseSchema, updateRecruitmentExpenseSchema, upsertHeadcountBudgetSchema } from './recruitment-budget.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { requirePermission } from '../../middleware/authorize';
 import { validateBody } from '../../middleware/validate';
@@ -8,6 +8,13 @@ import { PermissionCode } from '../../rbac/permissions';
 const router = Router();
 router.use(authenticate);
 
+router.get('/headcount', requirePermission(PermissionCode.HEADCOUNT_BUDGETS_READ), RecruitmentBudgetController.headcountBudgets);
+router.put(
+  '/headcount/:departmentId',
+  requirePermission(PermissionCode.HEADCOUNT_BUDGETS_MANAGE),
+  validateBody(upsertHeadcountBudgetSchema),
+  RecruitmentBudgetController.upsertHeadcountBudget
+);
 router.get('/', requirePermission(PermissionCode.RECRUITMENT_BUDGETS_READ), RecruitmentBudgetController.list);
 router.get('/summary', requirePermission(PermissionCode.RECRUITMENT_BUDGETS_READ), RecruitmentBudgetController.summary);
 router.get('/requisitions/:requisitionId/expenses', requirePermission(PermissionCode.RECRUITMENT_BUDGETS_READ), RecruitmentBudgetController.listExpenses);
