@@ -40,6 +40,8 @@ import {
   NotFoundPage,
   ServerErrorPage,
 } from "./pages/ErrorPages";
+// @ts-ignore
+import BudgetManagement from "./components/BudgetManagement";
 
 import type { Role } from "./data/roleMenus";
 
@@ -1720,6 +1722,7 @@ function App() {
             <DashboardRoute />
           }
         />
+        <Route path="/budget-management" element={<BudgetManagement />} />
 
 
         {/* SPRINT 2 */}
