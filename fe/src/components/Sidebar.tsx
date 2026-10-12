@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 
 import type { Role } from "../data/roleMenus";
 
-const API_URL = import.meta.env.VITE_ATS_API_URL || "http://localhost:4000";
+const API_URL =
+  import.meta.env.VITE_ATS_API_URL || "http://localhost:4000";
 
 type SidebarProps = {
   role: Role;
@@ -167,7 +168,7 @@ function Sidebar({
 
         if (!response.ok || !result.success || !Array.isArray(result.data)) {
           throw new Error(
-            result.error?.message || "Không thể tải menu theo quyền.",
+            result.error?.message || "Không thể tải menu theo quyền."
           );
         }
 
@@ -181,7 +182,7 @@ function Sidebar({
           setMenuError(
             error instanceof Error
               ? error.message
-              : "Không thể tải menu theo quyền.",
+              : "Không thể tải menu theo quyền."
           );
         }
       } finally {
@@ -218,7 +219,7 @@ function Sidebar({
      */
     if (item.key === "users") {
       const roleManagement = item.children?.find(
-        (child) => child.key === "role-management",
+        (child) => child.key === "role-management"
       );
 
       if (roleManagement) {
@@ -227,7 +228,7 @@ function Sidebar({
           label: getDisplayLabel(
             roleManagement.key,
             role,
-            roleManagement.label,
+            roleManagement.label
           ),
           path: roleManagement.path,
         });
@@ -248,7 +249,7 @@ function Sidebar({
       key: "change-password",
       label: "Đổi mật khẩu",
       path: "/change-password",
-    },
+    }
   );
 
   const handleLogout = async () => {
@@ -261,6 +262,7 @@ function Sidebar({
       setOpen(false);
       return;
     }
+    // S3-02: Approver goes to the requisition approval page.
     if (item.key === "requisitions" && role === "Approver") {
       navigate("/requisition-approvals");
       setOpen(false);
@@ -372,7 +374,11 @@ function Sidebar({
             ))}
         </nav>
 
-        <button type="button" className="logout-button" onClick={handleLogout}>
+        <button
+          type="button"
+          className="logout-button"
+          onClick={handleLogout}
+        >
           Đăng xuất
         </button>
       </aside>
