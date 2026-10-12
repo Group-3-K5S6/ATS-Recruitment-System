@@ -36,9 +36,11 @@ model User {
   auditLogs          AuditLog[]
 
   candidateProfile     Candidate?
-  managedRequisitions  Requisition[] @relation("HiringManagerRequisitions")
-  approvedRequisitions Requisition[] @relation("ApproverRequisitions")
-  managedJobs          Job[]         @relation("HiringManagerJobs")
+  managedRequisitions    Requisition[]                @relation("HiringManagerRequisitions")
+  approvedRequisitions   Requisition[]                @relation("ApproverRequisitions")
+  // S2-91 - Lịch sử phê duyệt do user này thực hiện
+  requisitionApprovalHistory RequisitionApprovalHistory[] @relation("ApprovalHistoryActor")
+  managedJobs              Job[]                        @relation("HiringManagerJobs")
   assignedJobs         Job[]         @relation("RecruiterJobs")
   assignedApplications Application[] @relation("RecruiterApplications")
   interviews           Interview[]   @relation("InterviewerInterviews")
@@ -140,11 +142,33 @@ model Requisition {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  department    Department @relation(fields: [departmentId], references: [id])
-  hiringManager User       @relation("HiringManagerRequisitions", fields: [hiringManagerId], references: [id])
-  approver      User?      @relation("ApproverRequisitions", fields: [approverId], references: [id])
-  jobTitle JobTitle? @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
-  jobs          Job[]
+  department       Department @relation(fields: [departmentId], references: [id])
+  hiringManager    User       @relation("HiringManagerRequisitions", fields: [hiringManagerId], references: [id])
+  approver         User?      @relation("ApproverRequisitions", fields: [approverId], references: [id])
+  jobTitle         JobTitle?  @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
+  jobs             Job[]
+  // S2-91 - Lịch sử phê duyệt
+  approvalHistory  RequisitionApprovalHistory[]
+}
+
+// S2-91 - Lịch sử phê duyệt yêu cầu tuyển dụng (bất biến - không sửa/xóa)
+model RequisitionApprovalHistory {
+  id             String   @id @default(uuid())
+  requisitionId  String
+  actorId        String
+  // Trạng thái của requisition tại thời điểm thao tác: PENDING_APPROVAL, APPROVED, REJECTED
+  fromStatus     String
+  toStatus       String
+  // Quyết định: APPROVE hoặc REJECT
+  decision       String
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  requisition    Requisition @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  actor          User        @relation("ApprovalHistoryActor", fields: [actorId], references: [id])
+
+  @@index([requisitionId])
+  @@index([actorId])
 }
 
 model Job {

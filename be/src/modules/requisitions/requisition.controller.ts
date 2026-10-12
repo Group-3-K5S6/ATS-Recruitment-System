@@ -588,7 +588,7 @@ export class RequisitionController {
 
   static async approve(req: Request, res: Response): Promise<void> {
     const { id } = req.params;
-    const { decision } = req.body;
+    const { decision, notes } = req.body;
     const user = req.user!;
 
     const canApprove = await RequisitionPolicy.canApprove(user, id);
@@ -602,11 +602,42 @@ export class RequisitionController {
       return;
     }
 
+    const existing = await prisma.requisition.findUnique({ where: { id } });
+    if (!existing) {
+      errorResponse(res, 'Requisition not found.', 404, 'NOT_FOUND');
+      return;
+    }
+
+    if (existing.status !== 'PENDING_APPROVAL') {
+      errorResponse(
+        res,
+        'Only requisitions with PENDING_APPROVAL status can be approved or rejected.',
+        400,
+        'INVALID_STATUS'
+      );
+      return;
+    }
+
+    const fromStatus = existing.status;
     const newStatus = decision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
-    const updated = await prisma.requisition.update({
-      where: { id },
-      data: { status: newStatus },
-    });
+
+    // Dùng transaction để đảm bảo cập nhật status và ghi history đồng bộ
+    const [updated] = await prisma.$transaction([
+      prisma.requisition.update({
+        where: { id },
+        data: { status: newStatus },
+      }),
+      prisma.requisitionApprovalHistory.create({
+        data: {
+          requisitionId: id,
+          actorId: user.id,
+          fromStatus,
+          toStatus: newStatus,
+          decision,
+          notes: notes || null,
+        },
+      }),
+    ]);
 
     const action =
       decision === 'APPROVE'
@@ -615,8 +646,92 @@ export class RequisitionController {
 
     await recordRequestAudit(req, action, 'requisition', updated.id, {
       status: newStatus,
+      notes: notes || null,
     });
 
     successResponse(res, updated, 200, `Requisition has been ${newStatus.toLowerCase()}.`);
+  }
+
+  /**
+   * GET /api/requisitions/:id/approval-history
+   * Trả về trạng thái hiện tại + toàn bộ lịch sử phê duyệt của một requisition.
+   * SCRUM-91: Lịch sử bất biến – chỉ đọc, không cho phép sửa/xóa.
+   */
+  static async getApprovalHistory(req: Request, res: Response): Promise<void> {
+    const { id } = req.params;
+    const user = req.user!;
+
+    // Kiểm tra quyền xem requisition (tái sử dụng policy hiện có)
+    const canView = await RequisitionPolicy.canView(user, id);
+    if (!canView) {
+      const exists = await prisma.requisition.findUnique({ where: { id } });
+      if (exists) {
+        errorResponse(
+          res,
+          'Access denied. Requisition is outside your department or assigned scope.',
+          403,
+          'FORBIDDEN_SCOPE'
+        );
+        return;
+      }
+      errorResponse(res, 'Requisition not found.', 404, 'NOT_FOUND');
+      return;
+    }
+
+    const requisition = await prisma.requisition.findUnique({
+      where: { id },
+      include: {
+        department: { select: { id: true, name: true, code: true } },
+        hiringManager: { select: { id: true, fullName: true, email: true } },
+        approver: { select: { id: true, fullName: true, email: true } },
+        approvalHistory: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            actor: { select: { id: true, fullName: true, email: true } },
+          },
+        },
+      },
+    });
+
+    if (!requisition) {
+      errorResponse(res, 'Requisition not found.', 404, 'NOT_FOUND');
+      return;
+    }
+
+    // Xác định cấp phê duyệt hiện tại và người đang cần xử lý tiếp theo
+    const isTerminal = ['APPROVED', 'REJECTED', 'CANCELLED'].includes(requisition.status);
+    const isDraft = requisition.status === 'DRAFT';
+
+    let currentApprover: { id: string; fullName: string; email: string } | null = null;
+    if (!isTerminal && !isDraft && requisition.approver) {
+      currentApprover = requisition.approver;
+    }
+
+    // Xây dựng response chuẩn hóa
+    const historySteps = requisition.approvalHistory.map((entry) => ({
+      id: entry.id,
+      decision: entry.decision,
+      fromStatus: entry.fromStatus,
+      toStatus: entry.toStatus,
+      actor: entry.actor,
+      notes: entry.notes,
+      processedAt: entry.createdAt,
+    }));
+
+    successResponse(
+      res,
+      {
+        requisitionId: requisition.id,
+        title: requisition.title,
+        currentStatus: requisition.status,
+        department: requisition.department,
+        hiringManager: requisition.hiringManager,
+        designatedApprover: requisition.approver,
+        currentPendingApprover: currentApprover,
+        totalSteps: historySteps.length,
+        history: historySteps,
+      },
+      200
+    );
   }
 }
