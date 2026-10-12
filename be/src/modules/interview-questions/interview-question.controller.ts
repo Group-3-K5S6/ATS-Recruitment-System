@@ -22,7 +22,7 @@ static async getLookups(
     if (!InterviewQuestionPolicy.canView(user)) {
       errorResponse(
         res,
-        'Access denied. You do not have permission to view interview questions.',
+        'Bạn không có quyền xem ngân hàng câu hỏi phỏng vấn.',
         403,
         'FORBIDDEN_PERMISSION'
       );
@@ -50,7 +50,7 @@ static async getLookups(
       if (!InterviewQuestionPolicy.canView(user)) {
         errorResponse(
           res,
-          'Access denied. You do not have permission to view interview questions.',
+          'Bạn không có quyền xem ngân hàng câu hỏi phỏng vấn.',
           403,
           'FORBIDDEN_PERMISSION'
         );
@@ -96,7 +96,7 @@ static async getLookups(
       if (!InterviewQuestionPolicy.canView(user)) {
         errorResponse(
           res,
-          'Access denied. You do not have permission to view interview questions.',
+          'Bạn không có quyền xem ngân hàng câu hỏi phỏng vấn.',
           403,
           'FORBIDDEN_PERMISSION'
         );
@@ -124,7 +124,7 @@ static async getLookups(
       if (!InterviewQuestionPolicy.canCreate(user)) {
         errorResponse(
           res,
-          'Access denied. You do not have permission to create interview questions.',
+          'Bạn không có quyền tạo câu hỏi phỏng vấn.',
           403,
           'FORBIDDEN_PERMISSION'
         );
@@ -168,7 +168,7 @@ static async getLookups(
         ) {
           errorResponse(
             res,
-            'Access denied. You do not have permission to update interview questions.',
+            'Bạn không có quyền cập nhật câu hỏi phỏng vấn.',
             403,
             'FORBIDDEN_PERMISSION'
           );
@@ -215,7 +215,7 @@ static async getLookups(
         ) {
           errorResponse(
             res,
-            'Access denied. You do not have permission to delete interview questions.',
+            'Bạn không có quyền xóa câu hỏi phỏng vấn.',
             403,
             'FORBIDDEN_PERMISSION'
           );

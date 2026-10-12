@@ -155,7 +155,7 @@ async function main() {
       name: "Kiến thức chuyên môn",
       description:
         "Đánh giá kiến thức chuyên môn Backend",
-      weight: 40,
+      weight: 100,
     },
     create: {
       id: CRITERION_ID,
@@ -163,38 +163,43 @@ async function main() {
       name: "Kiến thức chuyên môn",
       description:
         "Đánh giá kiến thức chuyên môn Backend",
-      weight: 40,
+      weight: 100
+      ,
     },
   });
 
-  /*
-   * 6. Liên kết với chức danh Backend
+    /*
+   * 6. Liên kết khung năng lực với chức danh Backend
    */
-  console.log("[6] Liên kết chức danh...");
+  console.log("[6] Liên kết khung năng lực với chức danh...");
+const backendJob = await prisma.job.findUnique({
+  where: {
+    id: "job-eng-001",
+  },
+  select: {
+    id: true,
+    jobTitleId: true,
+  },
+});
 
-  const backendJob = await prisma.job.findUnique({
-    where: {
-      id: "job-eng-001",
-    },
-  });
 
-  if (backendJob) {
-    await prisma.jobCompetencyFramework.upsert({
+  if (backendJob?.jobTitleId) {
+    await prisma.jobTitleCompetencyFramework.upsert({
       where: {
-        jobId_frameworkId: {
-          jobId: backendJob.id,
+        jobTitleId_frameworkId: {
+          jobTitleId: backendJob.jobTitleId,
           frameworkId: FRAMEWORK_ID,
         },
       },
       update: {},
       create: {
-        jobId: backendJob.id,
+        jobTitleId: backendJob.jobTitleId,
         frameworkId: FRAMEWORK_ID,
       },
     });
   } else {
     console.warn(
-      "Không tìm thấy job-eng-001. Bỏ qua liên kết chức danh."
+      "Không tìm thấy chức danh của job-eng-001. Bỏ qua liên kết khung năng lực."
     );
   }
 

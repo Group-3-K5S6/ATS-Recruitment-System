@@ -10,6 +10,12 @@ export enum PermissionCode {
   REQUISITIONS_APPROVE = 'requisitions:approve',
   REQUISITIONS_DELETE = 'requisitions:delete',
 
+  // Recruitment budgets and actual hiring expenses
+  RECRUITMENT_BUDGETS_READ = 'recruitment_budgets:read',
+  RECRUITMENT_BUDGETS_MANAGE = 'recruitment_budgets:manage',
+  HEADCOUNT_BUDGETS_READ = 'headcount_budgets:read',
+  HEADCOUNT_BUDGETS_MANAGE = 'headcount_budgets:manage',
+
   // Job Postings
   JOBS_READ = 'jobs:read',
   JOBS_CREATE = 'jobs:create',
@@ -29,7 +35,13 @@ export enum PermissionCode {
   INTERVIEWS_UPDATE = 'interviews:update',
   INTERVIEWS_DELETE = 'interviews:delete',
 
-INTERVIEW_QUESTIONS_READ = 'interview_questions:read',
+  // Competency Framework - S2-06
+  COMPETENCY_FRAMEWORKS_READ = 'competency_frameworks:read',
+  COMPETENCY_FRAMEWORKS_CREATE = 'competency_frameworks:create',
+  COMPETENCY_FRAMEWORKS_UPDATE = 'competency_frameworks:update',
+  COMPETENCY_FRAMEWORKS_DELETE = 'competency_frameworks:delete',
+
+  INTERVIEW_QUESTIONS_READ = 'interview_questions:read',
 INTERVIEW_QUESTIONS_CREATE = 'interview_questions:create',
 INTERVIEW_QUESTIONS_UPDATE = 'interview_questions:update',
 INTERVIEW_QUESTIONS_DELETE = 'interview_questions:delete',
@@ -83,6 +95,10 @@ export const ALL_PERMISSIONS: PermissionDefinition[] = [
   { code: PermissionCode.REQUISITIONS_UPDATE, module: 'requisitions', description: 'Cập nhật yêu cầu tuyển dụng' },
   { code: PermissionCode.REQUISITIONS_APPROVE, module: 'requisitions', description: 'Phê duyệt yêu cầu tuyển dụng' },
   { code: PermissionCode.REQUISITIONS_DELETE, module: 'requisitions', description: 'Xóa yêu cầu tuyển dụng' },
+  { code: PermissionCode.RECRUITMENT_BUDGETS_READ, module: 'recruitment_budgets', description: 'Xem ngân sách và chi phí tuyển dụng' },
+  { code: PermissionCode.RECRUITMENT_BUDGETS_MANAGE, module: 'recruitment_budgets', description: 'Ghi nhận, cập nhật và xóa chi phí tuyển dụng' },
+  { code: PermissionCode.HEADCOUNT_BUDGETS_READ, module: 'headcount_budgets', description: 'Xem chỉ tiêu headcount theo phòng ban và năm' },
+  { code: PermissionCode.HEADCOUNT_BUDGETS_MANAGE, module: 'headcount_budgets', description: 'Thiết lập chỉ tiêu headcount theo phòng ban và năm' },
 
   // Jobs
   { code: PermissionCode.JOBS_READ, module: 'jobs', description: 'Xem danh sách và chi tiết tin tuyển dụng' },
@@ -103,6 +119,28 @@ export const ALL_PERMISSIONS: PermissionDefinition[] = [
   { code: PermissionCode.INTERVIEWS_UPDATE, module: 'interviews', description: 'Cập nhật lịch phỏng vấn' },
   { code: PermissionCode.INTERVIEWS_DELETE, module: 'interviews', description: 'Hủy lịch phỏng vấn' },
          
+  // Competency Framework - S2-06
+  {
+    code: PermissionCode.COMPETENCY_FRAMEWORKS_READ,
+    module: 'competency_frameworks',
+    description: 'Xem khung năng lực và tiêu chí',
+  },
+  {
+    code: PermissionCode.COMPETENCY_FRAMEWORKS_CREATE,
+    module: 'competency_frameworks',
+    description: 'Tạo khung năng lực mới',
+  },
+  {
+    code: PermissionCode.COMPETENCY_FRAMEWORKS_UPDATE,
+    module: 'competency_frameworks',
+    description: 'Cập nhật khung năng lực, tiêu chí và gán chức danh',
+  },
+  {
+    code: PermissionCode.COMPETENCY_FRAMEWORKS_DELETE,
+    module: 'competency_frameworks',
+    description: 'Xóa hoặc vô hiệu hóa khung năng lực',
+  },
+
   // Interview Question Bank - S2-07
 {
   code: PermissionCode.INTERVIEW_QUESTIONS_READ,

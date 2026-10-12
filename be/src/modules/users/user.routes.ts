@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { uploadAvatar } from "./avatar-upload";
 
 import {
   UserController,
@@ -7,6 +8,7 @@ import {
   assignRolesSchema,
   importPayloadSchema,
   updateProfileSchema,
+  disableUserSchema,
 } from "./user.controller";
 
 import { authenticate } from '../../middleware/authenticate';
@@ -17,6 +19,18 @@ import { PermissionCode } from '../../rbac/permissions';
 const router = Router();
 
 router.use(authenticate);
+
+// S2-03 - Ảnh đại diện cá nhân
+router.get(
+  "/me/avatar",
+  UserController.getOwnAvatar,
+);
+
+router.post(
+  "/me/avatar",
+  uploadAvatar,
+  UserController.uploadOwnAvatar,
+);
 
 // S2-02 - Xem hồ sơ cá nhân
 router.get(
@@ -97,8 +111,9 @@ router.put(
  * S1-10 - KHÓA
  */
 router.patch(
-  '/:id/disable',
+  "/:id/disable",
   requirePermission(PermissionCode.USERS_DISABLE),
+  validateBody(disableUserSchema),
   UserController.disable
 );
 

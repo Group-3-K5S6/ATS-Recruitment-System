@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import type { FormEvent, ReactNode } from "react";
+import type {
+  ChangeEvent,
+  FormEvent,
+  ReactNode,
+} from "react";
 
 import {
   BadgeCheck,
@@ -16,8 +20,10 @@ import {
 } from "lucide-react";
 
 import {
+  getAvatarObjectUrl,
   getProfile,
   updateProfile,
+  uploadAvatar,
 } from "../services/profileApi";
 
 import type {
@@ -69,6 +75,12 @@ export default function UserProfilePage() {
   const [toast, setToast] =
     useState("");
 
+const [avatarUrl, setAvatarUrl] =
+  useState<string | null>(null);
+
+const [isUploadingAvatar, setIsUploadingAvatar] =
+  useState(false);
+
   const phoneInputRef =
     useRef<HTMLInputElement>(null);
 
@@ -80,6 +92,12 @@ export default function UserProfilePage() {
 
   const toastTimeoutRef =
     useRef<number | null>(null);
+
+  const avatarInputRef =
+    useRef<HTMLInputElement>(null);
+
+  const avatarObjectUrlRef =
+    useRef<string | null>(null);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -111,6 +129,32 @@ export default function UserProfilePage() {
 
     void loadProfile();
   }, []);
+
+useEffect(() => {
+  if (!profile?.id) {
+  return;
+}
+  const loadAvatar = async () => {
+    try {
+      const url = await getAvatarObjectUrl();
+
+      avatarObjectUrlRef.current = url;
+      setAvatarUrl(url);
+    } catch {
+      setAvatarUrl(null);
+    }
+  };
+
+  void loadAvatar();
+
+  return () => {
+    if (avatarObjectUrlRef.current) {
+      URL.revokeObjectURL(
+        avatarObjectUrlRef.current,
+      );
+    }
+  };
+}, [profile?.id]);
 
   useEffect(() => {
     return () => {
@@ -295,6 +339,91 @@ export default function UserProfilePage() {
     setToast("");
   };
 
+const handleAvatarChange = async (
+  event: ChangeEvent<HTMLInputElement>,
+) => {
+  const file = event.target.files?.[0];
+
+  // Cho phép chọn lại cùng một file
+  event.target.value = "";
+
+  if (!file) {
+    return;
+  }
+
+  const allowedTypes = [
+    "image/jpeg",
+    "image/png",
+  ];
+
+  if (!allowedTypes.includes(file.type)) {
+    setToast(
+      "Chỉ chấp nhận ảnh JPG hoặc PNG.",
+    );
+    return;
+  }
+
+  const maxSize = 2 * 1024 * 1024;
+
+  if (file.size > maxSize) {
+    setToast(
+      "Ảnh đại diện không được vượt quá 2 MB.",
+    );
+    return;
+  }
+
+  if (isUploadingAvatar) {
+    return;
+  }
+
+  setIsUploadingAvatar(true);
+  setToast("");
+
+  try {
+    await uploadAvatar(file);
+
+    const newAvatarUrl =
+      await getAvatarObjectUrl();
+
+    if (avatarObjectUrlRef.current) {
+      URL.revokeObjectURL(
+        avatarObjectUrlRef.current,
+      );
+    }
+
+    avatarObjectUrlRef.current =
+      newAvatarUrl;
+
+    setAvatarUrl(newAvatarUrl);
+
+    setToast(
+      "Đã cập nhật ảnh đại diện thành công.",
+    );
+
+    if (
+      toastTimeoutRef.current !== null
+    ) {
+      window.clearTimeout(
+        toastTimeoutRef.current,
+      );
+    }
+
+    toastTimeoutRef.current =
+      window.setTimeout(
+        () => setToast(""),
+        4200,
+      );
+  } catch (error) {
+    setToast(
+      error instanceof Error
+        ? error.message
+        : "Không thể cập nhật ảnh đại diện.",
+    );
+  } finally {
+    setIsUploadingAvatar(false);
+  }
+};
+
   const initials =
     savedProfile.fullName
       .split(/\s+/)
@@ -383,14 +512,46 @@ export default function UserProfilePage() {
           className="profile-identity"
         >
           <div className="profile-avatar-wrap">
-            <div className="profile-avatar">
-              <span>
-                {initials || (
-                  <UserRound size={40} />
-                )}
-              </span>
-            </div>
-          </div>
+  <div className="profile-avatar">
+    {avatarUrl ? (
+      <img
+        src={avatarUrl}
+        alt="Ảnh đại diện"
+      />
+    ) : (
+      <span>
+        {initials || (
+          <UserRound size={40} />
+        )}
+      </span>
+    )}
+  </div>
+
+  <input
+    ref={avatarInputRef}
+    accept="image/jpeg,image/png"
+    hidden
+    type="file"
+    onChange={handleAvatarChange}
+  />
+
+  <button
+    className="profile-avatar-button"
+    disabled={isUploadingAvatar}
+    onClick={() =>
+      avatarInputRef.current?.click()
+    }
+    type="button"
+  >
+    {isUploadingAvatar
+      ? "Đang tải ảnh..."
+      : "Đổi ảnh"}
+  </button>
+
+  <p className="profile-avatar-help">
+    JPG hoặc PNG, tối đa 2 MB
+  </p>
+</div>
 
           <div className="profile-identity-copy">
             <h2>
@@ -768,7 +929,13 @@ function ProfileStyles() {
       .profile-page-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin:4px 0 23px}.profile-eyebrow{margin:0 0 7px;color:#688278;font-size:10px;font-weight:750;letter-spacing:1px}.profile-page-heading h1{margin:0;color:#20312a;font-size:26px;font-weight:690;line-height:1.25}.profile-heading-copy{margin:7px 0 0;color:var(--profile-muted);font-size:13px;line-height:1.5}.profile-verified{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid #dcebe2;border-radius:6px;background:#f4faf6;color:#37805b;font-size:10px;font-weight:650;white-space:nowrap}
       .profile-card{display:grid;grid-template-columns:290px minmax(0,1fr);overflow:hidden;border:1px solid var(--profile-line);border-radius:9px;background:#fff;box-shadow:0 4px 18px rgba(37,61,49,.045)}
       .profile-identity{display:flex;flex-direction:column;align-items:center;padding:34px 25px 25px;border-right:1px solid var(--profile-line);background:linear-gradient(180deg,#f7faf8 0%,#f2f7f4 100%)}
-      .profile-avatar-wrap{position:relative;margin-bottom:15px}
+      .profile-avatar-wrap{position:relative;display:flex;flex-direction:column;align-items:center;margin-bottom:15px}
+.profile-avatar img{width:100%;height:100%;object-fit:cover}
+.profile-avatar-button{margin-top:10px;padding:7px 13px;border:1px solid #cbdcd2;border-radius:6px;background:#fff;color:#267553;font-size:11px;font-weight:650;cursor:pointer}
+.profile-avatar-button:hover{background:#f1f8f4}
+.profile-avatar-button:disabled{cursor:not-allowed;opacity:.6}
+.profile-avatar-help{margin:6px 0 0;color:#7e8b85;font-size:9px}
+
       .profile-avatar{display:grid;width:112px;height:112px;overflow:hidden;place-items:center;border:4px solid #fff;border-radius:50%;background:linear-gradient(145deg,#2e8064,#175741);box-shadow:0 3px 12px rgba(35,87,64,.17);color:#fff}
       .profile-avatar span{font-size:31px;font-weight:650}
       .profile-identity-copy{text-align:center}

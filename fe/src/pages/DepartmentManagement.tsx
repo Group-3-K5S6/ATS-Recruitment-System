@@ -226,6 +226,22 @@ function DepartmentManagement({role, userName,}: DepartmentManagementProps) {
     }
   };
 
+  const handleEnableDepartment = async (id: string) => {
+    setBusyDepartmentId(id);
+    try {
+      await setDepartmentActive(id, true);
+      await loadData();
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Không thể hoạt động lại phòng ban.",
+      );
+    } finally {
+      setBusyDepartmentId(null);
+    }
+  };
+
   const handleDeleteDepartment = async (department: Department) => {
     // Không cho xóa nếu đang có yêu cầu tuyển dụng mở
     if (department.hasOpenRequisition) {
@@ -347,6 +363,25 @@ function DepartmentManagement({role, userName,}: DepartmentManagementProps) {
                 flexWrap: "wrap",
               }}
             >
+              {department.active && (
+                <button
+                  type="button"
+                  disabled={busyDepartmentId === department.id}
+                  onClick={() => openAddModal(department.id)}
+                  style={{
+                    padding: "8px 12px",
+                    border: "1px solid #9fc7b1",
+                    borderRadius: "6px",
+                    background: "#eaf6ef",
+                    color: "#267553",
+                    fontWeight: 600,
+                    cursor: busyDepartmentId === department.id ? "wait" : "pointer",
+                  }}
+                >
+                  + Thêm phòng ban
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => openEditModal(department)}
@@ -361,7 +396,7 @@ function DepartmentManagement({role, userName,}: DepartmentManagementProps) {
                 Sửa
               </button>
 
-              {department.active && (
+              {department.active ? (
                 <button
                   type="button"
                   disabled={busyDepartmentId === department.id}
@@ -376,6 +411,22 @@ function DepartmentManagement({role, userName,}: DepartmentManagementProps) {
                   }}
                 >
                   {busyDepartmentId === department.id ? "Đang xử lý…" : "Ngừng áp dụng"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={busyDepartmentId === department.id}
+                  onClick={() => void handleEnableDepartment(department.id)}
+                  style={{
+                    padding: "8px 12px",
+                    border: "1px solid #9fc7b1",
+                    borderRadius: "6px",
+                    background: "#eaf6ef",
+                    color: "#267553",
+                    cursor: busyDepartmentId === department.id ? "wait" : "pointer",
+                  }}
+                >
+                  {busyDepartmentId === department.id ? "Đang xử lý…" : "Hoạt động lại"}
                 </button>
               )}
 
@@ -686,6 +737,7 @@ function DepartmentManagement({role, userName,}: DepartmentManagementProps) {
               </label>
               <select
                 value={parentId}
+                disabled={!editingDepartment}
                 onChange={(event) => setParentId(event.target.value)}
                 style={{
                   width: "100%",
@@ -693,7 +745,9 @@ function DepartmentManagement({role, userName,}: DepartmentManagementProps) {
                   padding: "10px 12px",
                   border: "1px solid #ccd7d1",
                   borderRadius: "6px",
-                  background: "#ffffff",
+                  background: editingDepartment ? "#ffffff" : "#f6f8f7",
+                  color: "#24332d",
+                  opacity: 1,
                 }}
               >
                 <option value="">Không có (cấp gốc)</option>
