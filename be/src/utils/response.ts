@@ -17,13 +17,15 @@ export function errorResponse(
   res: Response,
   message: string,
   statusCode = 400,
-  code?: string
+  code?: string,
+  details?: unknown
 ): Response {
   return res.status(statusCode).json({
     success: false,
     error: {
       code: code || `ERR_${statusCode}`,
       message,
+      ...(details === undefined ? {} : { details }),
     },
   });
 }
