@@ -36,9 +36,11 @@ model User {
   auditLogs          AuditLog[]
 
   candidateProfile     Candidate?
-  managedRequisitions  Requisition[] @relation("HiringManagerRequisitions")
-  approvedRequisitions Requisition[] @relation("ApproverRequisitions")
-  managedJobs          Job[]         @relation("HiringManagerJobs")
+  managedRequisitions    Requisition[]                @relation("HiringManagerRequisitions")
+  approvedRequisitions   Requisition[]                @relation("ApproverRequisitions")
+  // S2-91 - Lịch sử phê duyệt do user này thực hiện
+  requisitionApprovalHistory RequisitionApprovalHistory[] @relation("ApprovalHistoryActor")
+  managedJobs              Job[]                        @relation("HiringManagerJobs")
   assignedJobs         Job[]         @relation("RecruiterJobs")
   assignedApplications Application[] @relation("RecruiterApplications")
   interviews           Interview[]   @relation("InterviewerInterviews")
@@ -105,10 +107,11 @@ model Department {
 
   isActive Boolean @default(true)
 
-  users        User[]
-  requisitions Requisition[]
-  headcountBudgets DepartmentHeadcountBudget[]
-  jobs         Job[]
+  users             User[]
+  requisitions      Requisition[]
+  jobs              Job[]
+  headcountBudgets  DepartmentHeadcountBudget[]
+  approvalWorkflows ApprovalWorkflow[]
 }
 
 model DepartmentHeadcountBudget {
@@ -160,12 +163,18 @@ model Requisition {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  // S3-01: Luồng phê duyệt
+  approvalWorkflowId      String?
+  approvalWorkflowVersion Int?
+  approvalChain           String?
+
   department    Department @relation(fields: [departmentId], references: [id])
   hiringManager User       @relation("HiringManagerRequisitions", fields: [hiringManagerId], references: [id])
   approver      User?      @relation("ApproverRequisitions", fields: [approverId], references: [id])
   jobTitle JobTitle? @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
   jobs          Job[]
   expenses       RecruitmentExpense[]
+  approvalHistory RequisitionApprovalHistory[]
 }
 
 model RecruitmentExpense {
@@ -185,6 +194,26 @@ model RecruitmentExpense {
 
   @@index([requisitionId, occurredAt])
   @@index([category, occurredAt])
+}
+
+// S2-91 - Lịch sử phê duyệt yêu cầu tuyển dụng (bất biến - không sửa/xóa)
+model RequisitionApprovalHistory {
+  id             String   @id @default(uuid())
+  requisitionId  String
+  actorId        String
+  // Trạng thái của requisition tại thời điểm thao tác: PENDING_APPROVAL, APPROVED, REJECTED
+  fromStatus     String
+  toStatus       String
+  // Quyết định: APPROVE hoặc REJECT
+  decision       String
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  requisition    Requisition @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  actor          User        @relation("ApprovalHistoryActor", fields: [actorId], references: [id])
+
+  @@index([requisitionId])
+  @@index([actorId])
 }
 
 model Job {
@@ -450,4 +479,33 @@ model RecruitmentCategory {
 
   @@unique([category, name])
   @@index([category, position])
+}
+
+// S3-01 - Cấu hình luồng phê duyệt
+model ApprovalWorkflow {
+  id           String   @id @default(uuid())
+  departmentId String
+  version      Int      @default(1)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  department Department              @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  ranges     ApprovalWorkflowRange[]
+
+  @@unique([departmentId, version])
+  @@index([departmentId, isActive])
+}
+
+model ApprovalWorkflowRange {
+  id          String  @id @default(uuid())
+  workflowId  String
+  minSalary   Float
+  maxSalary   Float?
+  orderIndex  Int     @default(0)
+  approverIds String  // JSON array string: ["id1", "id2"]
+
+  workflow ApprovalWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
 }

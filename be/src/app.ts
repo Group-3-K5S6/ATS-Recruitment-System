@@ -24,6 +24,7 @@ import competencyFrameworkRoutes from './modules/competency-frameworks/competenc
 import rbacManagementRoutes from "./modules/rbac-management/rbac.routes";
 import sharedCategoryRoutes from './modules/shared-categories/shared-category.routes';
 import recruitmentBudgetRoutes from './modules/recruitment-budgets/recruitment-budget.routes';
+import approvalWorkflowRoutes from './modules/approval-workflows/approval-workflow.routes';
 
 export function createApp() {
   const app = express();
@@ -58,6 +59,7 @@ app.use('/api/departments', departmentRoutes);
   app.use('/api/shared-categories', sharedCategoryRoutes);
   app.use('/api/recruitment-budget', recruitmentBudgetRoutes);
   app.use('/api/competency-frameworks', competencyFrameworkRoutes);
+  app.use('/api/approval-workflows', approvalWorkflowRoutes);
   app.use(
   "/api/rbac",
   rbacManagementRoutes,
