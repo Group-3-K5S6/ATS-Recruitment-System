@@ -19,7 +19,7 @@ export class RequisitionPolicy {
     if (!req) return false;
 
     if (user.roles.includes(RoleType.APPROVER)) {
-      return req.approverId === user.id || true; // Approver can view requisitions to review
+      return req.approverId === user.id; // Only assigned requisitions may be viewed
     }
 
     if (user.roles.includes(RoleType.HIRING_MANAGER)) {
@@ -78,7 +78,7 @@ export class RequisitionPolicy {
         where: { id: requisitionId },
       });
       if (!req) return false;
-      return !req.approverId || req.approverId === user.id;
+      return req.approverId === user.id;
     }
 
     return false;

@@ -8,8 +8,11 @@ export interface TokenPayload {
   userId: string;
   email: string;
 
-  // S1-04
+  // S1-04 - Phien ban token
   tokenVersion?: number;
+
+  // S1-02 - Ma dinh danh phien dang nhap
+  sessionId?: string;
 }
 
 export function hashToken(token: string): string {

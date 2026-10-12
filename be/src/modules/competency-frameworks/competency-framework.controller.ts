@@ -17,7 +17,7 @@ export class CompetencyFrameworkController {
       if (!CompetencyFrameworkPolicy.canView(user)) {
         errorResponse(
           res,
-          'Access denied. You do not have permission to view competency frameworks.',
+          'Bạn không có quyền xem khung năng lực.',
           403,
           'FORBIDDEN_PERMISSION'
         );
@@ -48,7 +48,7 @@ export class CompetencyFrameworkController {
       if (!CompetencyFrameworkPolicy.canView(user)) {
         errorResponse(
           res,
-          'Access denied. You do not have permission to view competency frameworks.',
+          'Bạn không có quyền xem khung năng lực.',
           403,
           'FORBIDDEN_PERMISSION'
         );
@@ -76,7 +76,7 @@ export class CompetencyFrameworkController {
       if (!CompetencyFrameworkPolicy.canCreate(user)) {
         errorResponse(
           res,
-          'Access denied. You do not have permission to create competency frameworks.',
+          'Bạn không có quyền tạo khung năng lực.',
           403,
           'FORBIDDEN_PERMISSION'
         );
@@ -118,7 +118,7 @@ export class CompetencyFrameworkController {
       if (!hasPermission) {
         errorResponse(
           res,
-          'Access denied. You do not have permission to update competency frameworks.',
+          'Bạn không có quyền cập nhật khung năng lực.',
           403,
           'FORBIDDEN_PERMISSION'
         );
@@ -166,7 +166,7 @@ export class CompetencyFrameworkController {
       if (!hasPermission) {
         errorResponse(
           res,
-          'Access denied. You do not have permission to delete competency frameworks.',
+          'Bạn không có quyền xóa khung năng lực.',
           403,
           'FORBIDDEN_PERMISSION'
         );
@@ -210,7 +210,7 @@ export class CompetencyFrameworkController {
       if (!hasPermission) {
         errorResponse(
           res,
-          'Access denied. You do not have permission to modify criteria for this framework.',
+          'Bạn không có quyền thay đổi tiêu chí của khung năng lực này.',
           403,
           'FORBIDDEN_PERMISSION'
         );
@@ -254,7 +254,7 @@ export class CompetencyFrameworkController {
       if (!hasPermission) {
         errorResponse(
           res,
-          'Access denied. You do not have permission to modify criteria for this framework.',
+          'Bạn không có quyền thay đổi tiêu chí của khung năng lực này.',
           403,
           'FORBIDDEN_PERMISSION'
         );
@@ -303,7 +303,7 @@ export class CompetencyFrameworkController {
       if (!hasPermission) {
         errorResponse(
           res,
-          'Access denied. You do not have permission to delete criteria for this framework.',
+          'Bạn không có quyền xóa tiêu chí của khung năng lực này.',
           403,
           'FORBIDDEN_PERMISSION'
         );
@@ -347,7 +347,7 @@ export class CompetencyFrameworkController {
       if (!hasPermission) {
         errorResponse(
           res,
-          'Access denied. You do not have permission to assign jobs to this framework.',
+          'Bạn không có quyền gán chức danh vào khung năng lực này.',
           403,
           'FORBIDDEN_PERMISSION'
         );
@@ -382,7 +382,7 @@ export class CompetencyFrameworkController {
       if (!hasPermission) {
         errorResponse(
           res,
-          'Access denied. You do not have permission to remove jobs from this framework.',
+          'Bạn không có quyền bỏ gán chức danh khỏi khung năng lực này.',
           403,
           'FORBIDDEN_PERMISSION'
         );
@@ -413,7 +413,7 @@ export class CompetencyFrameworkController {
       if (!CompetencyFrameworkPolicy.canView(user)) {
         errorResponse(
           res,
-          'Access denied. You do not have permission to view competency framework criteria.',
+          'Bạn không có quyền xem tiêu chí khung năng lực.',
           403,
           'FORBIDDEN_PERMISSION'
         );

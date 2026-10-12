@@ -55,6 +55,7 @@ describe('3. Resource Scope & Ownership Authorization', () => {
         .set(authHeader(hmEngToken))
         .send({
           title: 'New Senior QA Engineer',
+          isDraft: true,
           departmentId: engDeptId,
           jobTitleId: jobTitle!.id,
           reason: 'NEW',

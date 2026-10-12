@@ -1713,3 +1713,567 @@
 .logout-button:hover {
   background: #fef2f2;
 }
+
+/* =========================================================
+   VAI TRÒ & QUYỀN
+========================================================= */
+
+.role-permission-page {
+  width: 100%;
+  min-width: 0;
+}
+
+.role-permission-heading {
+  margin-bottom: 18px;
+}
+
+.role-permission-heading h1 {
+  margin: 0 0 6px;
+  font-size: 28px;
+  color: #172b4d;
+}
+
+.role-permission-heading p {
+  margin: 0;
+  font-size: 15px;
+  color: #64748b;
+}
+
+/* TAB */
+
+.role-permission-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  margin-bottom: 20px;
+  padding: 5px;
+
+  background: #eef2f7;
+  border-radius: 10px;
+}
+
+.role-permission-tab {
+  border: none;
+  border-radius: 8px;
+
+  padding: 10px 18px;
+
+  background: transparent;
+  color: #475569;
+
+  font-size: 15px;
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.role-permission-tab:hover {
+  background: #ffffff;
+}
+
+.role-permission-tab.active {
+  background: #2563eb;
+  color: #ffffff;
+
+  box-shadow: 0 2px 6px
+    rgba(37, 99, 235, 0.2);
+}
+
+.role-permission-content {
+  min-width: 0;
+}
+
+/* =========================================================
+   MA TRẬN PHÂN QUYỀN
+========================================================= */
+
+.rbac-page {
+  width: 100%;
+}
+
+.rbac-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+  margin-bottom: 18px;
+}
+
+.rbac-header h1 {
+  margin: 0 0 5px;
+  font-size: 24px;
+}
+
+.rbac-header p {
+  margin: 0;
+  font-size: 14px;
+  color: #64748b;
+}
+
+.rbac-primary-button,
+.rbac-save-button,
+.rbac-secondary-button {
+  border: none;
+  border-radius: 8px;
+
+  min-height: 38px;
+  padding: 8px 14px;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.rbac-primary-button {
+  background: #2563eb;
+  color: white;
+}
+
+.rbac-primary-button:hover {
+  background: #1d4ed8;
+}
+
+.rbac-secondary-button {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.rbac-save-button {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+
+.rbac-save-button:hover {
+  background: #dbeafe;
+}
+
+.rbac-save-button:disabled,
+.rbac-primary-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ALERT */
+
+.rbac-alert {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.rbac-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b42318;
+}
+
+.rbac-success {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #15803d;
+}
+
+/* TABLE */
+
+.rbac-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+
+  background: white;
+}
+
+.rbac-table {
+  width: 100%;
+  min-width: 1050px;
+
+  border-collapse: collapse;
+}
+
+.rbac-table th,
+.rbac-table td {
+  padding: 12px;
+
+  border-bottom: 1px solid #e2e8f0;
+
+  font-size: 14px;
+  vertical-align: middle;
+}
+
+.rbac-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+
+  background: #f8fafc;
+
+  color: #334155;
+  font-weight: 700;
+  text-align: center;
+}
+
+.rbac-permission-column {
+  min-width: 270px;
+  text-align: left !important;
+}
+
+.rbac-permission-info {
+  min-width: 270px;
+}
+
+.rbac-permission-info strong {
+  display: block;
+
+  margin-bottom: 4px;
+
+  font-size: 14px;
+  color: #1e293b;
+}
+
+.rbac-permission-info span {
+  display: block;
+
+  font-family: Consolas, monospace;
+  font-size: 12px;
+
+  color: #64748b;
+}
+
+.rbac-check-cell {
+  min-width: 145px;
+  text-align: center;
+}
+
+.rbac-check-cell input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+
+  cursor: pointer;
+}
+
+.rbac-module-row td {
+  background: #f1f5f9;
+
+  color: #334155;
+
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+
+.rbac-admin-lock {
+  display: inline-block;
+
+  padding: 5px 8px;
+
+  border-radius: 6px;
+
+  background: #ecfdf3;
+
+  color: #15803d;
+
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rbac-loading {
+  padding: 30px;
+  text-align: center;
+
+  color: #64748b;
+}
+
+/* =========================================================
+   MODAL TẠO QUYỀN
+========================================================= */
+
+.rbac-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 20px;
+
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.rbac-modal {
+  width: min(520px, 100%);
+
+  padding: 24px;
+
+  background: white;
+
+  border-radius: 12px;
+
+  box-shadow:
+    0 18px 60px
+    rgba(15, 23, 42, 0.25);
+}
+
+.rbac-modal h2 {
+  margin: 0 0 20px;
+
+  font-size: 22px;
+}
+
+.rbac-modal label {
+  display: block;
+
+  margin: 12px 0 6px;
+
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.rbac-modal input,
+.rbac-modal textarea {
+  width: 100%;
+
+  box-sizing: border-box;
+
+  padding: 10px 12px;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+
+  font-size: 14px;
+}
+
+.rbac-modal input:focus,
+.rbac-modal textarea:focus {
+  outline: 2px solid #bfdbfe;
+  border-color: #2563eb;
+}
+
+.rbac-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+
+  gap: 10px;
+
+  margin-top: 20px;
+}
+
+/* RESPONSIVE */
+
+@media (max-width: 768px) {
+  .rbac-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .rbac-primary-button {
+    width: 100%;
+  }
+
+  .role-permission-tab {
+    flex: 1 1 100%;
+  }
+}
+
+/* =====================================================
+   S1-06 - SIDEBAR CUON DOC LAP
+   ===================================================== */
+
+/* Sidebar cố định toàn bộ chiều cao màn hình */
+.sidebar {
+  height: 100vh;
+  height: 100dvh;
+  box-sizing: border-box;
+
+  display: flex;
+  flex-direction: column;
+
+  overflow: hidden;
+}
+
+/* Logo và thông tin tài khoản không bị co */
+.sidebar-logo,
+.sidebar-user {
+  flex-shrink: 0;
+}
+
+/* Chỉ danh sách menu được cuộn */
+.sidebar-menu {
+  flex: 1 1 auto;
+  min-height: 0;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  overscroll-behavior: contain;
+
+  padding-right: 4px;
+
+  scrollbar-width: thin;
+  scrollbar-color: #6383a5 transparent;
+}
+
+/* Các mục menu giữ nguyên chiều cao */
+.sidebar-menu-item {
+  flex-shrink: 0;
+}
+
+/* Thanh cuộn cho Chrome và Edge */
+.sidebar-menu::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sidebar-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-menu::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.28);
+  border-radius: 10px;
+}
+
+.sidebar-menu::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* Nút đăng xuất luôn nằm ngoài vùng cuộn menu */
+.sidebar > .logout-button {
+  flex-shrink: 0;
+  margin-top: 12px;
+}
+
+/* Giữ Sidebar hoạt động trên điện thoại */
+@media (max-width: 768px) {
+  .sidebar {
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  .sidebar-menu {
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+/* S2 - Giao diện ngân hàng câu hỏi phỏng vấn */
+.interview-question-bank-content {
+  font-family: "Segoe UI", Arial, sans-serif;
+  min-width: 0;
+}
+
+.interview-question-bank-content button,
+.interview-question-bank-content input,
+.interview-question-bank-content select,
+.interview-question-bank-content textarea {
+  font-family: inherit;
+}
+/* ============================================
+   DASHBOARD - CAI THIEN GIAO DIEN TONG QUAN
+   ============================================ */
+
+.dashboard-overview {
+  font-family: "Segoe UI", Arial, sans-serif;
+}
+
+/* Tieu de */
+.dashboard-overview .dashboard-header h1 {
+  font-size: 30px;
+  line-height: 1.3;
+  font-weight: 700;
+}
+
+.dashboard-overview .dashboard-header p {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* Bon the thong ke tren cung mot hang */
+.dashboard-overview .dashboard-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+
+/* The thong ke */
+.dashboard-overview .dashboard-card {
+  min-width: 0;
+  padding: 20px;
+  border-radius: 12px;
+}
+
+.dashboard-overview .dashboard-card span {
+  font-size: 30px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.dashboard-overview .dashboard-card p {
+  margin-top: 8px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* Bang bao cao */
+.dashboard-overview .dashboard-panel {
+  margin-top: 20px;
+  overflow-x: auto;
+}
+
+.dashboard-overview .panel-title h2 {
+  font-family: inherit;
+  font-size: 22px;
+  line-height: 1.4;
+}
+
+.dashboard-overview .dashboard-table {
+  width: 100%;
+}
+
+.dashboard-overview .dashboard-table th,
+.dashboard-overview .dashboard-table td {
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 14px 16px;
+}
+
+/* Man hinh vua */
+@media (max-width: 1359px) {
+  .dashboard-overview .dashboard-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Dien thoai */
+@media (max-width: 600px) {
+  .dashboard-overview .dashboard-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-overview .dashboard-card {
+    padding: 18px;
+  }
+
+  .dashboard-overview .dashboard-header h1 {
+    font-size: 26px;
+  }
+
+  .dashboard-overview .panel-title h2 {
+    font-size: 19px;
+  }
+}
+
+/* Dashboard - hien thi ngan sach */
+.dashboard-overview .dashboard-budget-value {
+  font-size: clamp(20px, 2vw, 30px);
+  overflow-wrap: anywhere;
+}

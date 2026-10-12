@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import type { Role } from "../data/roleMenus";
@@ -50,80 +50,26 @@ const categories: {
   },
 ];
 
-// Dữ liệu minh họa Frontend, chưa kết nối Backend.
+const API_URL = import.meta.env.VITE_ATS_API_URL || "http://localhost:4000";
 const initialData: CategoryData = {
-  nguonUngVien: [
-    {
-      id: "source-1",
-      name: "Trang tuyển dụng",
-      isReferenced: true,
-    },
-    {
-      id: "source-2",
-      name: "Giới thiệu nội bộ",
-      isReferenced: false,
-    },
-    {
-      id: "source-3",
-      name: "Mạng xã hội",
-      isReferenced: false,
-    },
-  ],
-
-  lyDoLoai: [
-    {
-      id: "reason-1",
-      name: "Không đáp ứng yêu cầu",
-      isReferenced: true,
-    },
-    {
-      id: "reason-2",
-      name: "Thiếu kinh nghiệm",
-      isReferenced: false,
-    },
-    {
-      id: "reason-3",
-      name: "Không phù hợp vị trí",
-      isReferenced: false,
-    },
-  ],
-
-  diaDiem: [
-    {
-      id: "location-1",
-      name: "Hà Nội",
-      isReferenced: true,
-    },
-    {
-      id: "location-2",
-      name: "Thành phố Hồ Chí Minh",
-      isReferenced: false,
-    },
-    {
-      id: "location-3",
-      name: "Đà Nẵng",
-      isReferenced: false,
-    },
-  ],
-
-  hinhThuc: [
-    {
-      id: "work-1",
-      name: "Trực tiếp",
-      isReferenced: true,
-    },
-    {
-      id: "work-2",
-      name: "Từ xa",
-      isReferenced: false,
-    },
-    {
-      id: "work-3",
-      name: "Kết hợp",
-      isReferenced: false,
-    },
-  ],
+  nguonUngVien: [], lyDoLoai: [], diaDiem: [], hinhThuc: [],
 };
+type ApiItem = CategoryValue & { category: CategoryKey; position: number };
+type ApiResponse<T> = { success: boolean; data?: T; error?: { message?: string } };
+async function api<T>(path: string, method = "GET", body?: unknown): Promise<T> {
+  const token = sessionStorage.getItem("accessToken");
+  if (!token) throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+  const response = await fetch(`${API_URL}/api/shared-categories${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  const result = await response.json() as ApiResponse<T>;
+  if (!response.ok || !result.success || result.data === undefined) {
+    throw new Error(result.error?.message || "Không thể cập nhật danh mục.");
+  }
+  return result.data;
+}
 
 export default function RecruitmentSharedCategories({
   role,
@@ -136,6 +82,34 @@ export default function RecruitmentSharedCategories({
 
   const [data, setData] =
     useState<CategoryData>(initialData);
+  const [loading, setLoading] = useState(true);
+
+  const reload = async () => {
+    const items = await api<ApiItem[]>("");
+    const grouped: CategoryData = {
+      nguonUngVien: [], lyDoLoai: [], diaDiem: [], hinhThuc: [],
+    };
+    items.forEach(item => {
+      if (item.category in grouped) grouped[item.category].push(item);
+    });
+    setData(grouped);
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    api<ApiItem[]>("").then(items => {
+      if (!mounted) return;
+      const grouped: CategoryData = {
+        nguonUngVien: [], lyDoLoai: [], diaDiem: [], hinhThuc: [],
+      };
+      items.forEach(item => {
+        if (item.category in grouped) grouped[item.category].push(item);
+      });
+      setData(grouped);
+    }).catch(error => { if (mounted) { setMessage(error instanceof Error ? error.message : "Không tải được danh mục."); setIsError(true); } })
+      .finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; };
+  }, []);
 
   const [inputName, setInputName] = useState("");
 
@@ -151,6 +125,8 @@ export default function RecruitmentSharedCategories({
   )!;
 
   const currentItems = data[activeCategory];
+  // Trạng thái tải được thể hiện trong vùng thông báo chung.
+  const isLoadingCategories = loading;
 
   const showMessage = (
     text: string,
@@ -171,137 +147,60 @@ export default function RecruitmentSharedCategories({
     setMessage("");
   };
 
-  // Thêm hoặc cập nhật giá trị danh mục
-  const handleSave = () => {
+  // S2-08: ghi thay đổi vào Backend/SQLite, không còn tạo thành công giả trên FE.
+  const handleSave = async () => {
     const name = inputName.trim();
-
-    if (!name) {
-      showMessage(
-        "Vui lòng nhập tên giá trị danh mục.",
-        true
-      );
-      return;
+    if (!name) { showMessage("Vui lòng nhập tên giá trị danh mục.", true); return; }
+    if (currentItems.some(item => item.name.toLowerCase() === name.toLowerCase() && item.id !== editingId)) {
+      showMessage("Giá trị này đã tồn tại trong danh mục.", true); return;
     }
-
-    const duplicated = currentItems.some(
-      (item) =>
-        item.name.toLowerCase() ===
-          name.toLowerCase() &&
-        item.id !== editingId
-    );
-
-    if (duplicated) {
-      showMessage(
-        "Giá trị này đã tồn tại trong danh mục.",
-        true
-      );
-      return;
+    try {
+      if (editingId) {
+        await api(`/${editingId}`, "PUT", { name });
+      } else {
+        await api("", "POST", { category: activeCategory, name });
+      }
+      await reload();
+      resetForm();
+      showMessage("Đã lưu giá trị danh mục vào hệ thống.");
+    } catch (error) {
+      showMessage(error instanceof Error ? error.message : "Không lưu được danh mục.", true);
     }
-
-    if (editingId) {
-      setData((previous) => ({
-        ...previous,
-        [activeCategory]: previous[
-          activeCategory
-        ].map((item) =>
-          item.id === editingId
-            ? { ...item, name }
-            : item
-        ),
-      }));
-
-      showMessage("Cập nhật giá trị thành công.");
-    } else {
-      const newItem: CategoryValue = {
-        id: `${Date.now()}-${Math.random()}`,
-        name,
-        isReferenced: false,
-      };
-
-      setData((previous) => ({
-        ...previous,
-        [activeCategory]: [
-          ...previous[activeCategory],
-          newItem,
-        ],
-      }));
-
-      showMessage("Thêm giá trị thành công.");
-    }
-
-    resetForm();
   };
 
-  // Chọn giá trị cần sửa
   const handleEdit = (item: CategoryValue) => {
     setEditingId(item.id);
     setInputName(item.name);
     setMessage("");
   };
 
-  // Xóa giá trị chưa được tham chiếu
-  const handleDelete = (item: CategoryValue) => {
+  const handleDelete = async (item: CategoryValue) => {
     if (item.isReferenced) {
-      showMessage(
-        "Không thể xóa giá trị đang được tham chiếu.",
-        true
-      );
-      return;
+      showMessage("Không thể xóa giá trị đang được tham chiếu.", true); return;
     }
-
-    const confirmed = window.confirm(
-      `Bạn có chắc muốn xóa "${item.name}" không?`
-    );
-
-    if (!confirmed) return;
-
-    setData((previous) => ({
-      ...previous,
-      [activeCategory]: previous[
-        activeCategory
-      ].filter((value) => value.id !== item.id),
-    }));
-
-    if (editingId === item.id) {
-      resetForm();
+    if (!window.confirm(`Bạn có chắc muốn xóa "${item.name}" không?`)) return;
+    try {
+      await api(`/${item.id}`, "DELETE");
+      await reload();
+      if (editingId === item.id) resetForm();
+      showMessage("Đã xóa giá trị danh mục.");
+    } catch (error) {
+      showMessage(error instanceof Error ? error.message : "Không thể xóa giá trị.", true);
     }
-
-    showMessage("Xóa giá trị thành công.");
   };
 
-  // Thay đổi thứ tự hiển thị
-  const handleMove = (
-    index: number,
-    direction: "up" | "down"
-  ) => {
-    const newIndex =
-      direction === "up" ? index - 1 : index + 1;
-
-    if (
-      newIndex < 0 ||
-      newIndex >= currentItems.length
-    ) {
-      return;
+  const handleMove = async (index: number, direction: "up" | "down") => {
+    const newIndex = direction === "up" ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= currentItems.length) return;
+    const ordered = [...currentItems];
+    [ordered[index], ordered[newIndex]] = [ordered[newIndex], ordered[index]];
+    try {
+      await api("/reorder", "PUT", { category: activeCategory, ids: ordered.map(item => item.id) });
+      await reload();
+      showMessage("Đã lưu thứ tự hiển thị.");
+    } catch (error) {
+      showMessage(error instanceof Error ? error.message : "Không thể lưu thứ tự.", true);
     }
-
-    const updatedItems = [...currentItems];
-
-    [
-      updatedItems[index],
-      updatedItems[newIndex],
-    ] = [
-      updatedItems[newIndex],
-      updatedItems[index],
-    ];
-
-    setData((previous) => ({
-      ...previous,
-      [activeCategory]: updatedItems,
-    }));
-
-    showMessage(
-      "Đã cập nhật thứ tự hiển thị."
-    );
   };
 
   const handleLogout = async (): Promise<void> => {
@@ -338,11 +237,13 @@ export default function RecruitmentSharedCategories({
             background: #f5f7fb;
           }
 
-          .shared-main {
-            flex: 1;
-            min-width: 0;
-            padding: 36px 48px;
-          }
+         .shared-main {
+  flex: 1;
+  min-width: 0;
+  margin-left: 280px;
+  box-sizing: border-box;
+  padding: 36px 48px;
+}
 
           .shared-container {
             max-width: 1250px;
@@ -626,7 +527,8 @@ export default function RecruitmentSharedCategories({
               )}
             </div>
 
-            {message && (
+            {isLoadingCategories && <p role="status">Đang tải danh mục...</p>}
+          {message && (
               <div
                 className="shared-message"
                 style={{
@@ -757,12 +659,7 @@ export default function RecruitmentSharedCategories({
               </table>
             </div>
 
-            <p className="shared-note">
-              Dữ liệu hiện tại chỉ dùng để minh họa
-              giao diện. Trạng thái tham chiếu sẽ được
-              xác định từ cơ sở dữ liệu khi triển khai
-              Backend.
-            </p>
+
           </section>
         </div>
       </main>

@@ -39,7 +39,7 @@ export async function authenticate(
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     errorResponse(
       res,
-      'Authentication required. Missing Bearer token.',
+      'Bạn cần đăng nhập để sử dụng chức năng này.',
       401,
       'UNAUTHORIZED'
     );
@@ -51,7 +51,7 @@ export async function authenticate(
   if (!token) {
     errorResponse(
       res,
-      'Authentication required. Token is empty.',
+      'Thông tin đăng nhập không hợp lệ. Vui lòng đăng nhập lại.',
       401,
       'UNAUTHORIZED'
     );
@@ -68,7 +68,7 @@ export async function authenticate(
   if (revoked) {
     errorResponse(
       res,
-      'Token has been revoked. Please log in again.',
+      'Phiên đăng nhập đã bị thu hồi. Vui lòng đăng nhập lại.',
       401,
       'TOKEN_REVOKED'
     );
@@ -85,7 +85,7 @@ export async function authenticate(
   if (!payload) {
     errorResponse(
       res,
-      'Invalid or expired token.',
+      'Phiên đăng nhập đã hết hạn hoặc không hợp lệ.',
       401,
       'INVALID_TOKEN'
     );
@@ -123,7 +123,7 @@ export async function authenticate(
   if (!user || !user.isActive) {
     errorResponse(
       res,
-      'User account not found or deactivated.',
+      'Tài khoản không tồn tại hoặc đã bị khóa.',
       401,
       'ACCOUNT_INACTIVE'
     );
@@ -154,6 +154,47 @@ export async function authenticate(
     );
     return;
   }
+
+  /* =========================================================
+   S1-02 - KIEM TRA PHIEN DANG NHAP 20 PHUT
+========================================================= */
+
+const sessionId = payload.sessionId;
+
+if (typeof sessionId !== 'string' || !sessionId) {
+  errorResponse(
+    res,
+    'Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.',
+    401,
+    'SESSION_INVALIDATED'
+  );
+  return;
+}
+
+const authSession = await prisma.authSession.findUnique({
+  where: {
+    id: sessionId,
+  },
+});
+
+const sessionNow = Date.now();
+const idleTimeoutMs = 20 * 60 * 1000;
+
+if (
+  !authSession ||
+  authSession.userId !== user.id ||
+  authSession.revokedAt !== null ||
+  authSession.expiresAt.getTime() <= sessionNow ||
+  authSession.lastActivityAt.getTime() + idleTimeoutMs <= sessionNow
+) {
+  errorResponse(
+    res,
+    'Phiên đăng nhập đã hết hạn hoặc bị thu hồi. Vui lòng đăng nhập lại.',
+    401,
+    'SESSION_EXPIRED'
+  );
+  return;
+}
 
 
   /* =========================================================

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
+import sharp from 'sharp';
 import { prisma } from '../../database/prisma';
 import { errorResponse, successResponse } from '../../utils/response';
 
@@ -19,16 +20,49 @@ const defaultProfile = {
   id: 'default', companyName: '', tagline: '', introduction: '', culture: '',
   benefits: '', website: '', contactEmail: '', location: '', isPublished: false,
 };
-type CompanyProfileRecord = typeof defaultProfile & { updatedAt?: Date };
-
 export class CompanyProfileController {
+  static async getPublic(_req: Request, res: Response) {
+    const profile = await prisma.companyProfile.findUnique({ where: { id: 'default' } });
+    if (!profile || !profile.isPublished) {
+      return errorResponse(res, 'Trang giới thiệu công ty chưa được xuất bản.', 404, 'NOT_PUBLISHED');
+    }
+    return successResponse(res, profile);
+  }
+
+  static async uploadImage(req: Request, res: Response) {
+    const kind = req.params.kind;
+    if (kind !== 'logo' && kind !== 'banner') {
+      return errorResponse(res, 'Loại ảnh không hợp lệ.', 400, 'INVALID_IMAGE_KIND');
+    }
+    if (!req.file) return errorResponse(res, 'Vui lòng chọn ảnh để tải lên.', 400, 'IMAGE_REQUIRED');
+    try {
+      const input = sharp(req.file.buffer, { limitInputPixels: 20_000_000 });
+      const metadata = await input.metadata();
+      if (!['png', 'jpeg'].includes(metadata.format || '')) {
+        return errorResponse(res, 'Ảnh JPG hoặc PNG không hợp lệ.', 415, 'INVALID_IMAGE');
+      }
+      const output = await input.rotate().resize(
+        kind === 'logo' ? 400 : 1400, kind === 'logo' ? 400 : 480,
+        { fit: 'cover', position: 'attention' },
+      ).webp({ quality: kind === 'logo' ? 78 : 74 }).toBuffer();
+      const dataUri = `data:image/webp;base64,${output.toString('base64')}`;
+      const imageData = kind === 'logo'
+        ? { logoData: dataUri }
+        : { bannerData: dataUri };
+      const profile = await prisma.companyProfile.upsert({
+        where: { id: 'default' },
+        create: { id: 'default', ...imageData },
+        update: imageData,
+      });
+      return successResponse(res, profile, 200, 'Đã cập nhật hình ảnh công ty.');
+    } catch {
+      return errorResponse(res, 'Ảnh không thể xử lý. Vui lòng chọn ảnh JPG hoặc PNG khác.', 400, 'INVALID_IMAGE');
+    }
+  }
+
   static async get(_req: Request, res: Response) {
-    const rows = await prisma.$queryRaw<CompanyProfileRecord[]>`
-      SELECT id, "companyName", tagline, introduction, culture, benefits,
-             website, "contactEmail", location, "isPublished", "updatedAt"
-      FROM "CompanyProfile" WHERE id = 'default' LIMIT 1
-    `;
-    return successResponse(res, rows[0] ?? defaultProfile);
+    const profile = await prisma.companyProfile.findUnique({ where: { id: 'default' } });
+    return successResponse(res, profile ?? defaultProfile);
   }
 
   static async save(req: Request, res: Response) {
@@ -36,31 +70,11 @@ export class CompanyProfileController {
     if (!parsed.success) {
       return errorResponse(res, parsed.error.issues[0]?.message || 'Dữ liệu không hợp lệ.', 400, 'VALIDATION_ERROR');
     }
-    const data = parsed.data;
-    const rows = await prisma.$queryRaw<CompanyProfileRecord[]>`
-      INSERT INTO "CompanyProfile" (
-        id, "companyName", tagline, introduction, culture, benefits,
-        website, "contactEmail", location, "isPublished", "updatedAt"
-      ) VALUES (
-        'default', ${data.companyName}, ${data.tagline}, ${data.introduction},
-        ${data.culture}, ${data.benefits}, ${data.website}, ${data.contactEmail},
-        ${data.location}, ${data.isPublished}, NOW()
-      )
-      ON CONFLICT (id) DO UPDATE SET
-        "companyName" = EXCLUDED."companyName",
-        tagline = EXCLUDED.tagline,
-        introduction = EXCLUDED.introduction,
-        culture = EXCLUDED.culture,
-        benefits = EXCLUDED.benefits,
-        website = EXCLUDED.website,
-        "contactEmail" = EXCLUDED."contactEmail",
-        location = EXCLUDED.location,
-        "isPublished" = EXCLUDED."isPublished",
-        "updatedAt" = NOW()
-      RETURNING id, "companyName", tagline, introduction, culture, benefits,
-                website, "contactEmail", location, "isPublished", "updatedAt"
-    `;
-    const profile = rows[0];
+    const profile = await prisma.companyProfile.upsert({
+      where: { id: 'default' },
+      create: { id: 'default', ...parsed.data },
+      update: parsed.data,
+    });
     return successResponse(res, profile, 200, 'Đã lưu cấu hình trang giới thiệu công ty.');
   }
 }

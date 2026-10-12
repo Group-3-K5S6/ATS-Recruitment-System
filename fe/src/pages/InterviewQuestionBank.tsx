@@ -96,6 +96,8 @@ export default function InterviewQuestionBank({
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [modalError, setModalError] = useState("");
 
   const handleUnauthorized = () => {
     clearLocalSession();
@@ -365,28 +367,55 @@ export default function InterviewQuestionBank({
     setFilterCriterionId("");
   };
 
-  const handleAddQuestion = async () => {
+  const openAddModal = () => {
     setMessage("");
+    setModalError("");
+    setQuestion("");
+    setGoodAnswer("");
+    setDifficulty("MEDIUM");
+    setShowAddModal(true);
+  };
+
+  const closeAddModal = () => {
+    if (adding) return;
+    setShowAddModal(false);
+    setModalError("");
+  };
+
+  useEffect(() => {
+    if (!showAddModal) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !adding) {
+        setShowAddModal(false);
+        setModalError("");
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showAddModal, adding]);
+
+  const handleAddQuestion = async () => {
+    setModalError("");
 
     if (!jobId) {
-      setMessage("Vui lòng chọn chức danh.");
+      setModalError("Vui lòng chọn chức danh.");
       return;
     }
 
     if (!criterionId) {
-      setMessage("Vui lòng chọn tiêu chí.");
+      setModalError("Vui lòng chọn tiêu chí.");
       return;
     }
 
     if (!question.trim()) {
-      setMessage(
+      setModalError(
         "Vui lòng nhập câu hỏi phỏng vấn."
       );
       return;
     }
 
     if (!goodAnswer.trim()) {
-      setMessage(
+      setModalError(
         "Vui lòng nhập gợi ý câu trả lời tốt."
       );
       return;
@@ -412,12 +441,12 @@ export default function InterviewQuestionBank({
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-           question: question.trim(),
+            question: question.trim(),
             difficulty,
-          suggestedAnswer: goodAnswer.trim(),
-             competencyCriterionId: criterionId,
-               jobId,
-    }),
+            suggestedAnswer: goodAnswer.trim(),
+            competencyCriterionId: criterionId,
+            jobId,
+          }),
         }
       );
 
@@ -441,15 +470,14 @@ export default function InterviewQuestionBank({
       setGoodAnswer("");
       setDifficulty("MEDIUM");
 
-      setMessage(
-        "Thêm câu hỏi thành công."
-      );
-
+      setShowAddModal(false);
+      setModalError("");
+      setMessage("Thêm câu hỏi thành công.");
       await loadQuestions();
     } catch (error) {
       console.error(error);
 
-      setMessage(
+      setModalError(
         error instanceof Error
           ? error.message
           : "Không thể thêm câu hỏi."
@@ -578,12 +606,12 @@ const handleDeleteQuestion = async (id: string) => {
       />
 
       <main
-        style={{
-          flex: 1,
-          padding: "42px 56px",
-          minWidth: 0,
-        }}
-      >
+  className="dashboard-content interview-question-bank-content"
+  style={{
+    flex: 1,
+    minWidth: 0,
+  }}
+>
         <div
           style={{
             maxWidth: "1200px",
@@ -592,234 +620,56 @@ const handleDeleteQuestion = async (id: string) => {
         >
           <div
             style={{
-              marginBottom: "28px",
-            }}
-          >
-            <h1
-              style={{
-                margin: 0,
-                fontSize: "32px",
-              }}
-            >
-              Ngân hàng câu hỏi phỏng vấn
-            </h1>
-
-            <p
-              style={{
-                color: "#64748b",
-                marginTop: "8px",
-              }}
-            >
-              Quản lý câu hỏi phỏng vấn theo
-              chức danh và tiêu chí trong khung
-              năng lực.
-            </p>
-          </div>
-
-          <section
-            style={{
-              background: "#ffffff",
-              border:
-                "1px solid #e2e8f0",
-              borderRadius: "12px",
-              padding: "24px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "16px",
+              flexWrap: "wrap",
               marginBottom: "24px",
             }}
           >
-            <h2 style={{ marginTop: 0 }}>
-              Thêm câu hỏi phỏng vấn
-            </h2>
+            <div style={{ minWidth: 0 }}>
+              <h1 style={{ margin: 0, fontSize: "32px" }}>
+                Ngân hàng câu hỏi phỏng vấn
+              </h1>
+              <p style={{ color: "#64748b", margin: "8px 0 0" }}>
+                Quản lý câu hỏi phỏng vấn theo chức danh và tiêu chí trong khung năng lực.
+              </p>
+            </div>
+            <button type="button" onClick={openAddModal} style={primaryButtonStyle}>
+              + Thêm câu hỏi
+            </button>
+          </div>
 
+          {message && (
             <div
+              role={message.includes("thành công") ? "status" : "alert"}
               style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "repeat(auto-fit, minmax(220px, 1fr))",
-                gap: "16px",
-              }}
-            >
-              <div>
-                <label style={labelStyle}>
-                  Chức danh
-                </label>
-
-                <select
-                  value={jobId}
-                  onChange={(e) =>
-                    handleJobChange(
-                      e.target.value
-                    )
-                  }
-                  style={inputStyle}
-                >
-                  {lookups.length === 0 && (
-                    <option value="">
-                      Chưa có chức danh
-                    </option>
-                  )}
-
-                  {lookups.map((job) => (
-                    <option
-                      key={job.id}
-                      value={job.id}
-                    >
-                      {job.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label style={labelStyle}>
-                  Tiêu chí trong khung năng lực
-                </label>
-
-                <select
-                  value={criterionId}
-                  onChange={(e) =>
-                    setCriterionId(
-                      e.target.value
-                    )
-                  }
-                  style={inputStyle}
-                >
-                  {formCriteria.length ===
-                    0 && (
-                    <option value="">
-                      Chưa có tiêu chí
-                    </option>
-                  )}
-
-                  {formCriteria.map(
-                    (item) => (
-                      <option
-                        key={item.id}
-                        value={item.id}
-                      >
-                        {item.name}
-                      </option>
-                    )
-                  )}
-                </select>
-              </div>
-
-              <div>
-                <label style={labelStyle}>
-                  Mức độ khó
-                </label>
-
-                <select
-                  value={difficulty}
-                  onChange={(e) =>
-                    setDifficulty(
-                      e.target
-                        .value as DifficultyApi
-                    )
-                  }
-                  style={inputStyle}
-                >
-                  <option value="EASY">
-                    Dễ
-                  </option>
-
-                  <option value="MEDIUM">
-                    Trung bình
-                  </option>
-
-                  <option value="HARD">
-                    Khó
-                  </option>
-                </select>
-              </div>
-            </div>
-
-            <div
-              style={{ marginTop: "16px" }}
-            >
-              <label style={labelStyle}>
-                Câu hỏi phỏng vấn
-              </label>
-
-              <textarea
-                value={question}
-                onChange={(e) =>
-                  setQuestion(e.target.value)
-                }
-                placeholder="Nhập câu hỏi phỏng vấn"
-                rows={3}
-                style={{
-                  ...inputStyle,
-                  resize: "vertical",
-                }}
-              />
-            </div>
-
-            <div
-              style={{ marginTop: "16px" }}
-            >
-              <label style={labelStyle}>
-                Gợi ý câu trả lời tốt
-              </label>
-
-              <textarea
-                value={goodAnswer}
-                onChange={(e) =>
-                  setGoodAnswer(
-                    e.target.value
-                  )
-                }
-                placeholder="Nhập gợi ý câu trả lời tốt"
-                rows={4}
-                style={{
-                  ...inputStyle,
-                  resize: "vertical",
-                }}
-              />
-            </div>
-
-            {message && (
-              <div
-                style={{
-                  marginTop: "14px",
-                  color:
-                    message ===
-                    "Thêm câu hỏi thành công."
-                      ? "#15803d"
-                      : "#dc2626",
-                  fontWeight: 600,
-                }}
-              >
-                {message}
-              </div>
-            )}
-
-            <div
-              style={{
-                marginTop: "18px",
+                marginBottom: "16px",
+                padding: "12px 16px",
+                borderRadius: "8px",
+                border: message.includes("thành công")
+                  ? "1px solid #a7d5b7"
+                  : "1px solid #fecaca",
+                background: message.includes("thành công") ? "#f0fdf4" : "#fef2f2",
+                color: message.includes("thành công") ? "#166534" : "#b91c1c",
                 display: "flex",
-                justifyContent: "flex-end",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "12px",
               }}
             >
+              <span>{message}</span>
               <button
                 type="button"
-                onClick={() =>
-                  void handleAddQuestion()
-                }
-                disabled={adding}
-                style={{
-                  ...primaryButtonStyle,
-                  opacity: adding ? 0.6 : 1,
-                  cursor: adding
-                    ? "not-allowed"
-                    : "pointer",
-                }}
+                onClick={() => setMessage("")}
+                aria-label="Đóng thông báo"
+                style={{ border: "none", background: "transparent", color: "inherit", cursor: "pointer", fontSize: "20px" }}
               >
-                {adding
-                  ? "Đang thêm..."
-                  : "+ Thêm câu hỏi"}
+                ×
               </button>
             </div>
-          </section>
+          )}
 
           <section
             style={{
@@ -838,7 +688,7 @@ const handleDeleteQuestion = async (id: string) => {
               style={{
                 display: "grid",
                 gridTemplateColumns:
-                  "2fr 1fr 1fr",
+                  "repeat(auto-fit, minmax(220px, 1fr))",
                 gap: "12px",
                 marginBottom: "20px",
               }}
@@ -1049,6 +899,141 @@ const handleDeleteQuestion = async (id: string) => {
           </section>
         </div>
       </main>
+      {showAddModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 3000,
+            background: "rgba(15, 23, 42, 0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "16px",
+            overflowY: "auto",
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-interview-question-title"
+            style={{
+              width: "min(720px, 100%)",
+              maxHeight: "calc(100vh - 32px)",
+              overflowY: "auto",
+              background: "#ffffff",
+              borderRadius: "14px",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.22)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "20px 24px",
+                borderBottom: "1px solid #e2e8f0",
+                gap: "12px",
+              }}
+            >
+              <h2 id="add-interview-question-title" style={{ margin: 0, fontSize: "23px" }}>
+                Thêm câu hỏi phỏng vấn
+              </h2>
+              <button
+                type="button"
+                onClick={closeAddModal}
+                disabled={adding}
+                aria-label="Đóng biểu mẫu"
+                style={{ border: "none", background: "transparent", fontSize: "26px", cursor: adding ? "not-allowed" : "pointer", color: "#475569" }}
+              >
+                ×
+              </button>
+            </div>
+
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleAddQuestion();
+              }}
+              style={{ padding: "22px 24px 24px" }}
+            >
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "16px" }}>
+                <div>
+                  <label htmlFor="iqb-job" style={labelStyle}>Chức danh</label>
+                  <select id="iqb-job" value={jobId} onChange={(event) => handleJobChange(event.target.value)} style={inputStyle}>
+                    {lookups.length === 0 && <option value="">Chưa có chức danh</option>}
+                    {lookups.map((job) => (
+                      <option key={job.id} value={job.id}>{job.title}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="iqb-criterion" style={labelStyle}>Tiêu chí trong khung năng lực</label>
+                  <select id="iqb-criterion" value={criterionId} onChange={(event) => setCriterionId(event.target.value)} style={inputStyle}>
+                    {formCriteria.length === 0 && <option value="">Chưa có tiêu chí</option>}
+                    {formCriteria.map((item) => (
+                      <option key={item.id} value={item.id}>{item.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="iqb-difficulty" style={labelStyle}>Mức độ khó</label>
+                  <select id="iqb-difficulty" value={difficulty} onChange={(event) => setDifficulty(event.target.value as DifficultyApi)} style={inputStyle}>
+                    <option value="EASY">Dễ</option>
+                    <option value="MEDIUM">Trung bình</option>
+                    <option value="HARD">Khó</option>
+                  </select>
+                </div>
+              </div>
+              <div style={{ marginTop: "18px" }}>
+                <label htmlFor="iqb-question" style={labelStyle}>Câu hỏi phỏng vấn</label>
+                <textarea
+                  id="iqb-question"
+                  autoFocus
+                  value={question}
+                  onChange={(event) => setQuestion(event.target.value)}
+                  placeholder="Nhập câu hỏi phỏng vấn"
+                  rows={3}
+                  style={{ ...inputStyle, resize: "vertical" }}
+                />
+              </div>
+              <div style={{ marginTop: "16px" }}>
+                <label htmlFor="iqb-answer" style={labelStyle}>Gợi ý câu trả lời tốt</label>
+                <textarea
+                  id="iqb-answer"
+                  value={goodAnswer}
+                  onChange={(event) => setGoodAnswer(event.target.value)}
+                  placeholder="Nhập gợi ý câu trả lời tốt"
+                  rows={4}
+                  style={{ ...inputStyle, resize: "vertical" }}
+                />
+              </div>
+              {modalError && (
+                <div role="alert" style={{ marginTop: "16px", color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", padding: "10px 12px", borderRadius: "8px" }}>
+                  {modalError}
+                </div>
+              )}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", flexWrap: "wrap", marginTop: "22px" }}>
+                <button
+                  type="button"
+                  onClick={closeAddModal}
+                  disabled={adding}
+                  style={{ padding: "11px 18px", borderRadius: "8px", border: "1px solid #cbd5e1", background: "white", cursor: adding ? "not-allowed" : "pointer" }}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={adding || lookups.length === 0}
+                  style={{ ...primaryButtonStyle, opacity: adding || lookups.length === 0 ? 0.6 : 1, cursor: adding || lookups.length === 0 ? "not-allowed" : "pointer" }}
+                >
+                  {adding ? "Đang lưu..." : "Lưu câu hỏi"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -21,6 +21,9 @@ import jobTitleRoutes from './modules/job-titles/job-title.routes';
 import departmentRoutes from './modules/departments/department.routes';
 import companyProfileRoutes from './modules/company-profile/company-profile.routes';
 import competencyFrameworkRoutes from './modules/competency-frameworks/competency-framework.routes';
+import rbacManagementRoutes from "./modules/rbac-management/rbac.routes";
+import sharedCategoryRoutes from './modules/shared-categories/shared-category.routes';
+import approvalWorkflowRoutes from './modules/approval-workflows/approval-workflow.routes';
 
 export function createApp() {
   const app = express();
@@ -29,6 +32,7 @@ export function createApp() {
   app.use(helmet());
   app.use(cors());
   app.use(express.json());
+
 
   // Health check
   app.get('/health', (_req: Request, res: Response) => {
@@ -51,7 +55,13 @@ app.use('/api/menu', menuRoutes);
 app.use('/api/interview-questions', interviewQuestionRoutes);
 app.use('/api/departments', departmentRoutes);
   app.use('/api/company-profile', companyProfileRoutes);
+  app.use('/api/shared-categories', sharedCategoryRoutes);
   app.use('/api/competency-frameworks', competencyFrameworkRoutes);
+  app.use('/api/approval-workflows', approvalWorkflowRoutes);
+  app.use(
+  "/api/rbac",
+  rbacManagementRoutes,
+);
   // Catch-all 404
   app.use((_req: Request, res: Response) => {
     errorResponse(res, 'Route not found.', 404, 'NOT_FOUND');

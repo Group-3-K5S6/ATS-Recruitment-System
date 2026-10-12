@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import type { Role } from "../data/roleMenus";
 import { clearLocalSession } from "../services/session";
+import SalaryVndInput from "../components/SalaryVndInput";
 
 import {
   createJobTitle,
@@ -689,28 +690,22 @@ try {
               }}
             >
               <Field label="Lương tối thiểu">
-                <input
-                  type="number"
-                  min={0}
+                <SalaryVndInput
+                  label="Lương tối thiểu"
+                  theme="green"
                   value={minSalary}
-                  onChange={(event) =>
-                    setMinSalary(event.target.value)
-                  }
-                  placeholder="12000000"
-                  style={inputStyle}
+                  onValueChange={setMinSalary}
+                  placeholder="12.000.000"
                 />
               </Field>
 
               <Field label="Lương tối đa">
-                <input
-                  type="number"
-                  min={0}
+                <SalaryVndInput
+                  label="Lương tối đa"
+                  theme="green"
                   value={maxSalary}
-                  onChange={(event) =>
-                    setMaxSalary(event.target.value)
-                  }
-                  placeholder="18000000"
-                  style={inputStyle}
+                  onValueChange={setMaxSalary}
+                  placeholder="18.000.000"
                 />
               </Field>
             </div>

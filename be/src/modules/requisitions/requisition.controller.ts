@@ -6,6 +6,8 @@ import { successResponse, errorResponse } from '../../utils/response';
 import { recordRequestAudit } from '../../middleware/audit-logger';
 import { AuditAction } from '../../rbac/types';
 import { RoleType } from '../../rbac/roles';
+import { ApprovalWorkflowService } from '../approval-workflows/approval-workflow.service';
+import { ApprovalStepSnapshot } from '../approval-workflows/approval-workflow.types';
 
 
 const optionalText = z.preprocess(
@@ -23,13 +25,17 @@ const optionalDate = z.preprocess(
   z.coerce.date().optional()
 );
 
+// CSDL có thể chứa khóa String cũ không theo chuẩn UUID sau khi migrate.
+// Chỉ kiểm tra định dạng đầu vào ở đây; quyền và tồn tại được kiểm tra bên dưới.
+const dbRecordId = z.string().trim().min(1).max(191);
+
 const requisitionFields = {
   title: optionalText,
-  departmentId: z.string().uuid().optional(),
+  departmentId: dbRecordId.optional(),
   headcount: z.coerce.number().int().positive().optional(),
   budget: z.coerce.number().positive().optional(),
   approverId: z.string().uuid().optional(),
-  jobTitleId: z.string().uuid().optional(),
+  jobTitleId: dbRecordId.optional(),
   reason: z.enum(['NEW', 'REPLACEMENT']).optional(),
   proposedSalaryMin: optionalNumber,
   proposedSalaryMax: optionalNumber,
@@ -70,13 +76,21 @@ export class RequisitionController {
     const user = req.user!;
 
     let whereClause = {};
-    if (user.roles.includes(RoleType.HIRING_MANAGER)) {
+    if (user.roles.includes(RoleType.ADMIN) || user.roles.includes(RoleType.HR_MANAGER) || user.roles.includes(RoleType.RECRUITER)) {
+      // Full list only for roles granted organization-wide requisition visibility.
+      whereClause = {};
+    } else if (user.roles.includes(RoleType.HIRING_MANAGER)) {
       whereClause = {
         OR: [
           { hiringManagerId: user.id },
-          user.departmentId ? { departmentId: user.departmentId } : {},
+          ...(user.departmentId ? [{ departmentId: user.departmentId }] : []),
         ],
       };
+    } else if (user.roles.includes(RoleType.APPROVER)) {
+      whereClause = { approverId: user.id };
+    } else {
+      errorResponse(res, 'Bạn không có quyền xem danh sách yêu cầu tuyển dụng.', 403, 'FORBIDDEN_SCOPE');
+      return;
     }
 
     const requisitions = await prisma.requisition.findMany({
@@ -102,13 +116,13 @@ export class RequisitionController {
       if (exists) {
         errorResponse(
           res,
-          'Access denied. Requisition is outside your department or assigned scope.',
+          'Bạn không có quyền xem yêu cầu tuyển dụng ngoài phạm vi được phân công.',
           403,
           'FORBIDDEN_SCOPE'
         );
         return;
       }
-      errorResponse(res, 'Requisition not found.', 404, 'NOT_FOUND');
+      errorResponse(res, 'Không tìm thấy yêu cầu tuyển dụng.', 404, 'NOT_FOUND');
       return;
     }
 
@@ -125,6 +139,87 @@ export class RequisitionController {
     successResponse(res, requisition, 200);
   }
 
+
+  private static async resolveApprovalMetadata(params: {
+    departmentId: string;
+    effectiveSalary?: number;
+    shouldResolveChain: boolean;
+    isDraft: boolean;
+    defaultApproverId?: string | null;
+    currentWorkflowId?: string | null;
+    currentWorkflowVersion?: number | null;
+    currentApprovalChain?: string | null;
+  }): Promise<
+    | {
+        success: true;
+        approverId: string | null | undefined;
+        workflowId: string | null | undefined;
+        workflowVersion: number | null | undefined;
+        chain: string | null | undefined;
+      }
+    | {
+        success: false;
+        message: string;
+        code: string;
+        status: number;
+      }
+  > {
+    let resolvedApproverId = params.defaultApproverId;
+    let approvalWorkflowId = params.currentWorkflowId;
+    let approvalWorkflowVersion = params.currentWorkflowVersion;
+    let approvalChain = params.currentApprovalChain;
+
+    if (params.shouldResolveChain) {
+      const resolved = await ApprovalWorkflowService.resolveApprovalChain(
+        params.departmentId,
+        params.effectiveSalary
+      );
+
+      if (resolved.matched) {
+        resolvedApproverId = resolved.currentApproverId;
+        approvalWorkflowId = resolved.workflowId ?? null;
+        approvalWorkflowVersion = resolved.workflowVersion ?? null;
+        approvalChain = JSON.stringify(resolved.steps);
+      } else if (resolved.reason === 'NO_MATCHING_RANGE') {
+        return {
+          success: false,
+          message: 'Mức lương đề xuất không phù hợp với bất kỳ dải phê duyệt nào của phòng ban.',
+          code: 'NO_MATCHING_APPROVAL_RANGE',
+          status: 400,
+        };
+      } else if (resolved.reason === 'NO_ACTIVE_APPROVER' || resolved.reason === 'EMPTY_APPROVER_LIST') {
+        return {
+          success: false,
+          message: 'Không có người phê duyệt đang hoạt động phù hợp cho luồng phê duyệt này.',
+          code: 'NO_ACTIVE_APPROVER',
+          status: 400,
+        };
+      }
+    }
+
+    if (!params.isDraft && resolvedApproverId && !approvalWorkflowId) {
+      const manualApprover = await prisma.user.findUnique({
+        where: { id: resolvedApproverId },
+        select: { id: true, isActive: true },
+      });
+      if (!manualApprover || !manualApprover.isActive) {
+        return {
+          success: false,
+          message: 'Người phê duyệt không tồn tại hoặc đã bị vô hiệu hóa.',
+          code: 'NO_ACTIVE_APPROVER',
+          status: 400,
+        };
+      }
+    }
+
+    return {
+      success: true,
+      approverId: resolvedApproverId,
+      workflowId: approvalWorkflowId,
+      workflowVersion: approvalWorkflowVersion,
+      chain: approvalChain,
+    };
+  }
 
   static async create(req: Request, res: Response): Promise<void> {
     const data = req.body;
@@ -143,7 +238,7 @@ export class RequisitionController {
     if (!canCreate) {
       errorResponse(
         res,
-        'Access denied. You can only create recruitment requests within your authorized scope.',
+        'Bạn chỉ được tạo yêu cầu tuyển dụng trong phạm vi được phân công.',
         403,
         'FORBIDDEN_SCOPE'
       );
@@ -167,6 +262,12 @@ export class RequisitionController {
           ],
         },
       });
+    }
+
+    // Không âm thầm bỏ qua mã chức danh không tồn tại, kể cả khi lưu nháp.
+    if (data.jobTitleId && !jobTitleRecord) {
+      errorResponse(res, 'Chức danh đã chọn không còn tồn tại. Vui lòng chọn lại.', 400, 'INVALID_JOB_TITLE');
+      return;
     }
 
     const title = jobTitleRecord?.name || rawJobTitle;
@@ -245,6 +346,7 @@ export class RequisitionController {
       if (!title || title.length < 3) missingFields.push('jobTitle');
       if (!jobTitleRecord) missingFields.push('jobTitleId');
       if (!reason) missingFields.push('reason');
+      if (data.headcount === undefined && data.quantity === undefined) missingFields.push('headcount');
       if (salaryMin === undefined) missingFields.push('proposedSalaryMin');
       if (salaryMax === undefined) missingFields.push('proposedSalaryMax');
       if (!targetDate) missingFields.push('targetDate');
@@ -272,7 +374,7 @@ export class RequisitionController {
       if (outsideSalaryBand && !salaryExplanation) {
         errorResponse(
           res,
-          'An explanation is required when the proposed salary range is outside the standard salary band.',
+          'Dải lương đề xuất vượt mức chuẩn của chức danh. Vui lòng nhập giải trình.',
           400,
           'SALARY_EXPLANATION_REQUIRED'
         );
@@ -294,6 +396,20 @@ export class RequisitionController {
       return;
     }
 
+    const effectiveSalary = salaryMax !== undefined ? salaryMax : salaryMin;
+    const approvalRes = await RequisitionController.resolveApprovalMetadata({
+      departmentId,
+      effectiveSalary,
+      shouldResolveChain: !isDraft,
+      isDraft,
+      defaultApproverId: data.approverId || undefined,
+    });
+
+    if (!approvalRes.success) {
+      errorResponse(res, approvalRes.message, approvalRes.status, approvalRes.code);
+      return;
+    }
+
     const requisition = await prisma.requisition.create({
       data: {
         title: title || 'Bản nháp yêu cầu tuyển dụng',
@@ -301,7 +417,10 @@ export class RequisitionController {
         hiringManagerId: user.id,
         headcount,
         budget,
-        approverId: data.approverId || undefined,
+        approverId: approvalRes.approverId || undefined,
+        approvalWorkflowId: approvalRes.workflowId || undefined,
+        approvalWorkflowVersion: approvalRes.workflowVersion || undefined,
+        approvalChain: approvalRes.chain || undefined,
         jobTitleId: jobTitleRecord?.id,
         reason: reason || undefined,
         proposedSalaryMin: salaryMin,
@@ -347,7 +466,7 @@ export class RequisitionController {
     if (!canUpdate) {
       errorResponse(
         res,
-        'Access denied. You cannot modify requisitions outside your scope.',
+        'Bạn không có quyền sửa yêu cầu tuyển dụng ngoài phạm vi được phân công.',
         403,
         'FORBIDDEN_SCOPE'
       );
@@ -356,7 +475,7 @@ export class RequisitionController {
 
     const existing = await prisma.requisition.findUnique({ where: { id } });
     if (!existing) {
-      errorResponse(res, 'Requisition not found.', 404, 'NOT_FOUND');
+      errorResponse(res, 'Không tìm thấy yêu cầu tuyển dụng.', 404, 'NOT_FOUND');
       return;
     }
 
@@ -521,7 +640,7 @@ export class RequisitionController {
       if (outsideSalaryBand && !String(salaryExplanation).trim()) {
         errorResponse(
           res,
-          'An explanation is required when salary is outside the standard band.',
+          'Dải lương đề xuất vượt mức chuẩn của chức danh. Vui lòng nhập giải trình.',
           400,
           'SALARY_EXPLANATION_REQUIRED'
         );
@@ -542,6 +661,31 @@ export class RequisitionController {
       return;
     }
 
+    const willBePending = !isDraft && (data.status === 'PENDING_APPROVAL' || existing.status === 'DRAFT');
+    const shouldResolveChain = willBePending && (!existing.approvalChain || existing.status === 'DRAFT');
+    const effectiveSalary =
+      salaryMax !== null && salaryMax !== undefined
+        ? salaryMax
+        : salaryMin !== null && salaryMin !== undefined
+          ? salaryMin
+          : undefined;
+
+    const approvalRes = await RequisitionController.resolveApprovalMetadata({
+      departmentId,
+      effectiveSalary,
+      shouldResolveChain,
+      isDraft,
+      defaultApproverId: data.approverId ?? existing.approverId,
+      currentWorkflowId: existing.approvalWorkflowId,
+      currentWorkflowVersion: existing.approvalWorkflowVersion,
+      currentApprovalChain: existing.approvalChain,
+    });
+
+    if (!approvalRes.success) {
+      errorResponse(res, approvalRes.message, approvalRes.status, approvalRes.code);
+      return;
+    }
+
     const updated = await prisma.requisition.update({
       where: { id },
       data: {
@@ -554,7 +698,10 @@ export class RequisitionController {
             salaryMax !== null && salaryMax !== undefined
             ? salaryMax * headcount
             : budget,
-        approverId: data.approverId ?? existing.approverId,
+        approverId: approvalRes.approverId ?? null,
+        approvalWorkflowId: approvalRes.workflowId ?? null,
+        approvalWorkflowVersion: approvalRes.workflowVersion ?? null,
+        approvalChain: approvalRes.chain ?? null,
         jobTitleId: jobTitleId ?? null,
         reason,
         proposedSalaryMin: salaryMin,
@@ -595,7 +742,7 @@ export class RequisitionController {
     if (!canApprove) {
       errorResponse(
         res,
-        'Access denied. You do not have approval authorization for this requisition.',
+        'Bạn không được phân công phê duyệt yêu cầu tuyển dụng này.',
         403,
         'FORBIDDEN_SCOPE'
       );
@@ -604,14 +751,14 @@ export class RequisitionController {
 
     const existing = await prisma.requisition.findUnique({ where: { id } });
     if (!existing) {
-      errorResponse(res, 'Requisition not found.', 404, 'NOT_FOUND');
+      errorResponse(res, 'Không tìm thấy yêu cầu tuyển dụng.', 404, 'NOT_FOUND');
       return;
     }
 
     if (existing.status !== 'PENDING_APPROVAL') {
       errorResponse(
         res,
-        'Only requisitions with PENDING_APPROVAL status can be approved or rejected.',
+        'Chỉ có thể phê duyệt yêu cầu đang ở trạng thái chờ duyệt.',
         400,
         'INVALID_STATUS'
       );
@@ -619,25 +766,109 @@ export class RequisitionController {
     }
 
     const fromStatus = existing.status;
-    const newStatus = decision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
 
-    // Dùng transaction để đảm bảo cập nhật status và ghi history đồng bộ
-    const [updated] = await prisma.$transaction([
-      prisma.requisition.update({
-        where: { id },
-        data: { status: newStatus },
-      }),
-      prisma.requisitionApprovalHistory.create({
-        data: {
-          requisitionId: id,
-          actorId: user.id,
-          fromStatus,
-          toStatus: newStatus,
-          decision,
-          notes: notes || null,
-        },
-      }),
-    ]);
+    let newStatus = decision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+    let nextApproverId: string | null = existing.approverId;
+    let updatedChainString = existing.approvalChain;
+
+    if (existing.approvalChain) {
+      try {
+        const steps: ApprovalStepSnapshot[] = JSON.parse(existing.approvalChain);
+        const currentStepIndex = steps.findIndex(
+          (s) =>
+            s.status === 'PENDING' &&
+            (s.approverId === user.id ||
+              user.roles.includes(RoleType.ADMIN) ||
+              user.roles.includes(RoleType.HR_MANAGER))
+        );
+
+        if (currentStepIndex === -1) {
+          errorResponse(res, 'Không tìm thấy cấp phê duyệt hợp lệ đang chờ.', 409, 'NO_PENDING_APPROVAL_STEP');
+          return;
+        }
+
+        if (currentStepIndex !== -1) {
+          if (decision === 'REJECT') {
+            steps[currentStepIndex].status = 'REJECTED';
+            steps[currentStepIndex].decisionAt = new Date().toISOString();
+            steps[currentStepIndex].notes = notes || null;
+            newStatus = 'REJECTED';
+            updatedChainString = JSON.stringify(steps);
+          } else {
+            // APPROVE cấp hiện tại
+            steps[currentStepIndex].status = 'APPROVED';
+            steps[currentStepIndex].decisionAt = new Date().toISOString();
+            steps[currentStepIndex].notes = notes || null;
+
+            // Kiểm tra xem còn cấp tiếp theo không
+            if (currentStepIndex + 1 < steps.length) {
+              const nextStep = steps[currentStepIndex + 1];
+              nextStep.status = 'PENDING';
+              nextApproverId = nextStep.approverId;
+              newStatus = 'PENDING_APPROVAL';
+            } else {
+              newStatus = 'APPROVED';
+            }
+            updatedChainString = JSON.stringify(steps);
+          }
+        }
+      } catch {
+        errorResponse(res, 'Dữ liệu chuỗi phê duyệt không hợp lệ.', 409, 'INVALID_APPROVAL_CHAIN');
+        return;
+      }
+    }
+
+    let updated;
+    try {
+      updated = await prisma.$transaction(async (tx) => {
+        const claimed = await tx.requisition.updateMany({
+          where: {
+            id,
+            status: fromStatus,
+            approverId: existing.approverId,
+            approvalChain: existing.approvalChain,
+          },
+          data: {
+            status: newStatus,
+            approverId: nextApproverId,
+            approvalChain: updatedChainString,
+          },
+        });
+
+        if (claimed.count !== 1) return null;
+
+        await tx.requisitionApprovalHistory.create({
+          data: {
+            requisitionId: id,
+            actorId: user.id,
+            fromStatus,
+            toStatus: newStatus,
+            decision,
+            notes: notes || null,
+          },
+        });
+
+        return tx.requisition.findUniqueOrThrow({ where: { id } });
+      });
+    } catch (error) {
+      const code = error && typeof error === 'object' && 'code' in error
+        ? String(error.code)
+        : '';
+
+      if (['P2034', 'P2028', 'P1008', 'SQLITE_BUSY'].includes(code)) {
+        errorResponse(res, 'Yêu cầu đã được xử lý hoặc đang được cập nhật. Vui lòng tải lại.', 409, 'APPROVAL_CONFLICT');
+        return;
+      }
+
+      console.error('[Requisition] Approval failed:', error);
+      errorResponse(res, 'Không thể xử lý phê duyệt.', 500, 'SERVER_ERROR');
+      return;
+    }
+
+    if (!updated) {
+      errorResponse(res, 'Yêu cầu đã thay đổi trạng thái. Vui lòng tải lại.', 409, 'APPROVAL_CONFLICT');
+      return;
+    }
 
     const action =
       decision === 'APPROVE'
@@ -646,10 +877,16 @@ export class RequisitionController {
 
     await recordRequestAudit(req, action, 'requisition', updated.id, {
       status: newStatus,
+      stepDecision: decision,
       notes: notes || null,
     });
 
-    successResponse(res, updated, 200, `Requisition has been ${newStatus.toLowerCase()}.`);
+    const message =
+      newStatus === 'PENDING_APPROVAL'
+        ? 'Cấp duyệt hiện tại đã phê duyệt thành công. Yêu cầu đã được chuyển tới cấp duyệt tiếp theo.'
+        : `Yêu cầu tuyển dụng đã được ${newStatus === 'APPROVED' ? 'phê duyệt' : 'từ chối'}.`;
+
+    successResponse(res, updated, 200, message);
   }
 
   /**

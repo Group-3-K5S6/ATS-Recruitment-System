@@ -50,7 +50,11 @@ model User {
 
   // S1-03 / S1-04
   passwordHistories PasswordHistory[]
+   // S1-02 - Cac phien dang nhap cua nguoi dung
+  authSessions AuthSession[]
 }
+
+
 
 model Role {
   id          String           @id @default(uuid())
@@ -102,9 +106,10 @@ model Department {
 
   isActive Boolean @default(true)
 
-  users        User[]
-  requisitions Requisition[]
-  jobs         Job[]
+  users             User[]
+  requisitions      Requisition[]
+  jobs              Job[]
+  approvalWorkflows ApprovalWorkflow[]
 }
 
 model JobTitle {
@@ -142,12 +147,16 @@ model Requisition {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  department       Department @relation(fields: [departmentId], references: [id])
-  hiringManager    User       @relation("HiringManagerRequisitions", fields: [hiringManagerId], references: [id])
-  approver         User?      @relation("ApproverRequisitions", fields: [approverId], references: [id])
-  jobTitle         JobTitle?  @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
-  jobs             Job[]
-  // S2-91 - Lịch sử phê duyệt
+  // S3-01: Luồng phê duyệt
+  approvalWorkflowId      String?
+  approvalWorkflowVersion Int?
+  approvalChain           String?
+
+  department    Department @relation(fields: [departmentId], references: [id])
+  hiringManager User       @relation("HiringManagerRequisitions", fields: [hiringManagerId], references: [id])
+  approver      User?      @relation("ApproverRequisitions", fields: [approverId], references: [id])
+  jobTitle JobTitle? @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
+  jobs          Job[]
   approvalHistory  RequisitionApprovalHistory[]
 }
 
@@ -405,5 +414,62 @@ model CompanyProfile {
   contactEmail String   @default("")
   location     String   @default("")
   isPublished  Boolean  @default(false)
+  logoData     String?
+  bannerData   String?
   updatedAt    DateTime @updatedAt
+}
+
+// S1-02 - Quan ly phien dang nhap
+model AuthSession {
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt      DateTime  @default(now())
+  lastActivityAt DateTime  @default(now())
+  expiresAt      DateTime
+  revokedAt      DateTime?
+
+  @@index([userId])
+}
+// S2-08 - Danh mục dùng chung của tuyển dụng
+model RecruitmentCategory {
+  id        String   @id @default(uuid())
+  category  String
+  name      String
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([category, name])
+  @@index([category, position])
+}
+
+// S3-01 - Cấu hình luồng phê duyệt
+model ApprovalWorkflow {
+  id           String   @id @default(uuid())
+  departmentId String
+  version      Int      @default(1)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  department Department              @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  ranges     ApprovalWorkflowRange[]
+
+  @@unique([departmentId, version])
+  @@index([departmentId, isActive])
+}
+
+model ApprovalWorkflowRange {
+  id          String  @id @default(uuid())
+  workflowId  String
+  minSalary   Float
+  maxSalary   Float?
+  orderIndex  Int     @default(0)
+  approverIds String  // JSON array string: ["id1", "id2"]
+
+  workflow ApprovalWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
 }
