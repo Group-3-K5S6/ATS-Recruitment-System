@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 
-type Props = { allowedRole: 'HR_MANAGER' | 'HIRING_MANAGER' | 'RECRUITER'; children: ReactNode };
+type Props = { allowedRole: 'HR_MANAGER' | 'HIRING_MANAGER' | 'RECRUITER' | 'APPROVER'; children: ReactNode };
 export default function Sprint3RouteGuard({ allowedRole, children }: Props) {
   let roles: string[] = [];
   let authenticated = false;

@@ -23,6 +23,7 @@ import CopyRequisition from "./features/sprint3/CopyRequisition";
 import JobPostingDraft from "./features/sprint3/JobPostingDraft";
 import ApprovalWorkflowConfig from "./features/sprint3/ApprovalWorkflowConfig";
 import Sprint3RouteGuard from "./features/sprint3/Sprint3RouteGuard";
+import RequisitionApproval from "./features/sprint3/RequisitionApproval";
 
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
@@ -1661,6 +1662,48 @@ function Sprint3PostingWithSidebar() {
   );
 }
 
+/* S3-02 FE: Giao diện duyệt / từ chối yêu cầu tuyển dụng */
+function Sprint3RequisitionApprovalWithSidebar() {
+  const navigate = useNavigate();
+  const user = getSessionUser();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const handleLogout = async () => {
+    try {
+      await logoutFromBackend();
+      clearSession();
+      navigate("/login", { replace: true });
+    } catch (error) {
+      console.error("Logout failed:", error);
+
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Không thể đăng xuất. Vui lòng thử lại."
+      );
+    }
+  };
+
+  return (
+    <div className="dashboard-layout">
+      <Sidebar
+        role={resolveRole(user.roles)}
+        userName={user.fullName}
+        onLogout={handleLogout}
+        selectedMenu="Yêu cầu tuyển dụng"
+        onMenuSelect={() => navigate("/dashboard")}
+      />
+
+      <main className="dashboard-content">
+        <RequisitionApproval />
+      </main>
+    </div>
+  );
+}
+
 function App() {
 
   return (
@@ -1818,6 +1861,14 @@ function App() {
         />
 
 
+        <Route
+          path="/requisition-approvals"
+          element={
+            <Sprint3RouteGuard allowedRole="APPROVER">
+              <Sprint3RequisitionApprovalWithSidebar />
+            </Sprint3RouteGuard>
+          }
+        />
         <Route
           path="*"
           element={

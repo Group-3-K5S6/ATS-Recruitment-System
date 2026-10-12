@@ -276,6 +276,12 @@ function Sidebar({
       setOpen(false);
       return;
     }
+    // S3-02: Approver goes to the requisition approval page.
+    if (item.key === "requisitions" && role === "Approver") {
+      navigate("/requisition-approvals");
+      setOpen(false);
+      return;
+    }
     // S2-10: HiringManager goes to the existing create-request route.
     if (item.key === "requisitions" && role === "HiringManager") {
       navigate("/recruitment-requests/create");
