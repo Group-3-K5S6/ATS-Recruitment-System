@@ -239,6 +239,15 @@ function Sidebar({
   /*
    * Hai chức năng cá nhân dùng chung cho tài khoản đã đăng nhập.
    */
+  // SCRUM-44: FE shortcut, chi hien thi cho Recruiter sau khi tai menu thanh cong.
+  if (role === "Recruiter" && !menuLoading && !menuError) {
+    const index = menu.findIndex(item => item.key === "requisitions");
+    menu.splice(index >= 0 ? index + 1 : menu.length, 0, {
+      key: "job-posting-draft",
+      label: "Soạn tin tuyển dụng",
+      path: "/job-postings/draft",
+    });
+  }
   menu.push(
     {
       key: "profile",
@@ -257,6 +266,11 @@ function Sidebar({
   };
 
   const handleMenuClick = (item: SidebarItem) => {
+    if (item.key === "job-posting-draft") {
+      navigate("/job-postings/draft");
+      setOpen(false);
+      return;
+    }
     if (item.key === "approval-workflows") {
       navigate("/approval-workflows");
       setOpen(false);
