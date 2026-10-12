@@ -162,6 +162,8 @@ model Requisition {
   budget          Float?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  // SCRUM-89: Luồng phê duyệt nhiều cấp & lịch sử
+  approvalHistory RequisitionApprovalHistory[]
 
   // S3-01: Luồng phê duyệt
   approvalWorkflowId      String?
@@ -174,7 +176,6 @@ model Requisition {
   jobTitle JobTitle? @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
   jobs          Job[]
   expenses       RecruitmentExpense[]
-  approvalHistory RequisitionApprovalHistory[]
 }
 
 model RecruitmentExpense {
@@ -206,6 +207,7 @@ model RequisitionApprovalHistory {
   toStatus       String
   // Quyết định: APPROVE hoặc REJECT
   decision       String
+  step           Int?
   notes          String?
   createdAt      DateTime @default(now())
 

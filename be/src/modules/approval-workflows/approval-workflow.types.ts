@@ -17,7 +17,7 @@ export interface SavedWorkflow {
 export interface ApprovalStepSnapshot {
   step: number;
   approverId: string;
-  status: 'PENDING' | 'WAITING' | 'APPROVED' | 'REJECTED';
+  status: 'PENDING' | 'WAITING' | 'APPROVED' | 'REJECTED' | 'CHANGES_REQUESTED';
   decisionAt?: string | null;
   notes?: string | null;
 }

@@ -54,4 +54,30 @@ router.post(
   RequisitionController.approve
 );
 
+router.post(
+  '/:id/reject',
+  requirePermission(PermissionCode.REQUISITIONS_APPROVE),
+  validateBody(approveRequisitionSchema),
+  (req, res) => {
+    req.body.decision = 'REJECT';
+    return RequisitionController.approve(req, res);
+  }
+);
+
+router.post(
+  '/:id/request-changes',
+  requirePermission(PermissionCode.REQUISITIONS_APPROVE),
+  validateBody(approveRequisitionSchema),
+  (req, res) => {
+    req.body.decision = 'REQUEST_CHANGES';
+    return RequisitionController.approve(req, res);
+  }
+);
+
+router.get(
+  '/:id/approval-history',
+  requirePermission(PermissionCode.REQUISITIONS_READ),
+  RequisitionController.getApprovalHistory
+);
+
 export default router;
