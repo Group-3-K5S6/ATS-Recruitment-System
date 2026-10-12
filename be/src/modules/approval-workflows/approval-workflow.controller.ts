@@ -50,8 +50,13 @@ export class ApprovalWorkflowController {
         errorResponse(res, error.message, error.statusCode, error.code);
         return;
       }
-      const message = error instanceof Error ? error.message : 'Lỗi hệ thống khi lưu luồng phê duyệt.';
-      errorResponse(res, message, 500, 'SERVER_ERROR');
+      console.error("[ApprovalWorkflow] Save failed:", error);
+      errorResponse(
+        res,
+        "Không thể lưu cấu hình luồng phê duyệt. Vui lòng thử lại.",
+        500,
+        "SERVER_ERROR"
+      );
     }
   }
 }

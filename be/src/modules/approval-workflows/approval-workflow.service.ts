@@ -1,4 +1,5 @@
 import { prisma } from '../../database/prisma';
+import { Prisma } from '@prisma/client';
 import {
   ApprovalStepSnapshot,
   ApprovalWorkflowError,
@@ -247,15 +248,13 @@ export class ApprovalWorkflowService {
     }
 
     // 6. Xử lý phiên bản mới (Versioning)
-    const latest = await prisma.approvalWorkflow.findFirst({
-      where: { departmentId },
-      orderBy: { version: 'desc' },
-    });
-
-    const nextVersion = (latest?.version ?? 0) + 1;
-
-    // Lưu vào database trong transaction: chuyển các version cũ thành isActive = false
     const saved = await prisma.$transaction(async (tx) => {
+      const latest = await tx.approvalWorkflow.findFirst({
+        where: { departmentId },
+        orderBy: { version: 'desc' },
+      });
+
+      const nextVersion = (latest?.version ?? 0) + 1;
       await tx.approvalWorkflow.updateMany({
         where: { departmentId, isActive: true },
         data: { isActive: false },
@@ -279,6 +278,18 @@ export class ApprovalWorkflowService {
           ranges: { orderBy: { orderIndex: 'asc' } },
         },
       });
+    }).catch((error: unknown) => {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        (error.code === "P2002" || error.code === "P2034")
+      ) {
+        throw new ApprovalWorkflowError(
+          "Cấu hình vừa được thay đổi. Vui lòng tải lại và thử lại.",
+          409,
+          "WORKFLOW_VERSION_CONFLICT"
+        );
+      }
+      throw error;
     });
 
     return {
