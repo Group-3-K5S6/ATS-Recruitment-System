@@ -23,6 +23,7 @@ import companyProfileRoutes from './modules/company-profile/company-profile.rout
 import competencyFrameworkRoutes from './modules/competency-frameworks/competency-framework.routes';
 import rbacManagementRoutes from "./modules/rbac-management/rbac.routes";
 import sharedCategoryRoutes from './modules/shared-categories/shared-category.routes';
+import recruitmentBudgetRoutes from './modules/recruitment-budgets/recruitment-budget.routes';
 
 export function createApp() {
   const app = express();
@@ -55,6 +56,7 @@ app.use('/api/interview-questions', interviewQuestionRoutes);
 app.use('/api/departments', departmentRoutes);
   app.use('/api/company-profile', companyProfileRoutes);
   app.use('/api/shared-categories', sharedCategoryRoutes);
+  app.use('/api/recruitment-budget', recruitmentBudgetRoutes);
   app.use('/api/competency-frameworks', competencyFrameworkRoutes);
   app.use(
   "/api/rbac",

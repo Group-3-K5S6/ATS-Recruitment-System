@@ -45,6 +45,7 @@ model User {
   evaluations          Evaluation[]  @relation("InterviewerEvaluations")
   createdOffers        Offer[]       @relation("RecruiterOffers")
   approvedOffers       Offer[]       @relation("ApproverOffers")
+  createdRecruitmentExpenses RecruitmentExpense[] @relation("RecruitmentExpenseCreator")
 
   // S1-03 / S1-04
   passwordHistories PasswordHistory[]
@@ -149,6 +150,26 @@ model Requisition {
   approver      User?      @relation("ApproverRequisitions", fields: [approverId], references: [id])
   jobTitle JobTitle? @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
   jobs          Job[]
+  expenses       RecruitmentExpense[]
+}
+
+model RecruitmentExpense {
+  id            String   @id @default(uuid())
+  requisitionId String
+  category      String
+  amount        Float
+  occurredAt    DateTime
+  vendor        String?
+  description   String?
+  createdById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  requisition Requisition @relation(fields: [requisitionId], references: [id], onDelete: Restrict)
+  createdBy   User?       @relation("RecruitmentExpenseCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([requisitionId, occurredAt])
+  @@index([category, occurredAt])
 }
 
 model Job {

@@ -84,6 +84,8 @@ npm start
 
 ## 4. Tài Khoản Thử Nghiệm Mẫu
 
+API quản lý ngân sách tuyển dụng: xem [tài liệu endpoint](docs/recruitment-budget-api.md) và import [Postman collection](postman/recruitment-budget.postman_collection.json).
+
 Mật khẩu mặc định cho tất cả tài khoản là: `Password123!`
 
 | Role | Email |

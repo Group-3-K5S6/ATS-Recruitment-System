@@ -26,6 +26,7 @@ export const ROLE_PERMISSIONS: Record<RoleType, PermissionCode[]> = {
   [RoleType.HIRING_MANAGER]: [
     PermissionCode.ORGANIZATION_READ,
     PermissionCode.REQUISITIONS_READ,
+    PermissionCode.RECRUITMENT_BUDGETS_READ,
     PermissionCode.REQUISITIONS_CREATE,
     PermissionCode.REQUISITIONS_UPDATE,
     PermissionCode.JOBS_READ,
@@ -41,6 +42,8 @@ export const ROLE_PERMISSIONS: Record<RoleType, PermissionCode[]> = {
   [RoleType.RECRUITER]: [
     PermissionCode.ORGANIZATION_READ,
     PermissionCode.REQUISITIONS_READ,
+    PermissionCode.RECRUITMENT_BUDGETS_READ,
+    PermissionCode.RECRUITMENT_BUDGETS_MANAGE,
     PermissionCode.REQUISITIONS_CREATE,
     PermissionCode.REQUISITIONS_UPDATE,
     PermissionCode.JOBS_READ,
@@ -68,6 +71,7 @@ export const ROLE_PERMISSIONS: Record<RoleType, PermissionCode[]> = {
   [RoleType.APPROVER]: [
     PermissionCode.ORGANIZATION_READ,
     PermissionCode.REQUISITIONS_READ,
+    PermissionCode.RECRUITMENT_BUDGETS_READ,
     PermissionCode.REQUISITIONS_APPROVE,
     PermissionCode.JOBS_READ,
     PermissionCode.CANDIDATES_READ,
@@ -81,6 +85,8 @@ export const ROLE_PERMISSIONS: Record<RoleType, PermissionCode[]> = {
     PermissionCode.ORGANIZATION_READ,
     PermissionCode.ORGANIZATION_WRITE,
     PermissionCode.REQUISITIONS_READ,
+    PermissionCode.RECRUITMENT_BUDGETS_READ,
+    PermissionCode.RECRUITMENT_BUDGETS_MANAGE,
     PermissionCode.REQUISITIONS_CREATE,
     PermissionCode.REQUISITIONS_UPDATE,
     PermissionCode.REQUISITIONS_APPROVE,
@@ -126,6 +132,8 @@ export const ROLE_PERMISSIONS: Record<RoleType, PermissionCode[]> = {
     PermissionCode.ORGANIZATION_READ,
     PermissionCode.ORGANIZATION_WRITE,
     PermissionCode.REQUISITIONS_READ,
+    PermissionCode.RECRUITMENT_BUDGETS_READ,
+    PermissionCode.RECRUITMENT_BUDGETS_MANAGE,
     PermissionCode.REQUISITIONS_CREATE,
     PermissionCode.REQUISITIONS_UPDATE,
     PermissionCode.REQUISITIONS_APPROVE,
