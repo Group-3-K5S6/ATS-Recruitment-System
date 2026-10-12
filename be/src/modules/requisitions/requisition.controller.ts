@@ -140,6 +140,87 @@ export class RequisitionController {
   }
 
 
+  private static async resolveApprovalMetadata(params: {
+    departmentId: string;
+    effectiveSalary?: number;
+    shouldResolveChain: boolean;
+    isDraft: boolean;
+    defaultApproverId?: string | null;
+    currentWorkflowId?: string | null;
+    currentWorkflowVersion?: number | null;
+    currentApprovalChain?: string | null;
+  }): Promise<
+    | {
+        success: true;
+        approverId: string | null | undefined;
+        workflowId: string | null | undefined;
+        workflowVersion: number | null | undefined;
+        chain: string | null | undefined;
+      }
+    | {
+        success: false;
+        message: string;
+        code: string;
+        status: number;
+      }
+  > {
+    let resolvedApproverId = params.defaultApproverId;
+    let approvalWorkflowId = params.currentWorkflowId;
+    let approvalWorkflowVersion = params.currentWorkflowVersion;
+    let approvalChain = params.currentApprovalChain;
+
+    if (params.shouldResolveChain) {
+      const resolved = await ApprovalWorkflowService.resolveApprovalChain(
+        params.departmentId,
+        params.effectiveSalary
+      );
+
+      if (resolved.matched) {
+        resolvedApproverId = resolved.currentApproverId;
+        approvalWorkflowId = resolved.workflowId ?? null;
+        approvalWorkflowVersion = resolved.workflowVersion ?? null;
+        approvalChain = JSON.stringify(resolved.steps);
+      } else if (resolved.reason === 'NO_MATCHING_RANGE') {
+        return {
+          success: false,
+          message: 'Mức lương đề xuất không phù hợp với bất kỳ dải phê duyệt nào của phòng ban.',
+          code: 'NO_MATCHING_APPROVAL_RANGE',
+          status: 400,
+        };
+      } else if (resolved.reason === 'NO_ACTIVE_APPROVER' || resolved.reason === 'EMPTY_APPROVER_LIST') {
+        return {
+          success: false,
+          message: 'Không có người phê duyệt đang hoạt động phù hợp cho luồng phê duyệt này.',
+          code: 'NO_ACTIVE_APPROVER',
+          status: 400,
+        };
+      }
+    }
+
+    if (!params.isDraft && resolvedApproverId && !approvalWorkflowId) {
+      const manualApprover = await prisma.user.findUnique({
+        where: { id: resolvedApproverId },
+        select: { id: true, isActive: true },
+      });
+      if (!manualApprover || !manualApprover.isActive) {
+        return {
+          success: false,
+          message: 'Người phê duyệt không tồn tại hoặc đã bị vô hiệu hóa.',
+          code: 'NO_ACTIVE_APPROVER',
+          status: 400,
+        };
+      }
+    }
+
+    return {
+      success: true,
+      approverId: resolvedApproverId,
+      workflowId: approvalWorkflowId,
+      workflowVersion: approvalWorkflowVersion,
+      chain: approvalChain,
+    };
+  }
+
   static async create(req: Request, res: Response): Promise<void> {
     const data = req.body;
     const user = req.user!;
@@ -315,55 +396,18 @@ export class RequisitionController {
       return;
     }
 
-    let resolvedApproverId: string | undefined = data.approverId || undefined;
-    let approvalWorkflowId: string | undefined = undefined;
-    let approvalWorkflowVersion: number | undefined = undefined;
-    let approvalChain: string | undefined = undefined;
+    const effectiveSalary = salaryMax !== undefined ? salaryMax : salaryMin;
+    const approvalRes = await RequisitionController.resolveApprovalMetadata({
+      departmentId,
+      effectiveSalary,
+      shouldResolveChain: !isDraft,
+      isDraft,
+      defaultApproverId: data.approverId || undefined,
+    });
 
-    if (!isDraft) {
-      const resolved = await ApprovalWorkflowService.resolveApprovalChain(
-        departmentId,
-        salaryMax !== undefined ? salaryMax : salaryMin
-      );
-
-      if (resolved.matched) {
-        resolvedApproverId = resolved.currentApproverId;
-        approvalWorkflowId = resolved.workflowId;
-        approvalWorkflowVersion = resolved.workflowVersion;
-        approvalChain = JSON.stringify(resolved.steps);
-      } else if (resolved.reason === 'NO_MATCHING_RANGE') {
-        errorResponse(
-          res,
-          'Mức lương đề xuất không phù hợp với bất kỳ dải phê duyệt nào của phòng ban.',
-          400,
-          'NO_MATCHING_APPROVAL_RANGE'
-        );
-        return;
-      } else if (resolved.reason === 'NO_ACTIVE_APPROVER' || resolved.reason === 'EMPTY_APPROVER_LIST') {
-        errorResponse(
-          res,
-          'Không có người phê duyệt đang hoạt động phù hợp cho luồng phê duyệt này.',
-          400,
-          'NO_ACTIVE_APPROVER'
-        );
-        return;
-      }
-    }
-
-    if (!isDraft && resolvedApproverId && !approvalWorkflowId) {
-      const manualApprover = await prisma.user.findUnique({
-        where: { id: resolvedApproverId },
-        select: { id: true, isActive: true },
-      });
-      if (!manualApprover || !manualApprover.isActive) {
-        errorResponse(
-          res,
-          'Người phê duyệt không tồn tại hoặc đã bị vô hiệu hóa.',
-          400,
-          'NO_ACTIVE_APPROVER'
-        );
-        return;
-      }
+    if (!approvalRes.success) {
+      errorResponse(res, approvalRes.message, approvalRes.status, approvalRes.code);
+      return;
     }
 
     const requisition = await prisma.requisition.create({
@@ -373,10 +417,10 @@ export class RequisitionController {
         hiringManagerId: user.id,
         headcount,
         budget,
-        approverId: resolvedApproverId,
-        approvalWorkflowId,
-        approvalWorkflowVersion,
-        approvalChain,
+        approverId: approvalRes.approverId || undefined,
+        approvalWorkflowId: approvalRes.workflowId || undefined,
+        approvalWorkflowVersion: approvalRes.workflowVersion || undefined,
+        approvalChain: approvalRes.chain || undefined,
         jobTitleId: jobTitleRecord?.id,
         reason: reason || undefined,
         proposedSalaryMin: salaryMin,
@@ -617,61 +661,29 @@ export class RequisitionController {
       return;
     }
 
-    let resolvedApproverId = data.approverId ?? existing.approverId;
-    let approvalWorkflowId: string | null = existing.approvalWorkflowId;
-    let approvalWorkflowVersion: number | null = existing.approvalWorkflowVersion;
-    let approvalChain: string | null = existing.approvalChain;
-
     const willBePending = !isDraft && (data.status === 'PENDING_APPROVAL' || existing.status === 'DRAFT');
+    const shouldResolveChain = willBePending && (!existing.approvalChain || existing.status === 'DRAFT');
+    const effectiveSalary =
+      salaryMax !== null && salaryMax !== undefined
+        ? salaryMax
+        : salaryMin !== null && salaryMin !== undefined
+          ? salaryMin
+          : undefined;
 
-    if (willBePending && (!existing.approvalChain || existing.status === 'DRAFT')) {
-      const effectiveSalary =
-        salaryMax !== null && salaryMax !== undefined
-          ? salaryMax
-          : salaryMin !== null && salaryMin !== undefined
-            ? salaryMin
-            : undefined;
+    const approvalRes = await RequisitionController.resolveApprovalMetadata({
+      departmentId,
+      effectiveSalary,
+      shouldResolveChain,
+      isDraft,
+      defaultApproverId: data.approverId ?? existing.approverId,
+      currentWorkflowId: existing.approvalWorkflowId,
+      currentWorkflowVersion: existing.approvalWorkflowVersion,
+      currentApprovalChain: existing.approvalChain,
+    });
 
-      const resolved = await ApprovalWorkflowService.resolveApprovalChain(departmentId, effectiveSalary);
-
-      if (resolved.matched) {
-        resolvedApproverId = resolved.currentApproverId;
-        approvalWorkflowId = resolved.workflowId ?? null;
-        approvalWorkflowVersion = resolved.workflowVersion ?? null;
-        approvalChain = JSON.stringify(resolved.steps);
-      } else if (resolved.reason === 'NO_MATCHING_RANGE') {
-        errorResponse(
-          res,
-          'Mức lương đề xuất không phù hợp với bất kỳ dải phê duyệt nào của phòng ban.',
-          400,
-          'NO_MATCHING_APPROVAL_RANGE'
-        );
-        return;
-      } else if (resolved.reason === 'NO_ACTIVE_APPROVER' || resolved.reason === 'EMPTY_APPROVER_LIST') {
-        errorResponse(
-          res,
-          'Không có người phê duyệt đang hoạt động phù hợp cho luồng phê duyệt này.',
-          400,
-          'NO_ACTIVE_APPROVER'
-        );
-        return;
-      }
-    }
-
-    if (!isDraft && resolvedApproverId && !approvalWorkflowId) {
-      const manualApprover = await prisma.user.findUnique({
-        where: { id: resolvedApproverId },
-        select: { id: true, isActive: true },
-      });
-      if (!manualApprover || !manualApprover.isActive) {
-        errorResponse(
-          res,
-          'Người phê duyệt không tồn tại hoặc đã bị vô hiệu hóa.',
-          400,
-          'NO_ACTIVE_APPROVER'
-        );
-        return;
-      }
+    if (!approvalRes.success) {
+      errorResponse(res, approvalRes.message, approvalRes.status, approvalRes.code);
+      return;
     }
 
     const updated = await prisma.requisition.update({
@@ -686,10 +698,10 @@ export class RequisitionController {
             salaryMax !== null && salaryMax !== undefined
             ? salaryMax * headcount
             : budget,
-        approverId: resolvedApproverId ?? null,
-        approvalWorkflowId: approvalWorkflowId ?? null,
-        approvalWorkflowVersion: approvalWorkflowVersion ?? null,
-        approvalChain: approvalChain ?? null,
+        approverId: approvalRes.approverId ?? null,
+        approvalWorkflowId: approvalRes.workflowId ?? null,
+        approvalWorkflowVersion: approvalRes.workflowVersion ?? null,
+        approvalChain: approvalRes.chain ?? null,
         jobTitleId: jobTitleId ?? null,
         reason,
         proposedSalaryMin: salaryMin,

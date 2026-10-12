@@ -181,6 +181,21 @@ describe('SCRUM-87: API cấu hình luồng phê duyệt & Tích hợp Requisiti
     }
   });
 
+  function makeRequisitionPayload(overrides: Record<string, any> = {}) {
+    return {
+      departmentId: testDeptId,
+      jobTitleId: testJobTitleId,
+      reason: 'NEW',
+      headcount: 1,
+      proposedSalaryMin: 10000000,
+      proposedSalaryMax: 18000000,
+      targetDate: '2099-12-31T00:00:00.000Z',
+      description: 'Tuyển dụng kiểm thử S3-01',
+      requirements: 'Yêu cầu kiểm thử',
+      ...overrides,
+    };
+  }
+
   // =========================================================================
   // TIÊU CHÍ 1: Cho phép khai báo chuỗi cấp duyệt theo phòng ban và mức lương đề xuất
   // =========================================================================
@@ -268,17 +283,7 @@ describe('SCRUM-87: API cấu hình luồng phê duyệt & Tích hợp Requisiti
       const res = await request(app)
         .post('/api/requisitions')
         .set(authHeader(hrToken))
-        .send({
-          departmentId: testDeptId,
-          jobTitleId: testJobTitleId,
-          reason: 'NEW',
-          headcount: 1,
-          proposedSalaryMin: 10000000,
-          proposedSalaryMax: 18000000, // Dải 1: <= 20tr
-          targetDate: '2099-12-31T00:00:00.000Z',
-          description: 'Tuyển dụng dải 1',
-          requirements: 'Kinh nghiệm 1 năm',
-        });
+        .send(makeRequisitionPayload({ proposedSalaryMin: 10000000, proposedSalaryMax: 18000000, description: 'Tuyển dụng dải 1' }));
 
       expect(res.status).toBe(201);
       expect(res.body.data.status).toBe('PENDING_APPROVAL');
@@ -305,17 +310,7 @@ describe('SCRUM-87: API cấu hình luồng phê duyệt & Tích hợp Requisiti
       const res = await request(app)
         .post('/api/requisitions')
         .set(authHeader(hrToken))
-        .send({
-          departmentId: testDeptId,
-          jobTitleId: testJobTitleId,
-          reason: 'NEW',
-          headcount: 1,
-          proposedSalaryMin: 22000000,
-          proposedSalaryMax: 35000000, // Dải 2: 20tr - 50tr
-          targetDate: '2099-12-31T00:00:00.000Z',
-          description: 'Tuyển dụng dải 2',
-          requirements: 'Kinh nghiệm 3 năm',
-        });
+        .send(makeRequisitionPayload({ proposedSalaryMin: 22000000, proposedSalaryMax: 35000000, description: 'Tuyển dụng dải 2' }));
 
       expect(res.status).toBe(201);
       expect(res.body.data.status).toBe('PENDING_APPROVAL');
@@ -378,17 +373,7 @@ describe('SCRUM-87: API cấu hình luồng phê duyệt & Tích hợp Requisiti
       const res = await request(app)
         .post('/api/requisitions')
         .set(authHeader(hrToken))
-        .send({
-          departmentId: testDeptId,
-          jobTitleId: testJobTitleId,
-          reason: 'NEW',
-          headcount: 1,
-          proposedSalaryMin: 22000000,
-          proposedSalaryMax: 35000000, // Dải 2: 2 cấp
-          targetDate: '2099-12-31T00:00:00.000Z',
-          description: 'Tuyển dụng test từ chối cấp 1',
-          requirements: 'Test reject',
-        });
+        .send(makeRequisitionPayload({ proposedSalaryMin: 22000000, proposedSalaryMax: 35000000, description: 'Tuyển dụng test từ chối cấp 1' }));
 
       expect(res.status).toBe(201);
       const reqId = res.body.data.id;
@@ -411,17 +396,7 @@ describe('SCRUM-87: API cấu hình luồng phê duyệt & Tích hợp Requisiti
       const res = await request(app)
         .post('/api/requisitions')
         .set(authHeader(hrToken))
-        .send({
-          departmentId: testDeptId,
-          jobTitleId: testJobTitleId,
-          reason: 'NEW',
-          headcount: 1,
-          proposedSalaryMin: 22000000,
-          proposedSalaryMax: 35000000, // Dải 2: 2 cấp
-          targetDate: '2099-12-31T00:00:00.000Z',
-          description: 'Tuyển dụng test từ chối cấp 2',
-          requirements: 'Test reject cấp 2',
-        });
+        .send(makeRequisitionPayload({ proposedSalaryMin: 22000000, proposedSalaryMax: 35000000, description: 'Tuyển dụng test từ chối cấp 2' }));
 
       expect(res.status).toBe(201);
       const reqId = res.body.data.id;
@@ -452,17 +427,7 @@ describe('SCRUM-87: API cấu hình luồng phê duyệt & Tích hợp Requisiti
       const res = await request(app)
         .post('/api/requisitions')
         .set(authHeader(hrToken))
-        .send({
-          departmentId: testDeptId,
-          jobTitleId: testJobTitleId,
-          reason: 'NEW',
-          headcount: 1,
-          proposedSalaryMin: 55000000,
-          proposedSalaryMax: 70000000, // Dải 3: > 50tr
-          targetDate: '2099-12-31T00:00:00.000Z',
-          description: 'Tuyển dụng dải 3',
-          requirements: 'Chuyên gia',
-        });
+        .send(makeRequisitionPayload({ proposedSalaryMin: 55000000, proposedSalaryMax: 70000000, description: 'Tuyển dụng dải 3' }));
 
       expect(res.status).toBe(201);
       const chain = JSON.parse(res.body.data.approvalChain);
@@ -475,99 +440,66 @@ describe('SCRUM-87: API cấu hình luồng phê duyệt & Tích hợp Requisiti
   // TIÊU CHÍ 3: Từ chối lưu cấu hình không hợp lệ với lỗi rõ ràng
   // =========================================================================
   describe('Tiêu chí 3: Từ chối lưu cấu hình không hợp lệ', () => {
-    it('Từ chối nếu dải đầu tiên không bắt đầu từ 0 VNĐ', async () => {
+    it.each([
+      {
+        name: 'dải đầu tiên không bắt đầu từ 0 VNĐ',
+        getRanges: () => [{ minSalary: 5000000, maxSalary: null, approverIds: [approver1.id] }],
+        code: 'INVALID_SALARY_RANGE',
+        expectedMsg: 'bắt đầu từ 0',
+      },
+      {
+        name: 'các dải lương có khoảng trống (gap)',
+        getRanges: () => [
+          { minSalary: 0, maxSalary: 20000000, approverIds: [approver1.id] },
+          { minSalary: 25000000, maxSalary: null, approverIds: [approver1.id, approver2.id] },
+        ],
+        code: 'GAP_IN_SALARY_RANGES',
+      },
+      {
+        name: 'các dải lương chồng lấn nhau',
+        getRanges: () => [
+          { minSalary: 0, maxSalary: 30000000, approverIds: [approver1.id] },
+          { minSalary: 25000000, maxSalary: null, approverIds: [approver1.id, approver2.id] },
+        ],
+        code: 'OVERLAPPING_SALARY_RANGE',
+      },
+      {
+        name: 'dải cao hơn có ít cấp duyệt hơn dải thấp hơn',
+        getRanges: () => [
+          { minSalary: 0, maxSalary: 20000000, approverIds: [approver1.id, approver2.id] },
+          { minSalary: 20000001, maxSalary: null, approverIds: [approver1.id] },
+        ],
+        code: 'INVALID_APPROVAL_STEPS',
+        expectedMsg: 'ít cấp phê duyệt hơn',
+      },
+      {
+        name: 'dải cao nhất bị giới hạn kết thúc (không để mở maxSalary = null)',
+        getRanges: () => [
+          { minSalary: 0, maxSalary: 50000000, approverIds: [approver1.id] },
+        ],
+        code: 'UNBOUNDED_TOP_RANGE_REQUIRED',
+      },
+      {
+        name: 'chọn trùng người duyệt trong cùng 1 dải lương',
+        getRanges: () => [
+          { minSalary: 0, maxSalary: null, approverIds: [approver1.id, approver1.id] },
+        ],
+        code: 'DUPLICATE_APPROVER_IN_RANGE',
+      },
+    ])('Từ chối nếu $name', async ({ getRanges, code, expectedMsg }) => {
       const res = await request(app)
         .post('/api/approval-workflows')
         .set(authHeader(hrToken))
         .send({
           departmentId: testDept3Id,
-          ranges: [
-            { minSalary: 5000000, maxSalary: null, approverIds: [approver1.id] },
-          ],
+          ranges: getRanges(),
         });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('INVALID_SALARY_RANGE');
-      expect(res.body.error.message).toContain('bắt đầu từ 0');
-    });
-
-    it('Từ chối nếu các dải lương có khoảng trống (gap)', async () => {
-      const res = await request(app)
-        .post('/api/approval-workflows')
-        .set(authHeader(hrToken))
-        .send({
-          departmentId: testDept3Id,
-          ranges: [
-            { minSalary: 0, maxSalary: 20000000, approverIds: [approver1.id] },
-            { minSalary: 25000000, maxSalary: null, approverIds: [approver1.id, approver2.id] }, // Khoảng trống từ 20tr001 đến 24tr999
-          ],
-        });
-
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('GAP_IN_SALARY_RANGES');
-    });
-
-    it('Từ chối nếu các dải lương chồng lấn nhau', async () => {
-      const res = await request(app)
-        .post('/api/approval-workflows')
-        .set(authHeader(hrToken))
-        .send({
-          departmentId: testDept3Id,
-          ranges: [
-            { minSalary: 0, maxSalary: 30000000, approverIds: [approver1.id] },
-            { minSalary: 25000000, maxSalary: null, approverIds: [approver1.id, approver2.id] }, // Chồng lấn
-          ],
-        });
-
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('OVERLAPPING_SALARY_RANGE');
-    });
-
-    it('Từ chối nếu dải cao hơn có ít cấp duyệt hơn dải thấp hơn', async () => {
-      const res = await request(app)
-        .post('/api/approval-workflows')
-        .set(authHeader(hrToken))
-        .send({
-          departmentId: testDept3Id,
-          ranges: [
-            { minSalary: 0, maxSalary: 20000000, approverIds: [approver1.id, approver2.id] }, // 2 cấp
-            { minSalary: 20000001, maxSalary: null, approverIds: [approver1.id] }, // Lương cao hơn nhưng chỉ 1 cấp
-          ],
-        });
-
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('INVALID_APPROVAL_STEPS');
-      expect(res.body.error.message).toContain('ít cấp phê duyệt hơn');
-    });
-
-    it('Từ chối nếu dải cao nhất bị giới hạn kết thúc (không để mở maxSalary = null)', async () => {
-      const res = await request(app)
-        .post('/api/approval-workflows')
-        .set(authHeader(hrToken))
-        .send({
-          departmentId: testDept3Id,
-          ranges: [
-            { minSalary: 0, maxSalary: 50000000, approverIds: [approver1.id] }, // Không có dải vô cùng
-          ],
-        });
-
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('UNBOUNDED_TOP_RANGE_REQUIRED');
-    });
-
-    it('Từ chối nếu chọn trùng người duyệt trong cùng 1 dải lương', async () => {
-      const res = await request(app)
-        .post('/api/approval-workflows')
-        .set(authHeader(hrToken))
-        .send({
-          departmentId: testDept3Id,
-          ranges: [
-            { minSalary: 0, maxSalary: null, approverIds: [approver1.id, approver1.id] }, // Trùng approver1
-          ],
-        });
-
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('DUPLICATE_APPROVER_IN_RANGE');
+      expect(res.body.error.code).toBe(code);
+      if (expectedMsg) {
+        expect(res.body.error.message).toContain(expectedMsg);
+      }
     });
 
     it('Chấp nhận người duyệt có vai trò APPROVER và đang hoạt động (isActive === true)', async () => {
@@ -601,36 +533,24 @@ describe('SCRUM-87: API cấu hình luồng phê duyệt & Tích hợp Requisiti
       expect(res.body.error.message).toContain('đã bị vô hiệu hóa hoặc không hoạt động');
     });
 
-    it('Từ chối tài khoản chỉ có vai trò ADMIN nhưng không có vai trò APPROVER -> 400 APPROVER_ROLE_REQUIRED', async () => {
+    it.each([
+      { roleName: 'ADMIN', getUserId: () => adminUser.id },
+      { roleName: 'HR_MANAGER', getUserId: () => hrUser.id },
+      { roleName: 'CANDIDATE', getUserId: async () => (await prisma.user.findUnique({ where: { email: 'candidate1@ats.local' } }))!.id },
+    ])('Từ chối tài khoản có vai trò $roleName nhưng không có vai trò APPROVER -> 400 APPROVER_ROLE_REQUIRED', async ({ getUserId }) => {
+      const userId = await getUserId();
       const res = await request(app)
         .post('/api/approval-workflows')
         .set(authHeader(hrToken))
         .send({
           departmentId: testDept3Id,
           ranges: [
-            { minSalary: 0, maxSalary: null, approverIds: [adminUser.id] },
+            { minSalary: 0, maxSalary: null, approverIds: [userId] },
           ],
         });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('APPROVER_ROLE_REQUIRED');
-      expect(res.body.error.message).toContain('không có vai trò người phê duyệt (APPROVER)');
-    });
-
-    it('Từ chối tài khoản chỉ có vai trò HR_MANAGER nhưng không có vai trò APPROVER -> 400 APPROVER_ROLE_REQUIRED', async () => {
-      const res = await request(app)
-        .post('/api/approval-workflows')
-        .set(authHeader(hrToken))
-        .send({
-          departmentId: testDept3Id,
-          ranges: [
-            { minSalary: 0, maxSalary: null, approverIds: [hrUser.id] },
-          ],
-        });
-
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('APPROVER_ROLE_REQUIRED');
-      expect(res.body.error.message).toContain('không có vai trò người phê duyệt (APPROVER)');
     });
 
     it('Chấp nhận tài khoản có vai trò APPROVER cùng với HR_MANAGER/ADMIN và đang hoạt động -> 201', async () => {
@@ -647,26 +567,6 @@ describe('SCRUM-87: API cấu hình luồng phê duyệt & Tích hợp Requisiti
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
     });
-
-    it('Từ chối nếu người duyệt chỉ có vai trò khác (như CANDIDATE) -> 400 APPROVER_ROLE_REQUIRED', async () => {
-      // candidate1 không có vai trò APPROVER
-      const candidateUser = await prisma.user.findUnique({
-        where: { email: 'candidate1@ats.local' },
-      });
-
-      const res = await request(app)
-        .post('/api/approval-workflows')
-        .set(authHeader(hrToken))
-        .send({
-          departmentId: testDept3Id,
-          ranges: [
-            { minSalary: 0, maxSalary: null, approverIds: [candidateUser!.id] },
-          ],
-        });
-
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('APPROVER_ROLE_REQUIRED');
-    });
   });
 
   // =========================================================================
@@ -678,17 +578,14 @@ describe('SCRUM-87: API cấu hình luồng phê duyệt & Tích hợp Requisiti
       const createRes = await request(app)
         .post('/api/requisitions')
         .set(authHeader(hrToken))
-        .send({
-          departmentId: testDeptId,
-          jobTitleId: testJobTitleId,
-          reason: 'NEW',
-          headcount: 1,
-          proposedSalaryMin: 25000000,
-          proposedSalaryMax: 30000000,
-          targetDate: '2099-12-31T00:00:00.000Z',
-          description: 'Requisition chạy song song khi đổi config',
-          requirements: 'Test snapshot',
-        });
+        .send(
+          makeRequisitionPayload({
+            proposedSalaryMin: 25000000,
+            proposedSalaryMax: 30000000,
+            description: 'Requisition chạy song song khi đổi config',
+            requirements: 'Test snapshot',
+          })
+        );
 
       expect(createRes.status).toBe(201);
       const reqXId = createRes.body.data.id;
@@ -749,17 +646,14 @@ describe('SCRUM-87: API cấu hình luồng phê duyệt & Tích hợp Requisiti
       const createYRes = await request(app)
         .post('/api/requisitions')
         .set(authHeader(hrToken))
-        .send({
-          departmentId: testDeptId,
-          jobTitleId: testJobTitleId,
-          reason: 'NEW',
-          headcount: 1,
-          proposedSalaryMin: 25000000,
-          proposedSalaryMax: 30000000,
-          targetDate: '2099-12-31T00:00:00.000Z',
-          description: 'Requisition Y tạo sau khi có Version 2',
-          requirements: 'Test version 2',
-        });
+        .send(
+          makeRequisitionPayload({
+            proposedSalaryMin: 25000000,
+            proposedSalaryMax: 30000000,
+            description: 'Requisition Y tạo sau khi có Version 2',
+            requirements: 'Test version 2',
+          })
+        );
 
       expect(createYRes.status).toBe(201);
       expect(createYRes.body.data.approvalWorkflowVersion).toBe(2);
@@ -772,64 +666,7 @@ describe('SCRUM-87: API cấu hình luồng phê duyệt & Tích hợp Requisiti
   // KIỂM TRA TOÀN DIỆN ĐIỀU KIỆN isActive CỦA NGƯỜI PHÊ DUYỆT (SCRUM-87)
   // =========================================================================
   describe('Kiểm tra toàn diện điều kiện isActive của người phê duyệt', () => {
-    it('Trường hợp 1: Người phê duyệt có isActive = true: cấu hình thành công, nộp yêu cầu thành công, và phê duyệt thành công', async () => {
-      // 1. Cấu hình luồng
-      const configRes = await request(app)
-        .post('/api/approval-workflows')
-        .set(authHeader(hrToken))
-        .send({
-          departmentId: testDeptActiveId,
-          ranges: [
-            { minSalary: 0, maxSalary: null, approverIds: [approver1.id] },
-          ],
-        });
-      expect(configRes.status).toBe(201);
-
-      // 2. Nộp yêu cầu tuyển dụng
-      const createRes = await request(app)
-        .post('/api/requisitions')
-        .set(authHeader(hrToken))
-        .send({
-          departmentId: testDeptActiveId,
-          jobTitleId: testJobTitleId,
-          reason: 'NEW',
-          headcount: 1,
-          proposedSalaryMin: 10000000,
-          proposedSalaryMax: 20000000,
-          targetDate: '2099-12-31T00:00:00.000Z',
-          description: 'Tuyển dụng kiểm tra isActive = true',
-          requirements: 'Test isActive',
-        });
-      expect(createRes.status).toBe(201);
-      expect(createRes.body.data.status).toBe('PENDING_APPROVAL');
-      expect(createRes.body.data.approverId).toBe(approver1.id);
-
-      // 3. Approver 1 duyệt
-      const approver1Token = (await loginAndGetToken(approver1.email)).token;
-      const approveRes = await request(app)
-        .post(`/api/requisitions/${createRes.body.data.id}/approve`)
-        .set(authHeader(approver1Token))
-        .send({ decision: 'APPROVE', notes: 'Đồng ý duyệt' });
-
-      expect(approveRes.status).toBe(200);
-      expect(approveRes.body.data.status).toBe('APPROVED');
-    });
-
-    it('Trường hợp 2: Người phê duyệt có isActive = false: bị từ chối khi cấu hình (400 INACTIVE_APPROVER) và bị chặn khi cố duyệt (401 ACCOUNT_INACTIVE)', async () => {
-      // 1. Cố lưu cấu hình với inactiveApprover -> Bị từ chối 400
-      const configRes = await request(app)
-        .post('/api/approval-workflows')
-        .set(authHeader(hrToken))
-        .send({
-          departmentId: testDeptActiveId,
-          ranges: [
-            { minSalary: 0, maxSalary: null, approverIds: [inactiveApprover.id] },
-          ],
-        });
-      expect(configRes.status).toBe(400);
-      expect(configRes.body.error.code).toBe('INACTIVE_APPROVER');
-
-      // 2. Tạo một token hợp lệ trước, sau đó vô hiệu hóa user để kiểm tra lúc thực thi duyệt
+    it('Người phê duyệt bị vô hiệu hóa (isActive = false) bị chặn khi cố duyệt -> 401 ACCOUNT_INACTIVE', async () => {
       const defaultPassword = await hashPassword('Password123!');
       const approverRole = await prisma.role.findUnique({ where: { name: RoleType.APPROVER } });
       const testUser = await prisma.user.create({
@@ -848,7 +685,7 @@ describe('SCRUM-87: API cấu hình luồng phê duyệt & Tích hợp Requisiti
       const loginRes = await loginAndGetToken(testUser.email);
       const userToken = loginRes.token;
 
-      // Giờ vô hiệu hóa tài khoản
+      // Vô hiệu hóa tài khoản
       await prisma.user.update({
         where: { id: testUser.id },
         data: { isActive: false },
@@ -864,7 +701,7 @@ describe('SCRUM-87: API cấu hình luồng phê duyệt & Tích hợp Requisiti
       expect(approveRes.body.error.code).toBe('ACCOUNT_INACTIVE');
     });
 
-    it('Trường hợp 3: Không có người phê duyệt đang hoạt động phù hợp: từ chối tạo yêu cầu tuyển dụng với mã lỗi 400 NO_ACTIVE_APPROVER', async () => {
+    it('Không có người phê duyệt đang hoạt động phù hợp: từ chối tạo yêu cầu tuyển dụng với mã lỗi 400 NO_ACTIVE_APPROVER', async () => {
       // 1. Tạo approver đang active
       const defaultPassword = await hashPassword('Password123!');
       const approverRole = await prisma.role.findUnique({ where: { name: RoleType.APPROVER } });
@@ -899,29 +736,26 @@ describe('SCRUM-87: API cấu hình luồng phê duyệt & Tích hợp Requisiti
         data: { isActive: false },
       });
 
-      // 4. Khi có người nộp Requisition mới rơi vào dải lương này:
-      // Hệ thống phát hiện không có người phê duyệt đang hoạt động phù hợp -> Trả về lỗi 400
+      // 4. Khi nộp Requisition mới: Trả về lỗi 400 NO_ACTIVE_APPROVER
       const createRes = await request(app)
         .post('/api/requisitions')
         .set(authHeader(hrToken))
-        .send({
-          departmentId: testDeptActiveId,
-          jobTitleId: testJobTitleId,
-          reason: 'NEW',
-          headcount: 1,
-          proposedSalaryMin: 15000000,
-          proposedSalaryMax: 25000000,
-          targetDate: '2099-12-31T00:00:00.000Z',
-          description: 'Tuyển dụng kiểm tra không có người duyệt hoạt động',
-          requirements: 'Test no active approver',
-        });
+        .send(
+          makeRequisitionPayload({
+            departmentId: testDeptActiveId,
+            proposedSalaryMin: 15000000,
+            proposedSalaryMax: 25000000,
+            description: 'Tuyển dụng kiểm tra không có người duyệt hoạt động',
+            requirements: 'Test no active approver',
+          })
+        );
 
       expect(createRes.status).toBe(400);
       expect(createRes.body.error.code).toBe('NO_ACTIVE_APPROVER');
       expect(createRes.body.error.message).toContain('Không có người phê duyệt đang hoạt động phù hợp');
     });
 
-    it('Trường hợp 4: Luồng phê duyệt đã khởi chạy trước khi người phê duyệt bị vô hiệu hóa: bảo toàn snapshot cũ, người duyệt bị khóa không thể duyệt, Admin can thiệp duyệt thay thế thành công', async () => {
+    it('Luồng phê duyệt đã khởi chạy trước khi người phê duyệt bị vô hiệu hóa: bảo toàn snapshot cũ, người duyệt bị khóa không thể duyệt, Admin can thiệp duyệt thay thế thành công', async () => {
       // 1. Tạo approver đang active
       const defaultPassword = await hashPassword('Password123!');
       const approverRole = await prisma.role.findUnique({ where: { name: RoleType.APPROVER } });
@@ -958,17 +792,15 @@ describe('SCRUM-87: API cấu hình luồng phê duyệt & Tích hợp Requisiti
       const createRes = await request(app)
         .post('/api/requisitions')
         .set(authHeader(hrToken))
-        .send({
-          departmentId: testDeptActiveId,
-          jobTitleId: testJobTitleId,
-          reason: 'NEW',
-          headcount: 1,
-          proposedSalaryMin: 10000000,
-          proposedSalaryMax: 20000000,
-          targetDate: '2099-12-31T00:00:00.000Z',
-          description: 'Tuyển dụng kiểm tra luồng đã chạy trước khi approver đổi trạng thái',
-          requirements: 'Test snapshot vs inactive approver',
-        });
+        .send(
+          makeRequisitionPayload({
+            departmentId: testDeptActiveId,
+            proposedSalaryMin: 10000000,
+            proposedSalaryMax: 20000000,
+            description: 'Tuyển dụng kiểm tra luồng đã chạy trước khi approver đổi trạng thái',
+            requirements: 'Test snapshot vs inactive approver',
+          })
+        );
 
       expect(createRes.status).toBe(201);
       const reqId = createRes.body.data.id;
