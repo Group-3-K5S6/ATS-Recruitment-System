@@ -1,0 +1,43 @@
+{
+  "info": {
+    "name": "ATS Recruitment Budget API",
+    "description": "API ngân sách tuyển dụng. Điền accessToken và requisitionId trước khi chạy.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "accessToken", "value": "" },
+    { "key": "requisitionId", "value": "" },
+    { "key": "expenseId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Budgets",
+      "item": [
+        { "name": "List requisition budgets", "request": { "method": "GET", "url": "{{baseUrl}}/api/recruitment-budget" } },
+        { "name": "Monthly summary", "request": { "method": "GET", "url": "{{baseUrl}}/api/recruitment-budget/summary?month=2026-10" } }
+      ]
+    },
+    {
+      "name": "Expenses",
+      "item": [
+        {
+          "name": "Create expense",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if (pm.response.code === 201) pm.collectionVariables.set('expenseId', pm.response.json().data.id);"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"category\": \"job_posting\",\n  \"amount\": 2500000,\n  \"date\": \"2026-10-12\",\n  \"vendor\": \"VietnamWorks\",\n  \"description\": \"Gói đăng tin tuyển dụng\"\n}" }, "url": "{{baseUrl}}/api/recruitment-budget/requisitions/{{requisitionId}}/expenses" }
+        },
+        { "name": "List requisition expenses", "request": { "method": "GET", "url": "{{baseUrl}}/api/recruitment-budget/requisitions/{{requisitionId}}/expenses" } },
+        { "name": "Get expense", "request": { "method": "GET", "url": "{{baseUrl}}/api/recruitment-budget/expenses/{{expenseId}}" } },
+        {
+          "name": "Update expense",
+          "request": { "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"amount\": 3000000,\n  \"description\": \"Cập nhật chi phí đăng tin\"\n}" }, "url": "{{baseUrl}}/api/recruitment-budget/expenses/{{expenseId}}" }
+        },
+        { "name": "Delete expense", "request": { "method": "DELETE", "url": "{{baseUrl}}/api/recruitment-budget/expenses/{{expenseId}}" } }
+      ]
+    }
+  ]
+}

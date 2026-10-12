@@ -282,10 +282,19 @@ function Sidebar({
       setOpen(false);
       return;
     }
-
     /*
-     * Các trang có route React thật.
+     * Điều hướng các trang có route React thật.
      */
+    if (item.label === "Yêu cầu tuyển dụng") {
+      navigate("/recruitment-requests");
+      setOpen(false);
+      return;
+    }
+    if (item.label === "Danh mục dùng chung tuyển dụng") {
+      navigate("/recruitment-shared-categories");
+      setOpen(false);
+      return;
+    }
     if (
       directRouteKeys.has(item.key) ||
       item.key === "profile" ||
@@ -298,7 +307,6 @@ function Sidebar({
       setOpen(false);
       return;
     }
-
     /*
      * Các chức năng Dashboard hiện tại tiếp tục dùng cơ chế
      * selectedMenu/onMenuSelect như trước.

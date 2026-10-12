@@ -33,10 +33,17 @@ describe('S2-05 - Chức danh và dải lương', () => {
       },
     });
 
+    // Chon ung vien chua co application cho job nay.
+    const usedCandidateIds = job
+      ? (await prisma.application.findMany({
+          where: { jobId: job.id },
+          select: { candidateId: true },
+        })).map((application) => application.candidateId)
+      : [];
+
     const candidate = await prisma.candidate.findFirst({
-      select: {
-        id: true,
-      },
+      where: { id: { notIn: usedCandidateIds } },
+      select: { id: true },
     });
 
     if (!job) {

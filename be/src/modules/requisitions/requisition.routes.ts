@@ -26,6 +26,13 @@ router.get(
   RequisitionController.getById
 );
 
+// SCRUM-91: Lấy trạng thái và lịch sử phê duyệt (bất biến, chỉ đọc)
+router.get(
+  '/:id/approval-history',
+  requirePermission(PermissionCode.REQUISITIONS_READ),
+  RequisitionController.getApprovalHistory
+);
+
 router.post(
   '/',
   requirePermission(PermissionCode.REQUISITIONS_CREATE),

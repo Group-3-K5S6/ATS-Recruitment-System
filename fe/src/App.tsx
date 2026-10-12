@@ -3,7 +3,10 @@ import type { FormEvent } from "react";
 import CompetencyFrameworkManagement from "./pages/CompetencyFrameworkManagement";
 import InterviewQuestionBank from "./pages/InterviewQuestionBank";
 import RecruitmentSharedCategories from "./pages/RecruitmentSharedCategories";
+
+import RecruitmentRequestManagement from "./pages/RecruitmentRequestManagement";
 import CreateRecruitmentRequest from "./pages/CreateRecruitmentRequest";
+
 
 import {
   BrowserRouter,
@@ -37,6 +40,8 @@ import {
   NotFoundPage,
   ServerErrorPage,
 } from "./pages/ErrorPages";
+// @ts-ignore
+import BudgetManagement from "./components/BudgetManagement";
 
 import type { Role } from "./data/roleMenus";
 
@@ -252,7 +257,7 @@ async function logoutFromBackend(): Promise<void> {
   let result:
     ApiResponse<{
       message?: string;
-    }> | null = null;
+    }> | null;
 
   try {
     result =
@@ -1104,6 +1109,23 @@ function RecruitmentSharedCategoriesRoute() {
   );
 }
 
+function RecruitmentRequestRoute() {
+  const user = getSessionUser();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const role = resolveRole(user.roles);
+
+  return (
+    <RecruitmentRequestManagement
+      role={role}
+      userName={user.fullName}
+    />
+  );
+}
+
 
 /* =========================================================
    ROOT
@@ -1700,6 +1722,7 @@ function App() {
             <DashboardRoute />
           }
         />
+        <Route path="/budget-management" element={<BudgetManagement />} />
 
 
         {/* SPRINT 2 */}
@@ -1737,6 +1760,11 @@ function App() {
   path="/recruitment-shared-categories"
   element={<RecruitmentSharedCategoriesRoute />}
 />
+
+        <Route
+          path="/recruitment-requests"
+          element={<RecruitmentRequestRoute />}
+        />
 
         <Route
           path="/profile"

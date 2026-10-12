@@ -790,7 +790,12 @@ export class RequisitionController {
     }
 
     const fromStatus = existing.status;
-    let newStatus = 'APPROVED';
+    let newStatus =
+      normalizedDecision === 'APPROVE'
+        ? 'APPROVED'
+        : normalizedDecision === 'REJECT'
+          ? 'REJECTED'
+          : 'CHANGES_REQUESTED';
     let nextApproverId: string | null = existing.approverId;
     let updatedChainString = existing.approvalChain;
     let currentStepNumber: number | null = null;
@@ -805,6 +810,11 @@ export class RequisitionController {
               user.roles.includes(RoleType.ADMIN) ||
               user.roles.includes(RoleType.HR_MANAGER))
         );
+
+        if (currentStepIndex === -1) {
+          errorResponse(res, 'Không tìm thấy cấp phê duyệt hợp lệ đang chờ.', 409, 'NO_PENDING_APPROVAL_STEP');
+          return;
+        }
 
         if (currentStepIndex !== -1) {
           currentStepNumber = steps[currentStepIndex].step || currentStepIndex + 1;
@@ -842,44 +852,148 @@ export class RequisitionController {
           }
         }
       } catch {
-        // Fallback đơn cấp
+        errorResponse(res, 'Dữ liệu chuỗi phê duyệt không hợp lệ.', 409, 'INVALID_APPROVAL_CHAIN');
+        return;
       }
     }
 
-    if (currentStepNumber === null) {
-      currentStepNumber = 1;
-      if (normalizedDecision === 'REJECT') {
-        newStatus = 'REJECTED';
-      } else if (normalizedDecision === 'REQUEST_CHANGES') {
-        newStatus = 'CHANGES_REQUESTED';
-        nextApproverId = existing.approverId;
-      } else {
-        newStatus = 'APPROVED';
+    // Requisition khong co approval chain la duyet don cap.
+    if (currentStepNumber === null) currentStepNumber = 1;
+
+    // Loi nghiep vu ngan sach: rollback toan bo transaction.
+    class ApprovalBudgetError extends Error {
+      constructor(
+        public readonly code: string,
+        message: string,
+        public readonly details?: {
+          year: number;
+          allocatedHeadcount: number;
+          approvedHeadcount: number;
+          requestedHeadcount: number;
+          remainingHeadcount: number;
+        },
+      ) {
+        super(message);
       }
     }
 
-    // Ghi đồng bộ Requisition và RequisitionApprovalHistory trong một transaction
-    const [updated] = await prisma.$transaction([
-      prisma.requisition.update({
-        where: { id },
-        data: {
-          status: newStatus,
-          approverId: nextApproverId,
-          approvalChain: updatedChainString,
-        },
-      }),
-      prisma.requisitionApprovalHistory.create({
-        data: {
-          requisitionId: id,
-          actorId: user.id,
-          fromStatus,
-          toStatus: newStatus,
-          decision: normalizedDecision,
-          step: currentStepNumber,
-          notes: feedback || null,
-        },
-      }),
-    ]);
+    let updated;
+    try {
+      updated = await prisma.$transaction(async (tx) => {
+        const claimed = await tx.requisition.updateMany({
+          where: {
+            id,
+            status: fromStatus,
+            approverId: existing.approverId,
+            approvalChain: existing.approvalChain,
+          },
+          data: {
+            status: newStatus,
+            approverId: nextApproverId,
+            approvalChain: updatedChainString,
+          },
+        });
+
+        if (claimed.count !== 1) return null;
+
+        // PR67: chi kiem tra headcount khi phe duyet CAP CUOI.
+        // Duyet cap trung gian va tu choi khong tieu ton ngan sach.
+        if (normalizedDecision === 'APPROVE' && newStatus === 'APPROVED') {
+          if (!existing.targetDate) {
+            throw new ApprovalBudgetError(
+              'TARGET_DATE_REQUIRED',
+              'Yêu cầu cần có ngày tuyển dụng để xác định năm ngân sách headcount.'
+            );
+          }
+
+          const year = existing.targetDate.getUTCFullYear();
+          const budget = await tx.departmentHeadcountBudget.findUnique({
+            where: {
+              departmentId_year: {
+                departmentId: existing.departmentId,
+                year,
+              },
+            },
+            select: { headcount: true },
+          });
+
+          if (!budget) {
+            throw new ApprovalBudgetError(
+              'HEADCOUNT_BUDGET_NOT_CONFIGURED',
+              `Phòng ban chưa được thiết lập chỉ tiêu headcount năm ${year}.`
+            );
+          }
+
+          const start = new Date(Date.UTC(year, 0, 1));
+          const end = new Date(Date.UTC(year + 1, 0, 1));
+
+          const approved = await tx.requisition.aggregate({
+            where: {
+              departmentId: existing.departmentId,
+              status: 'APPROVED',
+              // Khong tinh lai headcount cua requisition dang duyet.
+              id: { not: id },
+              targetDate: { gte: start, lt: end },
+            },
+            _sum: { headcount: true },
+          });
+
+          const approvedHeadcount = approved._sum.headcount ?? 0;
+          const requestedHeadcount = existing.headcount;
+
+          if (approvedHeadcount + requestedHeadcount > budget.headcount) {
+            throw new ApprovalBudgetError(
+              'HEADCOUNT_BUDGET_EXCEEDED',
+              `Không thể duyệt: phòng ban đã dùng ${approvedHeadcount}/${budget.headcount} headcount năm ${year}; yêu cầu thêm ${requestedHeadcount}.`,
+              {
+                year,
+                allocatedHeadcount: budget.headcount,
+                approvedHeadcount,
+                requestedHeadcount,
+                remainingHeadcount: budget.headcount - approvedHeadcount,
+              }
+            );
+          }
+        }
+
+        await tx.requisitionApprovalHistory.create({
+          data: {
+            requisitionId: id,
+            actorId: user.id,
+            fromStatus,
+            toStatus: newStatus,
+            decision: normalizedDecision,
+            step: currentStepNumber,
+            notes: feedback || null,
+          },
+        });
+
+        return tx.requisition.findUniqueOrThrow({ where: { id } });
+      });
+    } catch (error) {
+      if (error instanceof ApprovalBudgetError) {
+        errorResponse(res, error.message, 409, error.code, error.details);
+        return;
+      }
+
+      const code = error && typeof error === 'object' && 'code' in error
+        ? String(error.code)
+        : '';
+
+      if (['P2034', 'P2028', 'P1008', 'SQLITE_BUSY'].includes(code)) {
+        errorResponse(res, 'Yêu cầu đã được xử lý hoặc đang được cập nhật. Vui lòng tải lại.', 409, 'APPROVAL_CONFLICT');
+        return;
+      }
+
+      console.error('[Requisition] Approval failed:', error);
+      errorResponse(res, 'Không thể xử lý phê duyệt.', 500, 'SERVER_ERROR');
+      return;
+    }
+
+    if (!updated) {
+      errorResponse(res, 'Yêu cầu đã thay đổi trạng thái. Vui lòng tải lại.', 409, 'APPROVAL_CONFLICT');
+      return;
+    }
 
     const action =
       normalizedDecision === 'APPROVE'
@@ -889,9 +1003,11 @@ export class RequisitionController {
           : AuditAction.REQUISITION_CHANGES_REQUESTED;
 
     await recordRequestAudit(req, action, 'requisition', updated.id, {
+      status: newStatus,
       fromStatus,
       toStatus: newStatus,
       decision: normalizedDecision,
+      stepDecision: normalizedDecision,
       step: currentStepNumber,
       notes: feedback || null,
     });
@@ -989,5 +1105,3 @@ export class RequisitionController {
     );
   }
 }
-
-

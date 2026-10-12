@@ -36,16 +36,18 @@ model User {
   auditLogs          AuditLog[]
 
   candidateProfile     Candidate?
-  managedRequisitions  Requisition[] @relation("HiringManagerRequisitions")
-  approvedRequisitions Requisition[] @relation("ApproverRequisitions")
+  managedRequisitions    Requisition[]                @relation("HiringManagerRequisitions")
+  approvedRequisitions   Requisition[]                @relation("ApproverRequisitions")
+  // S2-91 - Lịch sử phê duyệt do user này thực hiện
   requisitionApprovalHistory RequisitionApprovalHistory[] @relation("ApprovalHistoryActor")
-  managedJobs          Job[]         @relation("HiringManagerJobs")
+  managedJobs              Job[]                        @relation("HiringManagerJobs")
   assignedJobs         Job[]         @relation("RecruiterJobs")
   assignedApplications Application[] @relation("RecruiterApplications")
   interviews           Interview[]   @relation("InterviewerInterviews")
   evaluations          Evaluation[]  @relation("InterviewerEvaluations")
   createdOffers        Offer[]       @relation("RecruiterOffers")
   approvedOffers       Offer[]       @relation("ApproverOffers")
+  createdRecruitmentExpenses RecruitmentExpense[] @relation("RecruitmentExpenseCreator")
 
   // S1-03 / S1-04
   passwordHistories PasswordHistory[]
@@ -108,7 +110,22 @@ model Department {
   users             User[]
   requisitions      Requisition[]
   jobs              Job[]
+  headcountBudgets  DepartmentHeadcountBudget[]
   approvalWorkflows ApprovalWorkflow[]
+}
+
+model DepartmentHeadcountBudget {
+  id           String   @id @default(uuid())
+  departmentId String
+  year         Int
+  headcount    Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  @@unique([departmentId, year])
+  @@index([year])
 }
 
 model JobTitle {
@@ -158,6 +175,47 @@ model Requisition {
   approver      User?      @relation("ApproverRequisitions", fields: [approverId], references: [id])
   jobTitle JobTitle? @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
   jobs          Job[]
+  expenses       RecruitmentExpense[]
+}
+
+model RecruitmentExpense {
+  id            String   @id @default(uuid())
+  requisitionId String
+  category      String
+  amount        Float
+  occurredAt    DateTime
+  vendor        String?
+  description   String?
+  createdById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  requisition Requisition @relation(fields: [requisitionId], references: [id], onDelete: Restrict)
+  createdBy   User?       @relation("RecruitmentExpenseCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([requisitionId, occurredAt])
+  @@index([category, occurredAt])
+}
+
+// S2-91 - Lịch sử phê duyệt yêu cầu tuyển dụng (bất biến - không sửa/xóa)
+model RequisitionApprovalHistory {
+  id             String   @id @default(uuid())
+  requisitionId  String
+  actorId        String
+  // Trạng thái của requisition tại thời điểm thao tác: PENDING_APPROVAL, APPROVED, REJECTED
+  fromStatus     String
+  toStatus       String
+  // Quyết định: APPROVE hoặc REJECT
+  decision       String
+  step           Int?
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  requisition    Requisition @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  actor          User        @relation("ApprovalHistoryActor", fields: [actorId], references: [id])
+
+  @@index([requisitionId])
+  @@index([actorId])
 }
 
 model Job {
@@ -453,23 +511,3 @@ model ApprovalWorkflowRange {
 
   @@index([workflowId])
 }
-
-// SCRUM-89 / SCRUM-37 - Lịch sử phê duyệt yêu cầu tuyển dụng (bất biến)
-model RequisitionApprovalHistory {
-  id            String   @id @default(uuid())
-  requisitionId String
-  actorId       String
-  fromStatus    String
-  toStatus      String
-  decision      String
-  step          Int?
-  notes         String?
-  createdAt     DateTime @default(now())
-
-  requisition Requisition @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
-  actor       User        @relation("ApprovalHistoryActor", fields: [actorId], references: [id])
-
-  @@index([requisitionId])
-  @@index([actorId])
-}
-

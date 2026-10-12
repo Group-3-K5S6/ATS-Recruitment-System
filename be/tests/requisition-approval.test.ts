@@ -19,6 +19,7 @@ describe('SCRUM-89: BE-API xử lý phê duyệt (SCRUM-37)', () => {
   let testDepartmentId: string;
   let testJobTitleId: string;
   const createdRequisitionIds: string[] = [];
+  const SCRUM89_TEST_YEAR = 2099;
 
   beforeAll(async () => {
     // 1. Lấy token các tài khoản thực tế
@@ -42,6 +43,23 @@ describe('SCRUM-89: BE-API xử lý phê duyệt (SCRUM-37)', () => {
     recruiterToken = recruiterLogin.token;
 
     testDepartmentId = hiringManagerUser.departmentId;
+
+    // Fixture test: cap ngan sach rieng cho nam 2099.
+    // Khong thay doi quy tac kiem tra ngan sach production.
+    await prisma.departmentHeadcountBudget.upsert({
+      where: {
+        departmentId_year: {
+          departmentId: testDepartmentId,
+          year: SCRUM89_TEST_YEAR,
+        },
+      },
+      update: { headcount: 10000 },
+      create: {
+        departmentId: testDepartmentId,
+        year: SCRUM89_TEST_YEAR,
+        headcount: 10000,
+      },
+    });
 
     // 2. Tạo chức danh cho bài test
     const jobTitle = await prisma.jobTitle.create({
@@ -91,7 +109,7 @@ describe('SCRUM-89: BE-API xử lý phê duyệt (SCRUM-37)', () => {
         reason: customData.reason || 'NEW',
         proposedSalaryMin: customData.proposedSalaryMin || 25000000,
         proposedSalaryMax: customData.proposedSalaryMax || 35000000,
-        targetDate: customData.targetDate || new Date(Date.now() + 30 * 86400000),
+        targetDate: customData.targetDate || new Date(Date.UTC(SCRUM89_TEST_YEAR, 5, 1)),
         description: customData.description || 'Mô tả tuyển dụng kỹ sư phần mềm SCRUM-89',
         requirements: customData.requirements || 'Yêu cầu 3+ năm kinh nghiệm TypeScript, NodeJS',
       },
