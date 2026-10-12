@@ -67,8 +67,10 @@ export const updateRequisitionSchema = z.object({
 
 
 export const approveRequisitionSchema = z.object({
-  decision: z.enum(['APPROVE', 'REJECT']),
+  decision: z.enum(['APPROVE', 'REJECT', 'REQUEST_CHANGES', 'REQUEST_ADDITIONAL_INFO']).optional(),
   notes: z.string().optional(),
+  comment: z.string().optional(),
+  reason: z.string().optional(),
 });
 
 export class RequisitionController {
@@ -479,10 +481,10 @@ export class RequisitionController {
       return;
     }
 
-    if (!['DRAFT', 'PENDING_APPROVAL'].includes(existing.status)) {
+    if (!['DRAFT', 'PENDING_APPROVAL', 'CHANGES_REQUESTED'].includes(existing.status)) {
       errorResponse(
         res,
-        'Only draft or pending requisitions can be edited.',
+        'Only draft, pending, or returned (changes requested) requisitions can be edited.',
         400,
         'INVALID_STATUS'
       );
@@ -732,11 +734,33 @@ export class RequisitionController {
     );
   }
 
-
   static async approve(req: Request, res: Response): Promise<void> {
     const { id } = req.params;
-    const { decision, notes } = req.body;
+    let { decision, notes, comment, reason } = req.body;
     const user = req.user!;
+
+    // Chuẩn hóa và lấy ý kiến/lý do
+    const feedback = String(notes ?? comment ?? reason ?? '').trim();
+
+    let normalizedDecision = String(decision || 'APPROVE').toUpperCase();
+    if (normalizedDecision === 'REQUEST_ADDITIONAL_INFO') {
+      normalizedDecision = 'REQUEST_CHANGES';
+    }
+
+    // Tiêu chí SCRUM-37: Duyệt, Từ chối, Yêu cầu bổ sung — hai hành động sau bắt buộc nhập ý kiến
+    if (normalizedDecision === 'REJECT' || normalizedDecision === 'REQUEST_CHANGES') {
+      if (!feedback) {
+        errorResponse(
+          res,
+          normalizedDecision === 'REJECT'
+            ? 'Vui lòng nhập lý do/ý kiến khi từ chối yêu cầu tuyển dụng.'
+            : 'Vui lòng nhập ý kiến yêu cầu bổ sung thông tin hồ sơ.',
+          400,
+          'VALIDATION_ERROR'
+        );
+        return;
+      }
+    }
 
     const canApprove = await RequisitionPolicy.canApprove(user, id);
     if (!canApprove) {
@@ -758,16 +782,18 @@ export class RequisitionController {
     if (existing.status !== 'PENDING_APPROVAL') {
       errorResponse(
         res,
-        'Chỉ có thể phê duyệt yêu cầu đang ở trạng thái chờ duyệt.',
+        'Chỉ có thể phê duyệt hoặc từ chối yêu cầu đang ở trạng thái chờ duyệt (PENDING_APPROVAL).',
         400,
         'INVALID_STATUS'
       );
       return;
     }
 
-    let newStatus = decision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+    const fromStatus = existing.status;
+    let newStatus = 'APPROVED';
     let nextApproverId: string | null = existing.approverId;
     let updatedChainString = existing.approvalChain;
+    let currentStepNumber: number | null = null;
 
     if (existing.approvalChain) {
       try {
@@ -781,19 +807,29 @@ export class RequisitionController {
         );
 
         if (currentStepIndex !== -1) {
-          if (decision === 'REJECT') {
+          currentStepNumber = steps[currentStepIndex].step || currentStepIndex + 1;
+
+          if (normalizedDecision === 'REJECT') {
             steps[currentStepIndex].status = 'REJECTED';
             steps[currentStepIndex].decisionAt = new Date().toISOString();
-            steps[currentStepIndex].notes = notes || null;
+            steps[currentStepIndex].notes = feedback || null;
             newStatus = 'REJECTED';
             updatedChainString = JSON.stringify(steps);
+          } else if (normalizedDecision === 'REQUEST_CHANGES') {
+            steps[currentStepIndex].status = 'CHANGES_REQUESTED';
+            steps[currentStepIndex].decisionAt = new Date().toISOString();
+            steps[currentStepIndex].notes = feedback || null;
+            newStatus = 'CHANGES_REQUESTED';
+            // Yêu cầu bổ sung trả hồ sơ về cho người tạo, bảo lưu cấp duyệt đầu tiên để duyệt lại
+            nextApproverId = steps[0].approverId || existing.approverId;
+            updatedChainString = JSON.stringify(steps);
           } else {
-            // APPROVE cấp hiện tại
+            // Duyệt (APPROVE) cấp hiện tại
             steps[currentStepIndex].status = 'APPROVED';
             steps[currentStepIndex].decisionAt = new Date().toISOString();
-            steps[currentStepIndex].notes = notes || null;
+            steps[currentStepIndex].notes = feedback || null;
 
-            // Kiểm tra xem còn cấp tiếp theo không
+            // Duyệt xong tự chuyển sang cấp kế tiếp; cấp cuối duyệt thì yêu cầu chuyển sang trạng thái Đã duyệt
             if (currentStepIndex + 1 < steps.length) {
               const nextStep = steps[currentStepIndex + 1];
               nextStep.status = 'PENDING';
@@ -806,35 +842,152 @@ export class RequisitionController {
           }
         }
       } catch {
-        // Fallback to legacy single-step
+        // Fallback đơn cấp
       }
     }
 
-    const updated = await prisma.requisition.update({
-      where: { id },
-      data: {
-        status: newStatus,
-        approverId: nextApproverId,
-        approvalChain: updatedChainString,
-      },
-    });
+    if (currentStepNumber === null) {
+      currentStepNumber = 1;
+      if (normalizedDecision === 'REJECT') {
+        newStatus = 'REJECTED';
+      } else if (normalizedDecision === 'REQUEST_CHANGES') {
+        newStatus = 'CHANGES_REQUESTED';
+        nextApproverId = existing.approverId;
+      } else {
+        newStatus = 'APPROVED';
+      }
+    }
+
+    // Ghi đồng bộ Requisition và RequisitionApprovalHistory trong một transaction
+    const [updated] = await prisma.$transaction([
+      prisma.requisition.update({
+        where: { id },
+        data: {
+          status: newStatus,
+          approverId: nextApproverId,
+          approvalChain: updatedChainString,
+        },
+      }),
+      prisma.requisitionApprovalHistory.create({
+        data: {
+          requisitionId: id,
+          actorId: user.id,
+          fromStatus,
+          toStatus: newStatus,
+          decision: normalizedDecision,
+          step: currentStepNumber,
+          notes: feedback || null,
+        },
+      }),
+    ]);
 
     const action =
-      decision === 'APPROVE'
+      normalizedDecision === 'APPROVE'
         ? AuditAction.REQUISITION_APPROVED
-        : AuditAction.REQUISITION_REJECTED;
+        : normalizedDecision === 'REJECT'
+          ? AuditAction.REQUISITION_REJECTED
+          : AuditAction.REQUISITION_CHANGES_REQUESTED;
 
     await recordRequestAudit(req, action, 'requisition', updated.id, {
-      status: newStatus,
-      stepDecision: decision,
+      fromStatus,
+      toStatus: newStatus,
+      decision: normalizedDecision,
+      step: currentStepNumber,
+      notes: feedback || null,
     });
 
     const message =
       newStatus === 'PENDING_APPROVAL'
         ? 'Cấp duyệt hiện tại đã phê duyệt thành công. Yêu cầu đã được chuyển tới cấp duyệt tiếp theo.'
-        : `Yêu cầu tuyển dụng đã được ${newStatus === 'APPROVED' ? 'phê duyệt' : 'từ chối'}.`;
+        : newStatus === 'APPROVED'
+          ? 'Yêu cầu tuyển dụng đã được phê duyệt.'
+          : newStatus === 'REJECTED'
+            ? 'Yêu cầu tuyển dụng đã bị từ chối.'
+            : 'Đã yêu cầu bổ sung thông tin. Hồ sơ đã được trả về cho người tạo và lưu vết lịch sử.';
 
     successResponse(res, updated, 200, message);
   }
+
+  /**
+   * GET /api/requisitions/:id/approval-history
+   * SCRUM-89: Trả về trạng thái hiện tại + toàn bộ lịch sử phê duyệt của một requisition.
+   * Lịch sử bất biến – chỉ đọc, không cho phép sửa/xóa.
+   */
+  static async getApprovalHistory(req: Request, res: Response): Promise<void> {
+    const { id } = req.params;
+    const user = req.user!;
+
+    const canView = await RequisitionPolicy.canView(user, id);
+    if (!canView) {
+      const exists = await prisma.requisition.findUnique({ where: { id } });
+      if (exists) {
+        errorResponse(
+          res,
+          'Bạn không có quyền xem yêu cầu tuyển dụng ngoài phạm vi được phân công.',
+          403,
+          'FORBIDDEN_SCOPE'
+        );
+        return;
+      }
+      errorResponse(res, 'Không tìm thấy yêu cầu tuyển dụng.', 404, 'NOT_FOUND');
+      return;
+    }
+
+    const requisition = await prisma.requisition.findUnique({
+      where: { id },
+      include: {
+        department: { select: { id: true, name: true, code: true } },
+        hiringManager: { select: { id: true, fullName: true, email: true } },
+        approver: { select: { id: true, fullName: true, email: true } },
+        approvalHistory: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            actor: { select: { id: true, fullName: true, email: true } },
+          },
+        },
+      },
+    });
+
+    if (!requisition) {
+      errorResponse(res, 'Không tìm thấy yêu cầu tuyển dụng.', 404, 'NOT_FOUND');
+      return;
+    }
+
+    const isTerminal = ['APPROVED', 'REJECTED', 'CANCELLED'].includes(requisition.status);
+    const isDraft = ['DRAFT', 'CHANGES_REQUESTED'].includes(requisition.status);
+
+    let currentApprover: { id: string; fullName: string; email: string } | null = null;
+    if (!isTerminal && !isDraft && requisition.approver) {
+      currentApprover = requisition.approver;
+    }
+
+    const historySteps = requisition.approvalHistory.map((entry) => ({
+      id: entry.id,
+      decision: entry.decision,
+      step: entry.step,
+      fromStatus: entry.fromStatus,
+      toStatus: entry.toStatus,
+      actor: entry.actor,
+      notes: entry.notes,
+      processedAt: entry.createdAt,
+    }));
+
+    successResponse(
+      res,
+      {
+        requisitionId: requisition.id,
+        title: requisition.title,
+        currentStatus: requisition.status,
+        department: requisition.department,
+        hiringManager: requisition.hiringManager,
+        designatedApprover: requisition.approver,
+        currentPendingApprover: currentApprover,
+        totalSteps: historySteps.length,
+        history: historySteps,
+      },
+      200
+    );
+  }
 }
+
 

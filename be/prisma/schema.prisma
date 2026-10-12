@@ -38,6 +38,7 @@ model User {
   candidateProfile     Candidate?
   managedRequisitions  Requisition[] @relation("HiringManagerRequisitions")
   approvedRequisitions Requisition[] @relation("ApproverRequisitions")
+  requisitionApprovalHistory RequisitionApprovalHistory[] @relation("ApprovalHistoryActor")
   managedJobs          Job[]         @relation("HiringManagerJobs")
   assignedJobs         Job[]         @relation("RecruiterJobs")
   assignedApplications Application[] @relation("RecruiterApplications")
@@ -144,6 +145,8 @@ model Requisition {
   budget          Float?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  // SCRUM-89: Luồng phê duyệt nhiều cấp & lịch sử
+  approvalHistory RequisitionApprovalHistory[]
 
   // S3-01: Luồng phê duyệt
   approvalWorkflowId      String?
@@ -449,5 +452,24 @@ model ApprovalWorkflowRange {
   workflow ApprovalWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 
   @@index([workflowId])
+}
+
+// SCRUM-89 / SCRUM-37 - Lịch sử phê duyệt yêu cầu tuyển dụng (bất biến)
+model RequisitionApprovalHistory {
+  id            String   @id @default(uuid())
+  requisitionId String
+  actorId       String
+  fromStatus    String
+  toStatus      String
+  decision      String
+  step          Int?
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  requisition Requisition @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  actor       User        @relation("ApprovalHistoryActor", fields: [actorId], references: [id])
+
+  @@index([requisitionId])
+  @@index([actorId])
 }
 
