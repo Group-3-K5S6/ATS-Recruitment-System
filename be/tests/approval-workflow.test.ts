@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { randomUUID } from 'crypto';
 
@@ -138,7 +138,27 @@ describe('SCRUM-87: API cấu hình luồng phê duyệt & Tích hợp Requisiti
     hrUser = await prisma.user.findUnique({ where: { email: 'hr_manager@ats.local' } });
   });
 
+  // PR67: ngan sach test cho cac phong ban cua workflow.
+  beforeEach(async () => {
+    for (const departmentId of [testDeptId, testDept3Id, testDeptActiveId]) {
+      const exists = await prisma.department.findUnique({
+        where: { id: departmentId },
+        select: { id: true },
+      });
+      if (!exists) continue;
+
+      await prisma.departmentHeadcountBudget.upsert({
+        where: { departmentId_year: { departmentId, year: 2099 } },
+        create: { departmentId, year: 2099, headcount: 10000 },
+        update: { headcount: 10000 },
+      });
+    }
+  });
+
   afterAll(async () => {
+    await prisma.departmentHeadcountBudget.deleteMany({
+      where: { departmentId: { in: [testDeptId, testDept3Id, testDeptActiveId] }, year: 2099 },
+    });
     // 1. Xóa tất cả requisition, workflow và department test trước
     const testDeptIds = [testDeptId, testDept3Id, testDeptActiveId].filter(Boolean);
     if (testDeptIds.length > 0) {

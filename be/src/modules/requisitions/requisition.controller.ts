@@ -818,6 +818,23 @@ export class RequisitionController {
       }
     }
 
+    // Loi nghiep vu ngan sach: rollback toan bo transaction.
+    class ApprovalBudgetError extends Error {
+      constructor(
+        public readonly code: string,
+        message: string,
+        public readonly details?: {
+          year: number;
+          allocatedHeadcount: number;
+          approvedHeadcount: number;
+          requestedHeadcount: number;
+          remainingHeadcount: number;
+        },
+      ) {
+        super(message);
+      }
+    }
+
     let updated;
     try {
       updated = await prisma.$transaction(async (tx) => {
@@ -837,6 +854,66 @@ export class RequisitionController {
 
         if (claimed.count !== 1) return null;
 
+        // PR67: chi kiem tra headcount khi phe duyet CAP CUOI.
+        // Duyet cap trung gian va tu choi khong tieu ton ngan sach.
+        if (decision === 'APPROVE' && newStatus === 'APPROVED') {
+          if (!existing.targetDate) {
+            throw new ApprovalBudgetError(
+              'TARGET_DATE_REQUIRED',
+              'Yêu cầu cần có ngày tuyển dụng để xác định năm ngân sách headcount.'
+            );
+          }
+
+          const year = existing.targetDate.getUTCFullYear();
+          const budget = await tx.departmentHeadcountBudget.findUnique({
+            where: {
+              departmentId_year: {
+                departmentId: existing.departmentId,
+                year,
+              },
+            },
+            select: { headcount: true },
+          });
+
+          if (!budget) {
+            throw new ApprovalBudgetError(
+              'HEADCOUNT_BUDGET_NOT_CONFIGURED',
+              `Phòng ban chưa được thiết lập chỉ tiêu headcount năm ${year}.`
+            );
+          }
+
+          const start = new Date(Date.UTC(year, 0, 1));
+          const end = new Date(Date.UTC(year + 1, 0, 1));
+
+          const approved = await tx.requisition.aggregate({
+            where: {
+              departmentId: existing.departmentId,
+              status: 'APPROVED',
+              // Khong tinh lai headcount cua requisition dang duyet.
+              id: { not: id },
+              targetDate: { gte: start, lt: end },
+            },
+            _sum: { headcount: true },
+          });
+
+          const approvedHeadcount = approved._sum.headcount ?? 0;
+          const requestedHeadcount = existing.headcount;
+
+          if (approvedHeadcount + requestedHeadcount > budget.headcount) {
+            throw new ApprovalBudgetError(
+              'HEADCOUNT_BUDGET_EXCEEDED',
+              `Không thể duyệt: phòng ban đã dùng ${approvedHeadcount}/${budget.headcount} headcount năm ${year}; yêu cầu thêm ${requestedHeadcount}.`,
+              {
+                year,
+                allocatedHeadcount: budget.headcount,
+                approvedHeadcount,
+                requestedHeadcount,
+                remainingHeadcount: budget.headcount - approvedHeadcount,
+              }
+            );
+          }
+        }
+
         await tx.requisitionApprovalHistory.create({
           data: {
             requisitionId: id,
@@ -851,6 +928,11 @@ export class RequisitionController {
         return tx.requisition.findUniqueOrThrow({ where: { id } });
       });
     } catch (error) {
+      if (error instanceof ApprovalBudgetError) {
+        errorResponse(res, error.message, 409, error.code, error.details);
+        return;
+      }
+
       const code = error && typeof error === 'object' && 'code' in error
         ? String(error.code)
         : '';

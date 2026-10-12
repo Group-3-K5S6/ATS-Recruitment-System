@@ -10,6 +10,12 @@ export enum PermissionCode {
   REQUISITIONS_APPROVE = 'requisitions:approve',
   REQUISITIONS_DELETE = 'requisitions:delete',
 
+  // Recruitment budgets and actual hiring expenses
+  RECRUITMENT_BUDGETS_READ = 'recruitment_budgets:read',
+  RECRUITMENT_BUDGETS_MANAGE = 'recruitment_budgets:manage',
+  HEADCOUNT_BUDGETS_READ = 'headcount_budgets:read',
+  HEADCOUNT_BUDGETS_MANAGE = 'headcount_budgets:manage',
+
   // Job Postings
   JOBS_READ = 'jobs:read',
   JOBS_CREATE = 'jobs:create',
@@ -89,6 +95,10 @@ export const ALL_PERMISSIONS: PermissionDefinition[] = [
   { code: PermissionCode.REQUISITIONS_UPDATE, module: 'requisitions', description: 'Cập nhật yêu cầu tuyển dụng' },
   { code: PermissionCode.REQUISITIONS_APPROVE, module: 'requisitions', description: 'Phê duyệt yêu cầu tuyển dụng' },
   { code: PermissionCode.REQUISITIONS_DELETE, module: 'requisitions', description: 'Xóa yêu cầu tuyển dụng' },
+  { code: PermissionCode.RECRUITMENT_BUDGETS_READ, module: 'recruitment_budgets', description: 'Xem ngân sách và chi phí tuyển dụng' },
+  { code: PermissionCode.RECRUITMENT_BUDGETS_MANAGE, module: 'recruitment_budgets', description: 'Ghi nhận, cập nhật và xóa chi phí tuyển dụng' },
+  { code: PermissionCode.HEADCOUNT_BUDGETS_READ, module: 'headcount_budgets', description: 'Xem chỉ tiêu headcount theo phòng ban và năm' },
+  { code: PermissionCode.HEADCOUNT_BUDGETS_MANAGE, module: 'headcount_budgets', description: 'Thiết lập chỉ tiêu headcount theo phòng ban và năm' },
 
   // Jobs
   { code: PermissionCode.JOBS_READ, module: 'jobs', description: 'Xem danh sách và chi tiết tin tuyển dụng' },

@@ -38,6 +38,11 @@ describe('SCRUM-91 – Approval History API', () => {
     const hrLogin = await loginAndGetToken('hr_manager@ats.local');
     hrManagerToken = hrLogin.token;
     deptId = hrLogin.user.departmentId;
+    await prisma.departmentHeadcountBudget.upsert({
+      where: { departmentId_year: { departmentId: deptId, year: 2099 } },
+      create: { departmentId: deptId, year: 2099, headcount: 10000 },
+      update: { headcount: 10000 },
+    });
 
     const approverLogin = await loginAndGetToken('approver@ats.local');
     approverToken = approverLogin.token;
@@ -119,6 +124,11 @@ describe('SCRUM-91 – Approval History API', () => {
   });
 
   afterAll(async () => {
+    if (deptId) {
+      await prisma.departmentHeadcountBudget.deleteMany({
+        where: { departmentId: deptId, year: 2099 },
+      });
+    }
     const ids = [pendingReqId, approvedReqId, rejectedReqId, draftReqId].filter(Boolean);
     await prisma.requisition.deleteMany({ where: { id: { in: ids } } });
     if (jobTitleId) {

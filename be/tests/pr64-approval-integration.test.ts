@@ -23,6 +23,11 @@ describe('PR64 + PR68 - Approval integration', () => {
     hrToken = hr.token;
     hrId = hr.user.id;
     departmentId = hr.user.departmentId;
+    await prisma.departmentHeadcountBudget.upsert({
+      where: { departmentId_year: { departmentId, year: 2099 } },
+      create: { departmentId, year: 2099, headcount: 10000 },
+      update: { headcount: 10000 },
+    });
     approverToken = approver.token;
     approverId = approver.user.id;
 
@@ -41,6 +46,11 @@ describe('PR64 + PR68 - Approval integration', () => {
   });
 
   afterAll(async () => {
+    if (departmentId) {
+      await prisma.departmentHeadcountBudget.deleteMany({
+        where: { departmentId, year: 2099 },
+      });
+    }
     if (createdIds.length > 0) {
       await prisma.requisition.deleteMany({
         where: { id: { in: createdIds } },
