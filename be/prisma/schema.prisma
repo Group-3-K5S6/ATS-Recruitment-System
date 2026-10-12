@@ -104,9 +104,10 @@ model Department {
 
   isActive Boolean @default(true)
 
-  users        User[]
-  requisitions Requisition[]
-  jobs         Job[]
+  users             User[]
+  requisitions      Requisition[]
+  jobs              Job[]
+  approvalWorkflows ApprovalWorkflow[]
 }
 
 model JobTitle {
@@ -143,6 +144,11 @@ model Requisition {
   budget          Float?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  // S3-01: Luồng phê duyệt
+  approvalWorkflowId      String?
+  approvalWorkflowVersion Int?
+  approvalChain           String?
 
   department    Department @relation(fields: [departmentId], references: [id])
   hiringManager User       @relation("HiringManagerRequisitions", fields: [hiringManagerId], references: [id])
@@ -415,3 +421,33 @@ model RecruitmentCategory {
   @@unique([category, name])
   @@index([category, position])
 }
+
+// S3-01 - Cấu hình luồng phê duyệt
+model ApprovalWorkflow {
+  id           String   @id @default(uuid())
+  departmentId String
+  version      Int      @default(1)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  department Department              @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  ranges     ApprovalWorkflowRange[]
+
+  @@unique([departmentId, version])
+  @@index([departmentId, isActive])
+}
+
+model ApprovalWorkflowRange {
+  id          String  @id @default(uuid())
+  workflowId  String
+  minSalary   Float
+  maxSalary   Float?
+  orderIndex  Int     @default(0)
+  approverIds String  // JSON array string: ["id1", "id2"]
+
+  workflow ApprovalWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+}
+

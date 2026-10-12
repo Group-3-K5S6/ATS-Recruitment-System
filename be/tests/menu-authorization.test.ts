@@ -76,7 +76,6 @@ describe('5. Role-Based Navigation Menu & Authorization API (GET /api/auth/me/me
         'departments',
 'competency-frameworks',
 'company-profile',
-'company-config',
       ]);
 
       // Admin must NOT see candidate-specific portal links
@@ -122,6 +121,7 @@ describe('5. Role-Based Navigation Menu & Authorization API (GET /api/auth/me/me
 'interview-question-bank',
 'recruitment-shared-categories',
 'company-profile',
+'approval-workflows',
       ]);
 
       // HR Manager can view audit-logs and users
