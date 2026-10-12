@@ -17,6 +17,7 @@ import {
 
 import "./App.css";
 import CopyRequisition from "./features/sprint3/CopyRequisition";
+import JobPostingDraft from "./features/sprint3/JobPostingDraft";
 import ApprovalWorkflowConfig from "./features/sprint3/ApprovalWorkflowConfig";
 import Sprint3RouteGuard from "./features/sprint3/Sprint3RouteGuard";
 import RequisitionApproval from "./features/sprint3/RequisitionApproval";
@@ -388,7 +389,7 @@ function Login() {
 
 
     try {
-      
+
              const response =
         await fetch(
           `${API_URL}/api/auth/login`,
@@ -1598,6 +1599,47 @@ function Sprint3CopyWithSidebar() {
   );
 }
 
+
+/* SCRUM-44 / S3-09: Frontend soan tin tuyen dung */
+function Sprint3PostingWithSidebar() {
+  const navigate = useNavigate();
+  const user = getSessionUser();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const handleLogout = async () => {
+    try {
+      await logoutFromBackend();
+      clearSession();
+      navigate("/login", { replace: true });
+    } catch (error) {
+      console.error("Logout failed:", error);
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Không thể đăng xuất. Vui lòng thử lại."
+      );
+    }
+  };
+
+  return (
+    <div className="dashboard-layout">
+      <Sidebar
+        role={resolveRole(user.roles)}
+        userName={user.fullName}
+        onLogout={handleLogout}
+        selectedMenu="Soạn tin tuyển dụng"
+        onMenuSelect={() => navigate("/dashboard")}
+      />
+      <main className="dashboard-content">
+        <JobPostingDraft />
+      </main>
+    </div>
+  );
+}
+
 /* S3-02 FE: Giao diện duyệt / từ chối yêu cầu tuyển dụng */
 function Sprint3RequisitionApprovalWithSidebar() {
   const navigate = useNavigate();
@@ -1649,7 +1691,7 @@ function App() {
 
       <Routes>
         {/* ROOT */}
-       
+
 
         <Route
           path="/"
@@ -1767,6 +1809,16 @@ function App() {
           path="/recruitment-requests/copy"
           element={<Sprint3RouteGuard allowedRole="HIRING_MANAGER"><Sprint3CopyWithSidebar /></Sprint3RouteGuard>}
         />
+
+        <Route
+          path="/job-postings/draft"
+          element={
+            <Sprint3RouteGuard allowedRole="RECRUITER">
+              <Sprint3PostingWithSidebar />
+            </Sprint3RouteGuard>
+          }
+        />
+
         <Route
           path="/recruitment-requests/create"
           element={<RecruitmentRequestCreateRoute />}
@@ -1789,7 +1841,6 @@ function App() {
             </Sprint3RouteGuard>
           }
         />
-
         <Route
           path="*"
           element={
