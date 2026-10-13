@@ -6,17 +6,27 @@ export class RequisitionPolicy {
   static async canView(user: AuthenticatedUser, requisitionId: string): Promise<boolean> {
     if (
       user.roles.includes(RoleType.ADMIN) ||
-      user.roles.includes(RoleType.HR_MANAGER) ||
-      user.roles.includes(RoleType.RECRUITER)
+      user.roles.includes(RoleType.HR_MANAGER)
     ) {
       return true;
     }
 
     const req = await prisma.requisition.findUnique({
       where: { id: requisitionId },
+      include: {
+        supportingRecruiters: true,
+      },
     });
 
     if (!req) return false;
+
+    if (user.roles.includes(RoleType.RECRUITER)) {
+      return (
+        req.leadRecruiterId === user.id ||
+        req.supportingRecruiters.some((s) => s.recruiterId === user.id) ||
+        req.hiringManagerId === user.id
+      );
+    }
 
     if (user.roles.includes(RoleType.APPROVER)) {
       return req.approverId === user.id; // Only assigned requisitions may be viewed
@@ -27,6 +37,13 @@ export class RequisitionPolicy {
     }
 
     return false;
+  }
+
+  static canAssign(user: AuthenticatedUser): boolean {
+    return (
+      user.roles.includes(RoleType.ADMIN) ||
+      user.roles.includes(RoleType.HR_MANAGER)
+    );
   }
 
   static async canCreate(user: AuthenticatedUser, departmentId: string): Promise<boolean> {

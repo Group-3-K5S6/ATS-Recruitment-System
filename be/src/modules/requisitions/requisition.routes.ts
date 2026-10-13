@@ -4,6 +4,7 @@ import {
   createRequisitionSchema,
   updateRequisitionSchema,
   approveRequisitionSchema,
+  assignRecruitersSchema,
 } from './requisition.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { requirePermission } from '../../middleware/authorize';
@@ -80,4 +81,45 @@ router.get(
   RequisitionController.getApprovalHistory
 );
 
+// SCRUM-97 / SCRUM-41: BE-API phân công tuyển dụng & ghi lịch sử chuyển giao
+router.post(
+  '/:id/assign',
+  requirePermission(PermissionCode.REQUISITIONS_UPDATE),
+  validateBody(assignRecruitersSchema),
+  RequisitionController.assignRecruiters
+);
+
+router.put(
+  '/:id/assign',
+  requirePermission(PermissionCode.REQUISITIONS_UPDATE),
+  validateBody(assignRecruitersSchema),
+  RequisitionController.assignRecruiters
+);
+
+router.post(
+  '/:id/assign-recruiters',
+  requirePermission(PermissionCode.REQUISITIONS_UPDATE),
+  validateBody(assignRecruitersSchema),
+  RequisitionController.assignRecruiters
+);
+
+router.get(
+  '/:id/assignment-history',
+  requirePermission(PermissionCode.REQUISITIONS_READ),
+  RequisitionController.getAssignmentHistory
+);
+
+router.get(
+  '/:id/handover-history',
+  requirePermission(PermissionCode.REQUISITIONS_READ),
+  RequisitionController.getAssignmentHistory
+);
+
+router.get(
+  '/:id/applications',
+  requirePermission(PermissionCode.CANDIDATES_READ),
+  RequisitionController.getApplications
+);
+
 export default router;
+
