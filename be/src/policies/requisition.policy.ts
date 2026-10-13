@@ -68,6 +68,17 @@ export class RequisitionPolicy {
     return false;
   }
 
+  /**
+   * SCRUM-99: Chỉ Trưởng phòng Nhân sự (HR_MANAGER) và Admin mới có thể
+   * tạm dừng, đóng hoặc đánh dấu đã tuyển đủ một yêu cầu tuyển dụng.
+   */
+  static async canClose(user: AuthenticatedUser, _requisitionId: string): Promise<boolean> {
+    return (
+      user.roles.includes(RoleType.ADMIN) ||
+      user.roles.includes(RoleType.HR_MANAGER)
+    );
+  }
+
   static async canApprove(user: AuthenticatedUser, requisitionId: string): Promise<boolean> {
     if (user.roles.includes(RoleType.ADMIN) || user.roles.includes(RoleType.HR_MANAGER)) {
       return true;

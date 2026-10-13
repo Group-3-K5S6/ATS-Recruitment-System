@@ -80,4 +80,11 @@ router.get(
   RequisitionController.getApprovalHistory
 );
 
+// SCRUM-99: Tạm dừng / Đóng / Đã tuyển đủ yêu cầu tuyển dụng
+router.post(
+  '/:id/close',
+  requirePermission(PermissionCode.REQUISITIONS_UPDATE),
+  RequisitionController.closeRequisition
+);
+
 export default router;
