@@ -1180,7 +1180,7 @@ export class RequisitionController {
     if (action === 'ON_HOLD' && existing.status === 'ON_HOLD') {
       errorResponse(
         res,
-        'Yêu cầu tuyển dụng đang đã ở trạng thái tạm dừng (ON_HOLD).',
+        'Yêu cầu tuyển dụng đã ở trạng thái tạm dừng (ON_HOLD).',
         400,
         'INVALID_STATUS'
       );
@@ -1223,48 +1223,67 @@ export class RequisitionController {
 
     const fromStatus = existing.status;
 
-    // --- Transaction: cập nhật requisition + hủy tin đăng công khai ---
-    const publishedJobIds = existing.jobs
-      .filter((j) => j.status === 'PUBLISHED')
-      .map((j) => j.id);
-
-    // Khi đóng hoàn toàn (CANCELLED / FILLED), tự động gỡ bỏ tin đăng công khai.
-    // Khi ON_HOLD, cũng tạm dừng tin đăng để không nhận thêm ứng viên.
-    const shouldUnpublishJobs = publishedJobIds.length > 0;
-
+    // --- Transaction: chi mot request duoc chuyen trang thai tu ban ghi da doc ---
+    // CAS theo status + updatedAt tranh cap nhat de khi co thao tac dong thoi.
+    // Neu mat quyen cap nhat, khong dong job va khong ghi them history.
     let updated;
+    let unpublishedJobCount = 0;
     try {
-      updated = await prisma.$transaction(async (tx) => {
-        // Unpublish linked public job postings
-        if (shouldUnpublishJobs) {
-          await tx.job.updateMany({
-            where: { id: { in: publishedJobIds } },
-            data: { status: 'CLOSED' },
-          });
-        }
-
-        // Cập nhật trạng thái requisition
-        const updatedRequisition = await tx.requisition.update({
-          where: { id },
+      const result = await prisma.$transaction(async (tx) => {
+        const claimed = await tx.requisition.updateMany({
+          where: {
+            id,
+            status: fromStatus,
+            updatedAt: existing.updatedAt,
+          },
           data: { status: targetStatus },
         });
 
-        // Ghi lịch sử phê duyệt (bất biến, chỉ ghi thêm)
+        if (claimed.count !== 1) return null;
+
+        // Dong cac job dang PUBLISHED trong cung transaction; khong dung
+        // danh sach job lay truoc transaction (co the da thay doi).
+        const closedJobs = await tx.job.updateMany({
+          where: { requisitionId: id, status: 'PUBLISHED' },
+          data: { status: 'CLOSED' },
+        });
+
         await tx.requisitionApprovalHistory.create({
           data: {
             requisitionId: id,
             actorId: user.id,
             fromStatus,
             toStatus: targetStatus,
-            decision: action,   // 'CANCEL' | 'ON_HOLD' | 'FILLED'
+            decision: action,
             step: null,
             notes: reason,
           },
         });
 
-        return updatedRequisition;
+        const requisition = await tx.requisition.findUniqueOrThrow({ where: { id } });
+        return { requisition, unpublishedJobCount: closedJobs.count };
       });
+
+      if (!result) {
+        errorResponse(
+          res,
+          'Yêu cầu đã được thay đổi bởi thao tác khác. Vui lòng tải lại và thử lại.',
+          409,
+          'CONCURRENT_MODIFICATION'
+        );
+        return;
+      }
+      updated = result.requisition;
+      unpublishedJobCount = result.unpublishedJobCount;
     } catch (error) {
+      // SQLite/Prisma co the tra P2034 neu hai transaction tranh chap.
+      if (
+        typeof error === 'object' && error !== null &&
+        'code' in error && error.code === 'P2034'
+      ) {
+        errorResponse(res, 'Yêu cầu đang được cập nhật. Vui lòng thử lại.', 409, 'CONCURRENT_MODIFICATION');
+        return;
+      }
       console.error('[Requisition] closeRequisition failed:', error);
       errorResponse(res, 'Không thể thực hiện thao tác. Vui lòng thử lại.', 500, 'SERVER_ERROR');
       return;
@@ -1287,7 +1306,7 @@ export class RequisitionController {
         toStatus: targetStatus,
         action,
         reason,
-        unpublishedJobCount: publishedJobIds.length,
+        unpublishedJobCount,
         activeCandidateCount,
       }
     );
@@ -1302,7 +1321,7 @@ export class RequisitionController {
       res,
       {
         ...updated,
-        unpublishedJobCount: publishedJobIds.length,
+        unpublishedJobCount,
         activeCandidateCount,
       },
       200,

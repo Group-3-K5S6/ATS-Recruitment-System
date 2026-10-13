@@ -639,4 +639,23 @@ describe('SCRUM-99: Tạm dừng / Đóng yêu cầu tuyển dụng', () => {
       expect(closeEntry.notes).toBe('Lý do lịch sử.');
     });
   });
+  describe('Tiêu chí bổ sung: không ghi lịch sử trùng khi thao tác lặp', () => {
+    it('Đóng một yêu cầu hai lần liên tiếp chỉ ghi một bản ghi quyết định CANCEL', async () => {
+      const requisition = await createRequisition();
+      const url = `/api/requisitions/${requisition.id}/close`;
+      const payload = { action: 'CANCEL', reason: 'Kiểm tra tính duy nhất.' };
+
+      const first = await request(app).post(url).set(authHeader(hrManagerToken)).send(payload);
+      const second = await request(app).post(url).set(authHeader(hrManagerToken)).send(payload);
+
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(400);
+      expect(second.body.error.code).toBe('INVALID_STATUS');
+      const historyCount = await prisma.requisitionApprovalHistory.count({
+        where: { requisitionId: requisition.id, decision: 'CANCEL' },
+      });
+      expect(historyCount).toBe(1);
+    });
+  });
+
 });
