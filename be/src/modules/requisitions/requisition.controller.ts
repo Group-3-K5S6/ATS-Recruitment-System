@@ -8,6 +8,7 @@ import { AuditAction } from '../../rbac/types';
 import { RoleType } from '../../rbac/roles';
 import { ApprovalWorkflowService } from '../approval-workflows/approval-workflow.service';
 import { ApprovalStepSnapshot } from '../approval-workflows/approval-workflow.types';
+import { Prisma } from '@prisma/client';
 
 
 const optionalText = z.preprocess(
@@ -73,27 +74,63 @@ export const approveRequisitionSchema = z.object({
   reason: z.string().optional(),
 });
 
+const requisitionListQuerySchema = z.object({
+  status: z.string().trim().min(1).optional(),
+  departmentId: dbRecordId.optional(),
+  recruiterId: dbRecordId.optional(),
+  fromDate: z.string().date().optional(),
+  toDate: z.string().date().optional(),
+});
+
+function utcDay(value: string): Date {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
 export class RequisitionController {
   static async list(req: Request, res: Response): Promise<void> {
     const user = req.user!;
 
-    let whereClause = {};
+    const parsedQuery = requisitionListQuerySchema.safeParse(req.query);
+    if (!parsedQuery.success) {
+      errorResponse(res, 'Tham số lọc danh sách yêu cầu tuyển dụng không hợp lệ.', 400, 'VALIDATION_ERROR', parsedQuery.error.flatten());
+      return;
+    }
+    const { status, departmentId, recruiterId, fromDate, toDate } = parsedQuery.data;
+    if (fromDate && toDate && fromDate > toDate) {
+      errorResponse(res, 'fromDate phải nhỏ hơn hoặc bằng toDate.', 400, 'VALIDATION_ERROR');
+      return;
+    }
+
+    const scope: Prisma.RequisitionWhereInput = {};
     if (user.roles.includes(RoleType.ADMIN) || user.roles.includes(RoleType.HR_MANAGER) || user.roles.includes(RoleType.RECRUITER)) {
       // Full list only for roles granted organization-wide requisition visibility.
-      whereClause = {};
     } else if (user.roles.includes(RoleType.HIRING_MANAGER)) {
-      whereClause = {
-        OR: [
-          { hiringManagerId: user.id },
-          ...(user.departmentId ? [{ departmentId: user.departmentId }] : []),
-        ],
-      };
+      scope.OR = [
+        { hiringManagerId: user.id },
+        ...(user.departmentId ? [{ departmentId: user.departmentId }] : []),
+      ];
     } else if (user.roles.includes(RoleType.APPROVER)) {
-      whereClause = { approverId: user.id };
+      scope.approverId = user.id;
     } else {
       errorResponse(res, 'Bạn không có quyền xem danh sách yêu cầu tuyển dụng.', 403, 'FORBIDDEN_SCOPE');
       return;
     }
+
+    const whereClause: Prisma.RequisitionWhereInput = {
+      ...scope,
+      ...(status ? { status } : {}),
+      ...(departmentId ? { departmentId } : {}),
+      ...(recruiterId ? { jobs: { some: { recruiterId } } } : {}),
+      ...((fromDate || toDate)
+        ? {
+            createdAt: {
+              ...(fromDate ? { gte: utcDay(fromDate) } : {}),
+              ...(toDate ? { lt: new Date(utcDay(toDate).getTime() + 24 * 60 * 60 * 1000) } : {}),
+            },
+          }
+        : {}),
+    };
 
     const requisitions = await prisma.requisition.findMany({
       where: whereClause,
@@ -101,11 +138,49 @@ export class RequisitionController {
         department: true,
         hiringManager: { select: { id: true, fullName: true, email: true } },
         approver: { select: { id: true, fullName: true, email: true } },
+        jobs: {
+          select: {
+            id: true,
+            recruiter: { select: { id: true, fullName: true, email: true } },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    successResponse(res, requisitions, 200);
+    const today = new Date();
+    const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+    const result = requisitions.map((requisition) => {
+      const targetUtc = requisition.targetDate
+        ? Date.UTC(requisition.targetDate.getUTCFullYear(), requisition.targetDate.getUTCMonth(), requisition.targetDate.getUTCDate())
+        : null;
+      const daysRemaining = targetUtc === null ? null : Math.ceil((targetUtc - todayUtc) / (24 * 60 * 60 * 1000));
+      const recruiters = Array.from(
+        new Map(
+          requisition.jobs
+            .map((job) => job.recruiter)
+            .filter((recruiter): recruiter is NonNullable<typeof recruiter> => recruiter !== null)
+            .map((recruiter) => [recruiter.id, recruiter] as const)
+        ).values()
+      );
+
+      return {
+        ...requisition,
+        openDate: requisition.createdAt,
+        daysOpen: Math.max(0, Math.floor(
+          (todayUtc - Date.UTC(
+            requisition.createdAt.getUTCFullYear(),
+            requisition.createdAt.getUTCMonth(),
+            requisition.createdAt.getUTCDate()
+          )) / (24 * 60 * 60 * 1000)
+        )),
+        daysRemaining,
+        isOverdue: daysRemaining !== null && daysRemaining < 0 && !['REJECTED', 'CANCELLED'].includes(requisition.status),
+        recruiters,
+      };
+    });
+
+    successResponse(res, result, 200);
   }
 
   static async getById(req: Request, res: Response): Promise<void> {
@@ -140,7 +215,6 @@ export class RequisitionController {
 
     successResponse(res, requisition, 200);
   }
-
 
   private static async resolveApprovalMetadata(params: {
     departmentId: string;
