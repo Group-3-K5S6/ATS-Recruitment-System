@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { Role } from "../data/roleMenus";
 import Sidebar from "../components/Sidebar";
 import { clearLocalSession } from "../services/session";
+import { atsApi, fromError } from "../features/sprint3/api";
 
 type RecruitmentStatus =
   | "Đang tuyển"
@@ -26,6 +27,56 @@ type RecruitmentRequest = {
   jobPostingStatus: JobPostingStatus;
   lastActionReason?: string;
   lastActionNote?: string;
+};
+
+type ApprovalTrackingRequest = {
+  id: string;
+  title: string;
+  status: string;
+  approvalChain?: string | null;
+  department?: { name: string } | null;
+};
+
+type ApprovalChainStep = {
+  step: number;
+  approverId: string;
+  status: string;
+  decisionAt?: string | null;
+  notes?: string | null;
+};
+
+type ApprovalPerson = {
+  id: string;
+  fullName: string;
+  email?: string;
+};
+
+type ApprovalHistoryEntry = {
+  id: string;
+  decision: string;
+  step: number;
+  fromStatus: string;
+  toStatus: string;
+  actor: ApprovalPerson | null;
+  notes: string | null;
+  processedAt: string;
+};
+
+type ApprovalHistoryResponse = {
+  requisitionId: string;
+  title: string;
+  currentStatus: string;
+  department: { id: string; name: string; code: string } | null;
+  hiringManager: ApprovalPerson | null;
+  designatedApprover: ApprovalPerson | null;
+  currentPendingApprover: ApprovalPerson | null;
+  totalSteps: number;
+  history: ApprovalHistoryEntry[];
+};
+
+type ApprovalChainParseResult = {
+  steps: ApprovalChainStep[];
+  issue: string | null;
 };
 
 type RecruitmentRequestManagementProps = {
@@ -164,6 +215,116 @@ function getPostingClassName(status: JobPostingStatus) {
   return status === "Đang đăng" ? "status-blue" : "status-red";
 }
 
+function getApprovalStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    DRAFT: "Nháp",
+    PENDING_APPROVAL: "Chờ phê duyệt",
+    APPROVED: "Đã duyệt",
+    REJECTED: "Từ chối",
+    CHANGES_REQUESTED: "Chờ bổ sung",
+    CANCELLED: "Đã huỷ",
+  };
+
+  return labels[status] || status;
+}
+
+function getApprovalDecisionLabel(decision: string) {
+  const labels: Record<string, string> = {
+    APPROVE: "Đã duyệt",
+    REJECT: "Từ chối",
+    REQUEST_CHANGES: "Yêu cầu bổ sung",
+  };
+
+  return labels[decision] || decision;
+}
+
+function getApprovalChainStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    PENDING: "Đang chờ xử lý",
+    WAITING: "Chưa đến lượt",
+    APPROVED: "Đã duyệt",
+    REJECTED: "Từ chối",
+    CHANGES_REQUESTED: "Yêu cầu bổ sung",
+  };
+
+  return labels[status] || status;
+}
+
+function isApprovalChainStep(value: unknown): value is ApprovalChainStep {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("step" in value) ||
+    !("approverId" in value) ||
+    !("status" in value) ||
+    typeof value.step !== "number" ||
+    typeof value.approverId !== "string" ||
+    typeof value.status !== "string"
+  ) {
+    return false;
+  }
+
+  return (
+    (!("decisionAt" in value) ||
+      value.decisionAt === null ||
+      typeof value.decisionAt === "string") &&
+    (!("notes" in value) ||
+      value.notes === null ||
+      typeof value.notes === "string")
+  );
+}
+
+function parseApprovalChain(
+  value: string | null | undefined,
+): ApprovalChainParseResult {
+  if (!value) {
+    return {
+      steps: [],
+      issue: "API không cung cấp snapshot chuỗi cấp duyệt cho yêu cầu này.",
+    };
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed) || !parsed.every(isApprovalChainStep)) {
+      return {
+        steps: [],
+        issue: "Snapshot chuỗi cấp duyệt từ API không đúng định dạng.",
+      };
+    }
+
+    const steps = [...parsed].sort((first, second) => first.step - second.step);
+    return {
+      steps,
+      issue:
+        steps.length > 0
+          ? null
+          : "Snapshot chuỗi cấp duyệt không có cấp nào.",
+    };
+  } catch {
+    return {
+      steps: [],
+      issue: "Không thể đọc snapshot chuỗi cấp duyệt từ API.",
+    };
+  }
+}
+
+function formatApprovalDate(value: string | null | undefined) {
+  if (!value) {
+    return "Chưa có dữ liệu";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Thời điểm không hợp lệ";
+  }
+
+  return new Intl.DateTimeFormat("vi-VN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
 function getAllowedActions(status: RecruitmentStatus): ActionType[] {
   switch (status) {
     case "Đang tuyển":
@@ -210,6 +371,90 @@ export default function RecruitmentRequestManagement({
   const [toast, setToast] = useState<{ title: string; message: string } | null>(
     null,
   );
+  const [approvalRequests, setApprovalRequests] = useState<
+    ApprovalTrackingRequest[]
+  >([]);
+  const [isLoadingApprovalRequests, setIsLoadingApprovalRequests] =
+    useState(true);
+  const [approvalRequestsError, setApprovalRequestsError] = useState("");
+  const [selectedApprovalRequest, setSelectedApprovalRequest] =
+    useState<ApprovalTrackingRequest | null>(null);
+  const [approvalHistory, setApprovalHistory] =
+    useState<ApprovalHistoryResponse | null>(null);
+  const [isLoadingApprovalHistory, setIsLoadingApprovalHistory] =
+    useState(false);
+  const [approvalHistoryError, setApprovalHistoryError] = useState("");
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    void atsApi<ApprovalTrackingRequest[]>("/api/requisitions")
+      .then((data) => {
+        if (isCurrent) {
+          setApprovalRequests(data);
+        }
+      })
+      .catch((error: unknown) => {
+        if (isCurrent) {
+          setApprovalRequestsError(fromError(error));
+        }
+      })
+      .finally(() => {
+        if (isCurrent) {
+          setIsLoadingApprovalRequests(false);
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedApprovalRequest) {
+      return;
+    }
+
+    let isCurrent = true;
+
+    void atsApi<ApprovalHistoryResponse>(
+      `/api/requisitions/${encodeURIComponent(selectedApprovalRequest.id)}/approval-history`,
+    )
+      .then((data) => {
+        if (isCurrent) {
+          setApprovalHistory(data);
+        }
+      })
+      .catch((error: unknown) => {
+        if (isCurrent) {
+          setApprovalHistoryError(fromError(error));
+        }
+      })
+      .finally(() => {
+        if (isCurrent) {
+          setIsLoadingApprovalHistory(false);
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [selectedApprovalRequest]);
+
+  useEffect(() => {
+    if (!selectedApprovalRequest) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSelectedApprovalRequest(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedApprovalRequest]);
 
   const closeModal = useCallback(() => {
     if (isSaving) {
@@ -343,6 +588,13 @@ export default function RecruitmentRequestManagement({
     navigate("/login");
   };
 
+  const openApprovalHistory = (request: ApprovalTrackingRequest) => {
+    setApprovalHistory(null);
+    setApprovalHistoryError("");
+    setIsLoadingApprovalHistory(true);
+    setSelectedApprovalRequest(request);
+  };
+
   return (
     <div className="dashboard-layout">
       <Sidebar
@@ -361,7 +613,76 @@ export default function RecruitmentRequestManagement({
             </div>
           </header>
 
+          <section className="dashboard-panel recruitment-panel approval-tracking-panel">
+            <div className="approval-tracking-heading">
+              <div>
+                <h2>Theo dõi trạng thái &amp; lịch sử phê duyệt</h2>
+                <p>
+                  Dữ liệu yêu cầu và lịch sử được tải trực tiếp từ hệ thống.
+                  Chọn một yêu cầu để xem các bước đã ghi nhận và người đang xử lý.
+                </p>
+              </div>
+            </div>
+
+            {isLoadingApprovalRequests ? (
+              <div className="recruitment-empty-state" role="status">
+                Đang tải danh sách yêu cầu từ hệ thống...
+              </div>
+            ) : approvalRequestsError ? (
+              <div className="approval-tracking-error" role="alert">
+                Không thể tải danh sách yêu cầu: {approvalRequestsError}
+              </div>
+            ) : approvalRequests.length === 0 ? (
+              <div className="recruitment-empty-state">
+                API không trả về yêu cầu tuyển dụng nào trong phạm vi tài khoản
+                hiện tại.
+              </div>
+            ) : (
+              <div className="recruitment-table-wrap">
+                <table className="dashboard-table approval-tracking-table">
+                  <thead>
+                    <tr>
+                      <th>Yêu cầu</th>
+                      <th>Phòng ban</th>
+                      <th>Trạng thái phê duyệt</th>
+                      <th>Lịch sử</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {approvalRequests.map((request) => (
+                      <tr key={request.id}>
+                        <td>
+                          <strong>{request.title || "Yêu cầu tuyển dụng"}</strong>
+                          <span className="approval-request-id">{request.id}</span>
+                        </td>
+                        <td>{request.department?.name || "Chưa có dữ liệu"}</td>
+                        <td>
+                          <span className="approval-status-badge">
+                            {getApprovalStatusLabel(request.status)}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="approval-history-button"
+                            onClick={() => openApprovalHistory(request)}
+                          >
+                            Xem lịch sử
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
           <section className="dashboard-panel recruitment-panel">
+            <p className="recruitment-demo-notice">
+              Phần quản lý trạng thái tuyển dụng bên dưới đang dùng dữ liệu mô
+              phỏng có sẵn; không dùng dữ liệu này làm lịch sử phê duyệt.
+            </p>
             <div className="recruitment-toolbar">
               <div className="recruitment-search-box">
                 <label htmlFor="recruitment-search">Tìm kiếm</label>
@@ -655,6 +976,235 @@ export default function RecruitmentRequestManagement({
                 </>
               )}
             </div>
+          </div>
+        )}
+
+        {selectedApprovalRequest && (
+          <div
+            className="recruitment-modal-backdrop"
+            onClick={() => setSelectedApprovalRequest(null)}
+          >
+            <section
+              className="recruitment-modal approval-history-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="approval-history-title"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="recruitment-modal-close"
+                aria-label="Đóng lịch sử phê duyệt"
+                onClick={() => setSelectedApprovalRequest(null)}
+              >
+                ×
+              </button>
+
+              <div className="recruitment-modal-header">
+                <div>
+                  <p className="recruitment-modal-kicker">LỊCH SỬ CHỈ ĐỌC</p>
+                  <h3 id="approval-history-title">
+                    {approvalHistory?.title || selectedApprovalRequest.title}
+                  </h3>
+                  <p className="approval-history-id">
+                    Mã yêu cầu: {selectedApprovalRequest.id}
+                  </p>
+                </div>
+                {approvalHistory && (
+                  <span className="approval-status-badge">
+                    {getApprovalStatusLabel(approvalHistory.currentStatus)}
+                  </span>
+                )}
+              </div>
+
+              {isLoadingApprovalHistory ? (
+                <div className="recruitment-empty-state" role="status">
+                  Đang tải lịch sử phê duyệt...
+                </div>
+              ) : approvalHistoryError ? (
+                <div className="approval-tracking-error" role="alert">
+                  Không thể tải lịch sử: {approvalHistoryError}
+                </div>
+              ) : approvalHistory ? (
+                <>
+                  <div className="approval-history-readonly-note">
+                    Lịch sử này chỉ xem được; giao diện không hỗ trợ chỉnh sửa
+                    hoặc xoá.
+                  </div>
+
+                  <h4 className="approval-history-section-title">
+                    Chuỗi cấp duyệt
+                  </h4>
+                  {(() => {
+                    const chain = parseApprovalChain(
+                      selectedApprovalRequest.approvalChain,
+                    );
+
+                    if (chain.steps.length === 0) {
+                      return (
+                        <>
+                          <div className="approval-tracking-error" role="status">
+                            {chain.issue}
+                          </div>
+                          {approvalHistory.currentStatus === "PENDING_APPROVAL" &&
+                            approvalHistory.currentPendingApprover && (
+                              <section className="approval-current-step">
+                                <span className="approval-timeline-marker is-pending" />
+                                <div>
+                                  <span className="approval-step-state">
+                                    Đang chờ xử lý
+                                  </span>
+                                  <h4>
+                                    {approvalHistory.currentPendingApprover.fullName}
+                                  </h4>
+                                  {approvalHistory.currentPendingApprover.email && (
+                                    <p>
+                                      {approvalHistory.currentPendingApprover.email}
+                                    </p>
+                                  )}
+                                </div>
+                              </section>
+                            )}
+                        </>
+                      );
+                    }
+
+                    return (
+                      <>
+                        <ol className="approval-chain-list">
+                          {chain.steps.map((step) => {
+                            const stepHistory = approvalHistory.history.filter(
+                              (entry) => entry.step === step.step,
+                            );
+                            const latestHistoryEntry =
+                              stepHistory[stepHistory.length - 1];
+                            const currentApprover =
+                              approvalHistory.currentPendingApprover?.id ===
+                              step.approverId
+                                ? approvalHistory.currentPendingApprover
+                                : null;
+                            const approverName =
+                              latestHistoryEntry?.actor?.fullName ||
+                              currentApprover?.fullName;
+                            const statusClass =
+                              step.status === "APPROVED"
+                                ? "is-approved"
+                                : step.status === "REJECTED"
+                                  ? "is-rejected"
+                                  : step.status === "PENDING"
+                                    ? "is-pending"
+                                    : "is-neutral";
+
+                            return (
+                              <li className="approval-chain-step" key={step.step}>
+                                <span
+                                  className={`approval-timeline-marker ${statusClass}`}
+                                />
+                                <div className="approval-history-entry-content">
+                                  <div className="approval-history-entry-heading">
+                                    <strong>Cấp {step.step}</strong>
+                                    <span
+                                      className={`approval-step-state ${statusClass}`}
+                                    >
+                                      {getApprovalChainStatusLabel(step.status)}
+                                    </span>
+                                  </div>
+                                  <p className="approval-history-actor">
+                                    Người duyệt:{" "}
+                                    {approverName ||
+                                      `ID ${step.approverId} (API chưa cung cấp tên)`}
+                                  </p>
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ol>
+                        {approvalHistory.currentStatus === "PENDING_APPROVAL" &&
+                          !approvalHistory.currentPendingApprover && (
+                            <div className="approval-tracking-error" role="status">
+                              API chưa xác định người đang xử lý yêu cầu này.
+                            </div>
+                          )}
+                      </>
+                    );
+                  })()}
+
+                  <h4 className="approval-history-section-title">
+                    Các bước đã được ghi nhận
+                  </h4>
+                  {approvalHistory.history.length === 0 ? (
+                    <div className="recruitment-empty-state">
+                      Chưa có bước phê duyệt nào được ghi nhận trong lịch sử.
+                    </div>
+                  ) : (
+                    <ol className="approval-history-timeline">
+                      {[...approvalHistory.history]
+                        .sort(
+                          (first, second) =>
+                            first.step - second.step ||
+                            new Date(first.processedAt).getTime() -
+                              new Date(second.processedAt).getTime(),
+                        )
+                        .map((entry) => (
+                          <li className="approval-history-entry" key={entry.id}>
+                            <span
+                              className={`approval-timeline-marker ${
+                                entry.decision === "APPROVE"
+                                  ? "is-approved"
+                                  : entry.decision === "REJECT"
+                                    ? "is-rejected"
+                                    : "is-neutral"
+                              }`}
+                            />
+                            <div className="approval-history-entry-content">
+                              <div className="approval-history-entry-heading">
+                                <strong>Cấp {entry.step}</strong>
+                                <span
+                                  className={`approval-step-state ${
+                                    entry.decision === "APPROVE"
+                                      ? "is-approved"
+                                      : entry.decision === "REJECT"
+                                        ? "is-rejected"
+                                        : ""
+                                  }`}
+                                >
+                                  {getApprovalDecisionLabel(entry.decision)}
+                                </span>
+                              </div>
+                              <p className="approval-history-actor">
+                                Người xử lý: {entry.actor?.fullName || "Chưa có dữ liệu"}
+                                {entry.actor?.email ? ` · ${entry.actor.email}` : ""}
+                              </p>
+                              <p className="approval-history-datetime">
+                                Thời điểm: {formatApprovalDate(entry.processedAt)}
+                              </p>
+                              <p className="approval-history-status-change">
+                                {getApprovalStatusLabel(entry.fromStatus)} →{" "}
+                                {getApprovalStatusLabel(entry.toStatus)}
+                              </p>
+                              <p className="approval-history-notes">
+                                <strong>
+                                  {entry.decision === "REJECT"
+                                    ? "Lý do từ chối:"
+                                    : "Ý kiến:"}
+                                </strong>{" "}
+                                {entry.notes || "Không có ý kiến được ghi nhận."}
+                              </p>
+                            </div>
+                          </li>
+                        ))}
+                    </ol>
+                  )}
+
+                  <p className="approval-history-data-limit">
+                    Trạng thái và thứ tự cấp lấy từ snapshot của yêu cầu. Với
+                    người duyệt ở cấp chưa xử lý, API chỉ cung cấp ID; tên người
+                    duyệt chỉ hiển thị khi có trong lịch sử hoặc là người đang
+                    được phân công.
+                  </p>
+                </>
+              ) : null}
+            </section>
           </div>
         )}
 
