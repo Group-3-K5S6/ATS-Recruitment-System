@@ -38,8 +38,8 @@ export class CandidatePolicy {
       return true;
     }
 
-    // 2. RECRUITER and APPROVER have general read access
-    if (user.roles.includes(RoleType.RECRUITER) || user.roles.includes(RoleType.APPROVER)) {
+    // 2. APPROVER has general read access
+    if (user.roles.includes(RoleType.APPROVER)) {
       return true;
     }
 
@@ -49,7 +49,15 @@ export class CandidatePolicy {
       include: {
         applications: {
           include: {
-            job: true,
+            job: {
+              include: {
+                requisition: {
+                  include: {
+                    supportingRecruiters: true,
+                  },
+                },
+              },
+            },
             interviews: true,
           },
         },
@@ -57,6 +65,18 @@ export class CandidatePolicy {
     });
 
     if (!candidate) return false;
+
+    // RECRUITER role: Only view candidates applied to their assigned positions/requisitions
+    if (user.roles.includes(RoleType.RECRUITER)) {
+      const isAssigned = candidate.applications.some(
+        (app) =>
+          app.assignedRecruiterId === user.id ||
+          app.job.recruiterId === user.id ||
+          app.job.requisition?.leadRecruiterId === user.id ||
+          app.job.requisition?.supportingRecruiters?.some((s) => s.recruiterId === user.id)
+      );
+      if (isAssigned) return true;
+    }
 
     // 3. CANDIDATE role: Can only view their own profile
     if (user.roles.includes(RoleType.CANDIDATE)) {

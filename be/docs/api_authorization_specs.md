@@ -155,6 +155,31 @@ Tài liệu đặc tả toàn diện về **Authentication, Role-Based Access Co
   - Các role khác: Bị từ chối (403 Forbidden).
 - **Audit Action**: `REQUISITION_APPROVED` hoặc `REQUISITION_REJECTED`
 
+#### `POST /api/requisitions/:id/assign` (SCRUM-97 / SCRUM-41)
+- **Auth**: Required
+- **Permission**: `requisitions:update`
+- **Scope**:
+  - `HR_MANAGER`, `ADMIN`: Allowed phân chia một nhà tuyển dụng chính (`leadRecruiterId`) và nhiều nhà tuyển dụng hỗ trợ (`supportingRecruiterIds`).
+  - Các role khác: Bị từ chối (`403 FORBIDDEN_SCOPE`).
+- **Validation**:
+  - Người phụ trách chính và các người hỗ trợ bắt buộc phải là user có vai trò `RECRUITER` và `isActive === true`.
+  - Không cho phép người phụ trách chính đồng thời nằm trong danh sách hỗ trợ (`400 DUPLICATE_RECRUITER`).
+- **Lịch sử & Kiểm toán**:
+  - Tự động ghi nhận bản ghi lịch sử bất biến `RequisitionAssignmentHistory` với hành động `ASSIGN` (lần đầu), `HANDOVER` (khi đổi người phụ trách chính), hoặc `UPDATE_SUPPORTING`.
+  - Ghi vết `AuditAction.REQUISITION_ASSIGNED` hoặc `AuditAction.REQUISITION_HANDOVER`.
+
+#### `GET /api/requisitions/:id/assignment-history`
+- **Auth**: Required
+- **Permission**: `requisitions:read`
+- **Scope**: `HR_MANAGER`, `ADMIN`, `HIRING_MANAGER` (thuộc phòng ban), và `RECRUITER` (được phân công vị trí này).
+
+#### `GET /api/requisitions/:id/applications` & `GET /api/applications`
+- **Auth**: Required
+- **Permission**: `candidates:read`
+- **Scope**:
+  - `HR_MANAGER`, `ADMIN`: Toàn quyền xem và tìm kiếm ứng viên của mọi vị trí.
+  - `RECRUITER`: Chỉ tìm kiếm và xem ứng viên thuộc các vị trí tuyển dụng được phân công phụ trách (`leadRecruiter` hoặc `supportingRecruiter`). Vị trí ngoài phạm vi bị chặn `403 FORBIDDEN_SCOPE`.
+
 ---
 
 ### 4.4. Module Tin Tuyển Dụng (Job Postings)

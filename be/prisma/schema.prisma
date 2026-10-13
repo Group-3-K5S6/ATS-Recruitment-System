@@ -49,6 +49,12 @@ model User {
 
   // S1-03 / S1-04
   passwordHistories PasswordHistory[]
+  // SCRUM-97 / SCRUM-41: Phân công recruiter
+  leadRequisitions            Requisition[]                      @relation("LeadRecruiterRequisitions")
+  supportingRequisitions      RequisitionSupportingRecruiter[]   @relation("SupportingRecruiterAssignments")
+  requisitionAssignmentHistoryActor RequisitionAssignmentHistory[] @relation("AssignmentHistoryActor")
+  assignmentHistoryPrevLead   RequisitionAssignmentHistory[]     @relation("AssignmentHistoryPrevLead")
+  assignmentHistoryNewLead    RequisitionAssignmentHistory[]     @relation("AssignmentHistoryNewLead")
    // S1-02 - Cac phien dang nhap cua nguoi dung
   authSessions AuthSession[]
 }
@@ -147,6 +153,12 @@ model Requisition {
   updatedAt       DateTime @updatedAt
   // SCRUM-89: Luồng phê duyệt nhiều cấp & lịch sử
   approvalHistory RequisitionApprovalHistory[]
+
+  // SCRUM-97 / SCRUM-41: Phân chia recruiter chính và hỗ trợ
+  leadRecruiterId      String?
+  leadRecruiter        User?                            @relation("LeadRecruiterRequisitions", fields: [leadRecruiterId], references: [id])
+  supportingRecruiters RequisitionSupportingRecruiter[]
+  assignmentHistory    RequisitionAssignmentHistory[]
 
   // S3-01: Luồng phê duyệt
   approvalWorkflowId      String?
@@ -468,6 +480,42 @@ model RequisitionApprovalHistory {
 
   requisition Requisition @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
   actor       User        @relation("ApprovalHistoryActor", fields: [actorId], references: [id])
+
+  @@index([requisitionId])
+  @@index([actorId])
+}
+
+// SCRUM-97 / SCRUM-41 - Nhà tuyển dụng hỗ trợ cho yêu cầu tuyển dụng
+model RequisitionSupportingRecruiter {
+  id            String   @id @default(uuid())
+  requisitionId String
+  recruiterId   String
+  assignedAt    DateTime @default(now())
+
+  requisition Requisition @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  recruiter   User        @relation("SupportingRecruiterAssignments", fields: [recruiterId], references: [id], onDelete: Cascade)
+
+  @@unique([requisitionId, recruiterId])
+  @@index([requisitionId])
+  @@index([recruiterId])
+}
+
+// SCRUM-97 / SCRUM-41 - Lịch sử phân công & chuyển giao người phụ trách (bất biến)
+model RequisitionAssignmentHistory {
+  id                     String   @id @default(uuid())
+  requisitionId          String
+  actorId                String
+  previousLeadRecruiterId String?
+  newLeadRecruiterId     String?
+  supportingRecruiterIds String?  // JSON chuỗi mảng ID nhà tuyển dụng hỗ trợ
+  action                 String   @default("HANDOVER") // "ASSIGN" | "HANDOVER" | "UPDATE_SUPPORTING" | "REASSIGN"
+  notes                  String?
+  createdAt              DateTime @default(now())
+
+  requisition            Requisition @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  actor                  User        @relation("AssignmentHistoryActor", fields: [actorId], references: [id])
+  previousLeadRecruiter  User?       @relation("AssignmentHistoryPrevLead", fields: [previousLeadRecruiterId], references: [id])
+  newLeadRecruiter       User?       @relation("AssignmentHistoryNewLead", fields: [newLeadRecruiterId], references: [id])
 
   @@index([requisitionId])
   @@index([actorId])

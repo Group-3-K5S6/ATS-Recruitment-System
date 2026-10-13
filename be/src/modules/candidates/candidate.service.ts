@@ -11,11 +11,38 @@ export class CandidateService {
     // 1. Admin & HR Manager: Global access
     if (
       currentUser.roles.includes(RoleType.ADMIN) ||
-      currentUser.roles.includes(RoleType.HR_MANAGER) ||
-      currentUser.roles.includes(RoleType.RECRUITER)
+      currentUser.roles.includes(RoleType.HR_MANAGER)
     ) {
       const candidate = await prisma.candidate.findUnique({
         where: { id: candidateId },
+        include: {
+          applications: {
+            include: {
+              job: true,
+              interviews: true,
+            },
+          },
+        },
+      });
+      return candidate ? CandidatePolicy.sanitize(currentUser, candidate) : null;
+    }
+
+    // 1b. Recruiter: Candidate must have applied to assigned position/requisition
+    if (currentUser.roles.includes(RoleType.RECRUITER)) {
+      const candidate = await prisma.candidate.findFirst({
+        where: {
+          id: candidateId,
+          applications: {
+            some: {
+              OR: [
+                { assignedRecruiterId: currentUser.id },
+                { job: { recruiterId: currentUser.id } },
+                { job: { requisition: { leadRecruiterId: currentUser.id } } },
+                { job: { requisition: { supportingRecruiters: { some: { recruiterId: currentUser.id } } } } },
+              ],
+            },
+          },
+        },
         include: {
           applications: {
             include: {
@@ -128,10 +155,33 @@ export class CandidateService {
   static async listCandidatesForUser(currentUser: AuthenticatedUser) {
     if (
       currentUser.roles.includes(RoleType.ADMIN) ||
-      currentUser.roles.includes(RoleType.HR_MANAGER) ||
-      currentUser.roles.includes(RoleType.RECRUITER)
+      currentUser.roles.includes(RoleType.HR_MANAGER)
     ) {
       const candidates = await prisma.candidate.findMany({
+        include: {
+          applications: {
+            include: { job: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      return candidates.map((c) => CandidatePolicy.sanitize(currentUser, c));
+    }
+
+    if (currentUser.roles.includes(RoleType.RECRUITER)) {
+      const candidates = await prisma.candidate.findMany({
+        where: {
+          applications: {
+            some: {
+              OR: [
+                { assignedRecruiterId: currentUser.id },
+                { job: { recruiterId: currentUser.id } },
+                { job: { requisition: { leadRecruiterId: currentUser.id } } },
+                { job: { requisition: { supportingRecruiters: { some: { recruiterId: currentUser.id } } } } },
+              ],
+            },
+          },
+        },
         include: {
           applications: {
             include: { job: true },
