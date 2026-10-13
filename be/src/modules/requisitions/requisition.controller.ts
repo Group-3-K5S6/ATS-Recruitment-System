@@ -1104,4 +1104,228 @@ export class RequisitionController {
       200
     );
   }
+  /**
+   * POST /api/requisitions/:id/close
+   * SCRUM-99: Tạm dừng (ON_HOLD), Đóng/Hủy (CANCELLED), hoặc Đã tuyển đủ (FILLED) yêu cầu tuyển dụng.
+   *
+   * Body:
+   *   action: 'CANCEL' | 'ON_HOLD' | 'FILLED'
+   *   reason: string  (bắt buộc)
+   *   force?: boolean (nếu còn ứng viên trong pipeline, mặc định false = trả cảnh báo)
+   */
+  static async closeRequisition(req: Request, res: Response): Promise<void> {
+    const { id } = req.params;
+    const user = req.user!;
+
+    // --- Quyền ---
+    const canClose = await RequisitionPolicy.canClose(user, id);
+    if (!canClose) {
+      errorResponse(
+        res,
+        'Bạn không có quyền tạm dừng hoặc đóng yêu cầu tuyển dụng. Chỉ Trưởng phòng Nhân sự hoặc Admin mới được thực hiện thao tác này.',
+        403,
+        'FORBIDDEN_SCOPE'
+      );
+      return;
+    }
+
+    // --- Validation body ---
+    const closeSchema = z.object({
+      action: z.enum(['CANCEL', 'ON_HOLD', 'FILLED']),
+      reason: z.string().trim().min(1, 'Lý do không được để trống.'),
+      force: z.boolean().optional().default(false),
+    });
+
+    const parsed = closeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      const firstError = parsed.error.errors[0];
+      errorResponse(
+        res,
+        firstError?.message ?? 'Dữ liệu không hợp lệ.',
+        400,
+        'VALIDATION_ERROR'
+      );
+      return;
+    }
+
+    const { action, reason, force } = parsed.data;
+
+    // --- Lấy requisition ---
+    const existing = await prisma.requisition.findUnique({
+      where: { id },
+      include: {
+        jobs: { select: { id: true, status: true } },
+      },
+    });
+
+    if (!existing) {
+      errorResponse(res, 'Không tìm thấy yêu cầu tuyển dụng.', 404, 'NOT_FOUND');
+      return;
+    }
+
+    // --- Kiểm tra trạng thái hợp lệ để chuyển ---
+    // Trạng thái kết thúc không thể chuyển tiếp nữa.
+    const TERMINAL_STATUSES = ['CANCELLED', 'FILLED'];
+    if (TERMINAL_STATUSES.includes(existing.status)) {
+      errorResponse(
+        res,
+        `Yêu cầu tuyển dụng đang ở trạng thái "${existing.status}" và không thể thay đổi thêm.`,
+        400,
+        'INVALID_STATUS'
+      );
+      return;
+    }
+
+    // ON_HOLD chỉ chuyển từ trạng thái đang hoạt động (không phải từ trạng thái kết thúc).
+    if (action === 'ON_HOLD' && existing.status === 'ON_HOLD') {
+      errorResponse(
+        res,
+        'Yêu cầu tuyển dụng đã ở trạng thái tạm dừng (ON_HOLD).',
+        400,
+        'INVALID_STATUS'
+      );
+      return;
+    }
+
+    // --- Kiểm tra ứng viên đang trong pipeline ---
+    // Đếm ứng viên ACTIVE trong tất cả các job thuộc requisition này.
+    const jobIds = existing.jobs.map((j) => j.id);
+    let activeCandidateCount = 0;
+    if (jobIds.length > 0) {
+      activeCandidateCount = await prisma.application.count({
+        where: {
+          jobId: { in: jobIds },
+          status: 'ACTIVE',
+        },
+      });
+    }
+
+    if (activeCandidateCount > 0 && !force) {
+      // Trả cảnh báo thay vì xử lý âm thầm — người dùng phải gửi force=true để xác nhận.
+      successResponse(
+        res,
+        {
+          warning: true,
+          activeCandidateCount,
+          message: `Còn ${activeCandidateCount} ứng viên đang trong pipeline. Gửi lại với force=true để xác nhận thao tác. Ứng viên sẽ không bị xóa.`,
+        },
+        200,
+        'PIPELINE_WARNING'
+      );
+      return;
+    }
+
+    // --- Xác định trạng thái đích ---
+    const targetStatus =
+      action === 'ON_HOLD' ? 'ON_HOLD' :
+      action === 'FILLED' ? 'FILLED' :
+      'CANCELLED';
+
+    const fromStatus = existing.status;
+
+    // --- Transaction: chi mot request duoc chuyen trang thai tu ban ghi da doc ---
+    // CAS theo status + updatedAt tranh cap nhat de khi co thao tac dong thoi.
+    // Neu mat quyen cap nhat, khong dong job va khong ghi them history.
+    let updated;
+    let unpublishedJobCount = 0;
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        const claimed = await tx.requisition.updateMany({
+          where: {
+            id,
+            status: fromStatus,
+            updatedAt: existing.updatedAt,
+          },
+          data: { status: targetStatus },
+        });
+
+        if (claimed.count !== 1) return null;
+
+        // Dong cac job dang PUBLISHED trong cung transaction; khong dung
+        // danh sach job lay truoc transaction (co the da thay doi).
+        const closedJobs = await tx.job.updateMany({
+          where: { requisitionId: id, status: 'PUBLISHED' },
+          data: { status: 'CLOSED' },
+        });
+
+        await tx.requisitionApprovalHistory.create({
+          data: {
+            requisitionId: id,
+            actorId: user.id,
+            fromStatus,
+            toStatus: targetStatus,
+            decision: action,
+            step: null,
+            notes: reason,
+          },
+        });
+
+        const requisition = await tx.requisition.findUniqueOrThrow({ where: { id } });
+        return { requisition, unpublishedJobCount: closedJobs.count };
+      });
+
+      if (!result) {
+        errorResponse(
+          res,
+          'Yêu cầu đã được thay đổi bởi thao tác khác. Vui lòng tải lại và thử lại.',
+          409,
+          'CONCURRENT_MODIFICATION'
+        );
+        return;
+      }
+      updated = result.requisition;
+      unpublishedJobCount = result.unpublishedJobCount;
+    } catch (error) {
+      // SQLite/Prisma co the tra P2034 neu hai transaction tranh chap.
+      if (
+        typeof error === 'object' && error !== null &&
+        'code' in error && error.code === 'P2034'
+      ) {
+        errorResponse(res, 'Yêu cầu đang được cập nhật. Vui lòng thử lại.', 409, 'CONCURRENT_MODIFICATION');
+        return;
+      }
+      console.error('[Requisition] closeRequisition failed:', error);
+      errorResponse(res, 'Không thể thực hiện thao tác. Vui lòng thử lại.', 500, 'SERVER_ERROR');
+      return;
+    }
+
+    // --- Audit log ---
+    const auditActionMap: Record<string, AuditAction> = {
+      CANCEL: AuditAction.REQUISITION_CLOSED,
+      ON_HOLD: AuditAction.REQUISITION_ON_HOLD,
+      FILLED: AuditAction.REQUISITION_FILLED,
+    };
+
+    await recordRequestAudit(
+      req,
+      auditActionMap[action]!,
+      'requisition',
+      updated.id,
+      {
+        fromStatus,
+        toStatus: targetStatus,
+        action,
+        reason,
+        unpublishedJobCount,
+        activeCandidateCount,
+      }
+    );
+
+    const messageMap: Record<string, string> = {
+      CANCEL: 'Yêu cầu tuyển dụng đã được hủy (CANCELLED).',
+      ON_HOLD: 'Yêu cầu tuyển dụng đã được tạm dừng (ON_HOLD).',
+      FILLED: 'Yêu cầu tuyển dụng đã được đánh dấu đã tuyển đủ (FILLED).',
+    };
+
+    successResponse(
+      res,
+      {
+        ...updated,
+        unpublishedJobCount,
+        activeCandidateCount,
+      },
+      200,
+      messageMap[action]!
+    );
+  }
 }
