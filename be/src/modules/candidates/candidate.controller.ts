@@ -144,7 +144,7 @@ export class CandidateController {
     const { id } = req.params;
     const user = req.user!;
 
-    const canDelete = await CandidatePolicy.canDelete(user);
+    const canDelete = await CandidatePolicy.canDelete(user, id);
     if (!canDelete) {
       errorResponse(res, 'Access denied. You cannot delete candidate records.', 403, 'FORBIDDEN_ROLE');
       return;

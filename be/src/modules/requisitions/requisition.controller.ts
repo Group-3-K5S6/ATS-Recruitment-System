@@ -9,6 +9,7 @@ import { RoleType } from '../../rbac/roles';
 import { ApprovalWorkflowService } from '../approval-workflows/approval-workflow.service';
 import { ApprovalStepSnapshot } from '../approval-workflows/approval-workflow.types';
 import { Prisma } from '@prisma/client';
+import { CandidatePolicy } from '../../policies/candidate.policy';
 
 
 const optionalText = z.preprocess(
@@ -44,7 +45,15 @@ const requisitionFields = {
   description: optionalText,
   requirements: optionalText,
   salaryExplanation: optionalText,
+  leadRecruiterId: dbRecordId.optional(),
+  supportingRecruiterIds: z.array(dbRecordId).optional(),
 };
+
+export const assignRecruitersSchema = z.object({
+  leadRecruiterId: dbRecordId,
+  supportingRecruiterIds: z.array(dbRecordId).optional().default([]),
+  notes: optionalText,
+});
 
 export const createRequisitionSchema = z.object({
   ...requisitionFields,
@@ -87,6 +96,44 @@ function utcDay(value: string): Date {
   return new Date(Date.UTC(year, month - 1, day));
 }
 
+/** Validate the same recruiter-role and active-account rules as the assignment endpoint. */
+async function validateRecruiterSelection(
+  leadRecruiterId: string,
+  supportingRecruiterIds: string[]
+): Promise<{ message: string; code: string } | null> {
+  if (supportingRecruiterIds.includes(leadRecruiterId)) {
+    return {
+      message: 'Nhà tuyển dụng chính không thể đồng thời là nhà tuyển dụng hỗ trợ.',
+      code: 'DUPLICATE_RECRUITER',
+    };
+  }
+
+  const recruiterIds = [leadRecruiterId, ...new Set(supportingRecruiterIds)];
+  const users = await prisma.user.findMany({
+    where: { id: { in: recruiterIds } },
+    include: { roles: { include: { role: true } } },
+  });
+  const byId = new Map(users.map((u) => [u.id, u]));
+  const isRecruiter = (id: string): boolean => {
+    const account = byId.get(id);
+    return !!account && account.isActive && account.roles.some((r) => r.role.name === RoleType.RECRUITER);
+  };
+
+  if (!isRecruiter(leadRecruiterId)) {
+    return {
+      message: 'Nhà tuyển dụng chính không hợp lệ, bị khóa hoặc không có vai trò RECRUITER.',
+      code: 'INVALID_RECRUITER',
+    };
+  }
+  if (supportingRecruiterIds.some((id) => !isRecruiter(id))) {
+    return {
+      message: 'Danh sách recruiter hỗ trợ có tài khoản không tồn tại, bị khóa hoặc không đúng vai trò.',
+      code: 'INVALID_SUPPORTING_RECRUITER',
+    };
+  }
+  return null;
+}
+
 export class RequisitionController {
   static async list(req: Request, res: Response): Promise<void> {
     const user = req.user!;
@@ -103,8 +150,15 @@ export class RequisitionController {
     }
 
     const scope: Prisma.RequisitionWhereInput = {};
-    if (user.roles.includes(RoleType.ADMIN) || user.roles.includes(RoleType.HR_MANAGER) || user.roles.includes(RoleType.RECRUITER)) {
+    if (user.roles.includes(RoleType.ADMIN) || user.roles.includes(RoleType.HR_MANAGER)) {
       // Full list only for roles granted organization-wide requisition visibility.
+    } else if (user.roles.includes(RoleType.RECRUITER)) {
+      // S3-06: preserve S3-08 filters while restricting a recruiter to assigned requisitions.
+      scope.OR = [
+        { leadRecruiterId: user.id },
+        { supportingRecruiters: { some: { recruiterId: user.id } } },
+        { hiringManagerId: user.id },
+      ];
     } else if (user.roles.includes(RoleType.HIRING_MANAGER)) {
       scope.OR = [
         { hiringManagerId: user.id },
@@ -141,6 +195,12 @@ export class RequisitionController {
         jobs: {
           select: {
             id: true,
+            recruiter: { select: { id: true, fullName: true, email: true } },
+          },
+        },
+        leadRecruiter: { select: { id: true, fullName: true, email: true } },
+        supportingRecruiters: {
+          include: {
             recruiter: { select: { id: true, fullName: true, email: true } },
           },
         },
@@ -209,6 +269,20 @@ export class RequisitionController {
         department: true,
         hiringManager: { select: { id: true, fullName: true, email: true } },
         approver: { select: { id: true, fullName: true, email: true } },
+        leadRecruiter: { select: { id: true, fullName: true, email: true } },
+        supportingRecruiters: {
+          include: {
+            recruiter: { select: { id: true, fullName: true, email: true } },
+          },
+        },
+        assignmentHistory: {
+          include: {
+            actor: { select: { id: true, fullName: true, email: true } },
+            previousLeadRecruiter: { select: { id: true, fullName: true, email: true } },
+            newLeadRecruiter: { select: { id: true, fullName: true, email: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
         jobs: true,
       },
     });
@@ -486,27 +560,75 @@ export class RequisitionController {
       return;
     }
 
-    const requisition = await prisma.requisition.create({
-      data: {
-        title: title || 'Bản nháp yêu cầu tuyển dụng',
-        departmentId,
-        hiringManagerId: user.id,
-        headcount,
-        budget,
-        approverId: approvalRes.approverId || undefined,
-        approvalWorkflowId: approvalRes.workflowId || undefined,
-        approvalWorkflowVersion: approvalRes.workflowVersion || undefined,
-        approvalChain: approvalRes.chain || undefined,
-        jobTitleId: jobTitleRecord?.id,
-        reason: reason || undefined,
-        proposedSalaryMin: salaryMin,
-        proposedSalaryMax: salaryMax,
-        targetDate,
-        description: description || undefined,
-        requirements: requirements || undefined,
-        salaryExplanation: salaryExplanation || undefined,
-        status,
-      },
+    const requestedAssignment = data.leadRecruiterId !== undefined || data.supportingRecruiterIds !== undefined;
+    if (requestedAssignment && !RequisitionPolicy.canAssign(user)) {
+      errorResponse(res, 'Bạn không có quyền phân công nhà tuyển dụng.', 403, 'FORBIDDEN_SCOPE');
+      return;
+    }
+    if (data.supportingRecruiterIds?.length && !data.leadRecruiterId) {
+      errorResponse(res, 'Phải chọn recruiter chính trước khi chọn người hỗ trợ.', 400, 'INVALID_RECRUITER');
+      return;
+    }
+
+    const initialLeadRecruiterId: string | undefined = data.leadRecruiterId;
+    const initialSupportingIds: string[] = Array.from(new Set(data.supportingRecruiterIds ?? []));
+    if (initialLeadRecruiterId) {
+      const issue = await validateRecruiterSelection(initialLeadRecruiterId, initialSupportingIds);
+      if (issue) {
+        errorResponse(res, issue.message, 400, issue.code);
+        return;
+      }
+    }
+
+    // Requisition, supporting assignments, and audit history must commit atomically.
+    const requisition = await prisma.$transaction(async (tx) => {
+      const created = await tx.requisition.create({
+        data: {
+          title: title || 'Bản nháp yêu cầu tuyển dụng',
+          departmentId,
+          hiringManagerId: user.id,
+          headcount,
+          budget,
+          approverId: approvalRes.approverId || undefined,
+          approvalWorkflowId: approvalRes.workflowId || undefined,
+          approvalWorkflowVersion: approvalRes.workflowVersion || undefined,
+          approvalChain: approvalRes.chain || undefined,
+          jobTitleId: jobTitleRecord?.id,
+          reason: reason || undefined,
+          proposedSalaryMin: salaryMin,
+          proposedSalaryMax: salaryMax,
+          targetDate,
+          description: description || undefined,
+          requirements: requirements || undefined,
+          salaryExplanation: salaryExplanation || undefined,
+          leadRecruiterId: initialLeadRecruiterId,
+          status,
+        },
+      });
+
+      if (initialLeadRecruiterId) {
+        if (initialSupportingIds.length > 0) {
+          await tx.requisitionSupportingRecruiter.createMany({
+            data: initialSupportingIds.map((recruiterId) => ({
+              requisitionId: created.id,
+              recruiterId,
+            })),
+          });
+        }
+
+        await tx.requisitionAssignmentHistory.create({
+          data: {
+            requisitionId: created.id,
+            actorId: user.id,
+            previousLeadRecruiterId: null,
+            newLeadRecruiterId: initialLeadRecruiterId,
+            supportingRecruiterIds: JSON.stringify(initialSupportingIds),
+            action: 'ASSIGN',
+            notes: 'Phân công nhà tuyển dụng khi tạo yêu cầu tuyển dụng',
+          },
+        });
+      }
+      return created;
     });
 
     await recordRequestAudit(
@@ -549,9 +671,25 @@ export class RequisitionController {
       return;
     }
 
-    const existing = await prisma.requisition.findUnique({ where: { id } });
+    const existing = await prisma.requisition.findUnique({
+      where: { id },
+      include: { supportingRecruiters: true },
+    });
     if (!existing) {
       errorResponse(res, 'Không tìm thấy yêu cầu tuyển dụng.', 404, 'NOT_FOUND');
+      return;
+    }
+
+    if (
+      (data.leadRecruiterId !== undefined || data.supportingRecruiterIds !== undefined) &&
+      !RequisitionPolicy.canAssign(user)
+    ) {
+      errorResponse(
+        res,
+        'Bạn không có quyền thay đổi người phụ trách yêu cầu tuyển dụng.',
+        403,
+        'FORBIDDEN_SCOPE'
+      );
       return;
     }
 
@@ -762,32 +900,101 @@ export class RequisitionController {
       return;
     }
 
-    const updated = await prisma.requisition.update({
-      where: { id },
-      data: {
-        title: title || 'Bản nháp yêu cầu tuyển dụng',
-        departmentId,
-        headcount,
-        budget:
-          data.budget === undefined &&
-            data.proposedSalaryMax !== undefined &&
-            salaryMax !== null && salaryMax !== undefined
-            ? salaryMax * headcount
-            : budget,
-        approverId: approvalRes.approverId ?? null,
-        approvalWorkflowId: approvalRes.workflowId ?? null,
-        approvalWorkflowVersion: approvalRes.workflowVersion ?? null,
-        approvalChain: approvalRes.chain ?? null,
-        jobTitleId: jobTitleId ?? null,
-        reason,
-        proposedSalaryMin: salaryMin,
-        proposedSalaryMax: salaryMax,
-        targetDate,
-        description: description || null,
-        requirements: requirements || null,
-        salaryExplanation: salaryExplanation || null,
-        status: isDraft ? 'DRAFT' : 'PENDING_APPROVAL',
-      },
+    const assignmentRequested = data.leadRecruiterId !== undefined || data.supportingRecruiterIds !== undefined;
+    const updatedLeadRecruiterId = data.leadRecruiterId ?? existing.leadRecruiterId;
+    const originalSupportingIds = existing.supportingRecruiters.map((entry) => entry.recruiterId);
+    const updatedSupportingIds: string[] = Array.from(new Set<string>(data.supportingRecruiterIds ?? originalSupportingIds));
+    let assignmentAction: 'ASSIGN' | 'HANDOVER' | 'UPDATE_SUPPORTING' | null = null;
+
+    if (assignmentRequested) {
+      if (!updatedLeadRecruiterId && updatedSupportingIds.length > 0) {
+        errorResponse(res, 'Phải chọn recruiter chính trước khi chọn người hỗ trợ.', 400, 'INVALID_RECRUITER');
+        return;
+      }
+      if (updatedLeadRecruiterId) {
+        const issue = await validateRecruiterSelection(updatedLeadRecruiterId, updatedSupportingIds);
+        if (issue) {
+          errorResponse(res, issue.message, 400, issue.code);
+          return;
+        }
+      }
+
+      const leadChanged = updatedLeadRecruiterId !== existing.leadRecruiterId;
+      const oldSet = new Set(originalSupportingIds);
+      const supportChanged = oldSet.size !== updatedSupportingIds.length ||
+        updatedSupportingIds.some((id) => !oldSet.has(id));
+      if (leadChanged) assignmentAction = existing.leadRecruiterId ? 'HANDOVER' : 'ASSIGN';
+      else if (supportChanged) assignmentAction = 'UPDATE_SUPPORTING';
+    }
+
+    // Keep generic edits and optional assignment/history updates in one transaction.
+    const updated = await prisma.$transaction(async (tx) => {
+      const saved = await tx.requisition.update({
+        where: { id },
+        data: {
+          title: title || 'Bản nháp yêu cầu tuyển dụng',
+          departmentId,
+          headcount,
+          budget:
+            data.budget === undefined &&
+              data.proposedSalaryMax !== undefined &&
+              salaryMax !== null && salaryMax !== undefined
+              ? salaryMax * headcount
+              : budget,
+          approverId: approvalRes.approverId ?? null,
+          approvalWorkflowId: approvalRes.workflowId ?? null,
+          approvalWorkflowVersion: approvalRes.workflowVersion ?? null,
+          approvalChain: approvalRes.chain ?? null,
+          jobTitleId: jobTitleId ?? null,
+          reason,
+          proposedSalaryMin: salaryMin,
+          proposedSalaryMax: salaryMax,
+          targetDate,
+          description: description || null,
+          requirements: requirements || null,
+          salaryExplanation: salaryExplanation || null,
+          leadRecruiterId: updatedLeadRecruiterId,
+          status: isDraft ? 'DRAFT' : 'PENDING_APPROVAL',
+        },
+      });
+
+      if (assignmentAction && updatedLeadRecruiterId) {
+        const originalSet = new Set(originalSupportingIds);
+        const supportChanged = originalSet.size !== updatedSupportingIds.length ||
+          updatedSupportingIds.some((id) => !originalSet.has(id));
+        if (supportChanged) {
+          await tx.requisitionSupportingRecruiter.deleteMany({ where: { requisitionId: id } });
+          if (updatedSupportingIds.length > 0) {
+            await tx.requisitionSupportingRecruiter.createMany({
+              data: updatedSupportingIds.map((recruiterId) => ({ requisitionId: id, recruiterId })),
+            });
+          }
+        }
+
+        if (updatedLeadRecruiterId !== existing.leadRecruiterId) {
+          await tx.job.updateMany({
+            where: { requisitionId: id },
+            data: { recruiterId: updatedLeadRecruiterId },
+          });
+        }
+
+        await tx.requisitionAssignmentHistory.create({
+          data: {
+            requisitionId: id,
+            actorId: user.id,
+            previousLeadRecruiterId: existing.leadRecruiterId,
+            newLeadRecruiterId: updatedLeadRecruiterId,
+            supportingRecruiterIds: JSON.stringify(updatedSupportingIds),
+            action: assignmentAction,
+            notes: assignmentAction === 'HANDOVER'
+              ? 'Chuyển giao người phụ trách khi cập nhật yêu cầu tuyển dụng'
+              : assignmentAction === 'UPDATE_SUPPORTING'
+                ? 'Cập nhật recruiter hỗ trợ khi sửa yêu cầu tuyển dụng'
+                : 'Phân công tuyển dụng khi cập nhật',
+          },
+        });
+      }
+      return saved;
     });
 
     await recordRequestAudit(
@@ -1401,5 +1608,352 @@ export class RequisitionController {
       200,
       messageMap[action]!
     );
+  }
+
+  /**
+   * SCRUM-97 / SCRUM-41: Phân công nhà tuyển dụng phụ trách (Chính & Hỗ trợ)
+   * Có ghi lịch sử chuyển giao khi đổi người phụ trách
+   */
+  static async assignRecruiters(req: Request, res: Response): Promise<void> {
+    const { id } = req.params;
+    const { leadRecruiterId, supportingRecruiterIds = [], notes } = req.body;
+    const user = req.user!;
+
+    // 1. Phân quyền: Chỉ HR_MANAGER và ADMIN được phân công nhà tuyển dụng
+    if (!RequisitionPolicy.canAssign(user)) {
+      errorResponse(
+        res,
+        'Bạn không có quyền phân công người phụ trách yêu cầu tuyển dụng.',
+        403,
+        'FORBIDDEN_SCOPE'
+      );
+      return;
+    }
+
+    // 2. Kiểm tra Requisition tồn tại
+    const requisition = await prisma.requisition.findUnique({
+      where: { id },
+      include: {
+        supportingRecruiters: true,
+      },
+    });
+
+    if (!requisition) {
+      errorResponse(res, 'Không tìm thấy yêu cầu tuyển dụng.', 404, 'NOT_FOUND');
+      return;
+    }
+
+    // 3. Kiểm tra nhà tuyển dụng chính
+    const leadUser = await prisma.user.findUnique({
+      where: { id: leadRecruiterId },
+      include: { roles: { include: { role: true } } },
+    });
+
+    if (!leadUser || !leadUser.isActive || !leadUser.roles.some((r) => r.role.name === RoleType.RECRUITER)) {
+      errorResponse(
+        res,
+        'Nhà tuyển dụng chính không hợp lệ, không hoạt động hoặc không có vai trò RECRUITER.',
+        400,
+        'INVALID_RECRUITER'
+      );
+      return;
+    }
+
+    // 4. Kiểm tra danh sách nhà tuyển dụng hỗ trợ
+    const rawSupportingIds: string[] = Array.isArray(supportingRecruiterIds) ? supportingRecruiterIds : [];
+    if (rawSupportingIds.includes(leadRecruiterId)) {
+      errorResponse(
+        res,
+        'Nhà tuyển dụng chính không thể đồng thời là nhà tuyển dụng hỗ trợ.',
+        400,
+        'DUPLICATE_RECRUITER'
+      );
+      return;
+    }
+
+    const uniqueSupportingIds = Array.from(new Set(rawSupportingIds));
+
+    if (uniqueSupportingIds.length > 0) {
+      const supportingUsers = await prisma.user.findMany({
+        where: {
+          id: { in: uniqueSupportingIds },
+        },
+        include: { roles: { include: { role: true } } },
+      });
+
+      if (supportingUsers.length !== uniqueSupportingIds.length) {
+        errorResponse(
+          res,
+          'Một hoặc nhiều nhà tuyển dụng hỗ trợ không tồn tại trong hệ thống.',
+          400,
+          'INVALID_SUPPORTING_RECRUITER'
+        );
+        return;
+      }
+
+      const invalidUser = supportingUsers.find(
+        (u) => !u.isActive || !u.roles.some((r) => r.role.name === RoleType.RECRUITER)
+      );
+
+      if (invalidUser) {
+        errorResponse(
+          res,
+          `Nhà tuyển dụng hỗ trợ "${invalidUser.fullName}" không hợp lệ, bị khóa hoặc không có vai trò RECRUITER.`,
+          400,
+          'INVALID_SUPPORTING_RECRUITER'
+        );
+        return;
+      }
+    }
+
+    const previousLeadId = requisition.leadRecruiterId;
+    const oldSupportIds = new Set(requisition.supportingRecruiters.map((entry) => entry.recruiterId));
+    if (
+      previousLeadId === leadRecruiterId &&
+      oldSupportIds.size === uniqueSupportingIds.length &&
+      uniqueSupportingIds.every((id) => oldSupportIds.has(id))
+    ) {
+      const current = await prisma.requisition.findUnique({
+        where: { id },
+        include: {
+          department: true,
+          hiringManager: { select: { id: true, fullName: true, email: true } },
+          approver: { select: { id: true, fullName: true, email: true } },
+          leadRecruiter: { select: { id: true, fullName: true, email: true } },
+          supportingRecruiters: {
+            include: { recruiter: { select: { id: true, fullName: true, email: true } } },
+          },
+        },
+      });
+      successResponse(res, current, 200, 'Phân công không thay đổi.');
+      return;
+    }
+    const isHandover = previousLeadId !== null && previousLeadId !== leadRecruiterId;
+    const action = previousLeadId === null ? 'ASSIGN' : (isHandover ? 'HANDOVER' : 'UPDATE_SUPPORTING');
+    const historyNotes = notes?.trim() || (isHandover ? 'Chuyển giao người phụ trách chính' : 'Phân công tuyển dụng');
+
+    // 5. Thực thi Transaction cập nhật Requisition, SupportingRecruiters & Ghi Lịch sử chuyển giao
+    const result = await prisma.$transaction(async (tx) => {
+      // Xóa danh sách hỗ trợ cũ
+      await tx.requisitionSupportingRecruiter.deleteMany({
+        where: { requisitionId: id },
+      });
+
+      // Tạo danh sách hỗ trợ mới
+      if (uniqueSupportingIds.length > 0) {
+        await tx.requisitionSupportingRecruiter.createMany({
+          data: uniqueSupportingIds.map((recruiterId) => ({
+            requisitionId: id,
+            recruiterId,
+          })),
+        });
+      }
+
+      // Cập nhật người phụ trách chính
+      const updatedReq = await tx.requisition.update({
+        where: { id },
+        data: {
+          leadRecruiterId,
+        },
+        include: {
+          department: true,
+          hiringManager: { select: { id: true, fullName: true, email: true } },
+          approver: { select: { id: true, fullName: true, email: true } },
+          leadRecruiter: { select: { id: true, fullName: true, email: true } },
+          supportingRecruiters: {
+            include: {
+              recruiter: { select: { id: true, fullName: true, email: true } },
+            },
+          },
+        },
+      });
+
+      // Đồng bộ người phụ trách vào các tin tuyển dụng (Job) thuộc yêu cầu này
+      await tx.job.updateMany({
+        where: { requisitionId: id },
+        data: { recruiterId: leadRecruiterId },
+      });
+
+      // Ghi lịch sử chuyển giao / phân công bất biến
+      const historyRecord = await tx.requisitionAssignmentHistory.create({
+        data: {
+          requisitionId: id,
+          actorId: user.id,
+          previousLeadRecruiterId: previousLeadId,
+          newLeadRecruiterId: leadRecruiterId,
+          supportingRecruiterIds: JSON.stringify(uniqueSupportingIds),
+          action,
+          notes: historyNotes,
+        },
+      });
+
+      return { updatedReq, historyRecord };
+    });
+
+    // 6. Ghi Audit Log
+    await recordRequestAudit(
+      req,
+      isHandover ? AuditAction.REQUISITION_HANDOVER : AuditAction.REQUISITION_ASSIGNED,
+      'requisition',
+      id,
+      {
+        previousLeadRecruiterId: previousLeadId,
+        newLeadRecruiterId: leadRecruiterId,
+        supportingRecruiterIds: uniqueSupportingIds,
+        action,
+        notes: historyNotes,
+      }
+    );
+
+    successResponse(
+      res,
+      result.updatedReq,
+      200,
+      isHandover ? 'Chuyển giao người phụ trách tuyển dụng thành công.' : 'Phân công tuyển dụng thành công.'
+    );
+  }
+
+  /**
+   * SCRUM-97 / SCRUM-41: Lịch sử phân công & chuyển giao người phụ trách
+   */
+  static async getAssignmentHistory(req: Request, res: Response): Promise<void> {
+    const { id } = req.params;
+    const user = req.user!;
+
+    const canView = await RequisitionPolicy.canView(user, id);
+    if (!canView) {
+      const exists = await prisma.requisition.findUnique({ where: { id } });
+      if (exists) {
+        errorResponse(
+          res,
+          'Bạn không có quyền xem lịch sử phân công của yêu cầu tuyển dụng này.',
+          403,
+          'FORBIDDEN_SCOPE'
+        );
+        return;
+      }
+      errorResponse(res, 'Không tìm thấy yêu cầu tuyển dụng.', 404, 'NOT_FOUND');
+      return;
+    }
+
+    const history = await prisma.requisitionAssignmentHistory.findMany({
+      where: { requisitionId: id },
+      include: {
+        actor: { select: { id: true, fullName: true, email: true } },
+        previousLeadRecruiter: { select: { id: true, fullName: true, email: true } },
+        newLeadRecruiter: { select: { id: true, fullName: true, email: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Bổ sung thông tin recruiter hỗ trợ
+    const allSupportingIds = new Set<string>();
+    history.forEach((h) => {
+      try {
+        if (h.supportingRecruiterIds) {
+          const ids = JSON.parse(h.supportingRecruiterIds);
+          if (Array.isArray(ids)) ids.forEach((sid: string) => allSupportingIds.add(sid));
+        }
+      } catch {}
+    });
+
+    const supportingUsers =
+      allSupportingIds.size > 0
+        ? await prisma.user.findMany({
+            where: { id: { in: Array.from(allSupportingIds) } },
+            select: { id: true, fullName: true, email: true },
+          })
+        : [];
+    const userMap = new Map(supportingUsers.map((u) => [u.id, u]));
+
+    const enrichedHistory = history.map((h) => {
+      let supportingRecruiters: any[] = [];
+      try {
+        if (h.supportingRecruiterIds) {
+          const ids = JSON.parse(h.supportingRecruiterIds);
+          if (Array.isArray(ids)) {
+            supportingRecruiters = ids.map((sid: string) => userMap.get(sid) || { id: sid, fullName: 'Unknown' });
+          }
+        }
+      } catch {}
+
+      return {
+        ...h,
+        supportingRecruiters,
+      };
+    });
+
+    successResponse(res, enrichedHistory, 200);
+  }
+
+  /**
+   * SCRUM-97 / SCRUM-41: Danh sách ứng viên/đơn ứng tuyển thuộc yêu cầu tuyển dụng này
+   * Nhà tuyển dụng chỉ xem được nếu được phân công phụ trách.
+   */
+  static async getApplications(req: Request, res: Response): Promise<void> {
+    const { id } = req.params;
+    const user = req.user!;
+
+    const canView = await RequisitionPolicy.canView(user, id);
+    if (!canView) {
+      const exists = await prisma.requisition.findUnique({ where: { id } });
+      if (exists) {
+        errorResponse(
+          res,
+          'Bạn không có quyền xem ứng viên của yêu cầu tuyển dụng này.',
+          403,
+          'FORBIDDEN_SCOPE'
+        );
+        return;
+      }
+      errorResponse(res, 'Không tìm thấy yêu cầu tuyển dụng.', 404, 'NOT_FOUND');
+      return;
+    }
+
+    // S3-06 / AC2: canView also permits a requisition creator. That alone
+    // must not grant a recruiter access to its candidates/applications.
+    if (
+      user.roles.includes(RoleType.RECRUITER) &&
+      !user.roles.includes(RoleType.ADMIN) &&
+      !user.roles.includes(RoleType.HR_MANAGER)
+    ) {
+      const assignmentCount = await prisma.requisition.count({
+        where: {
+          id,
+          OR: [
+            { leadRecruiterId: user.id },
+            { supportingRecruiters: { some: { recruiterId: user.id } } },
+          ],
+        },
+      });
+      if (assignmentCount === 0) {
+        errorResponse(
+          res,
+          'Bạn chưa được phân công nên không có quyền xem ứng viên của yêu cầu này.',
+          403,
+          'FORBIDDEN_SCOPE'
+        );
+        return;
+      }
+    }
+
+    const applications = await prisma.application.findMany({
+      where: {
+        job: { requisitionId: id },
+      },
+      include: {
+        candidate: true,
+        job: true,
+        assignedRecruiter: { select: { id: true, fullName: true, email: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const sanitized = applications.map((app) => ({
+      ...app,
+      candidate: CandidatePolicy.sanitize(user, app.candidate),
+    }));
+
+    successResponse(res, sanitized, 200);
   }
 }
