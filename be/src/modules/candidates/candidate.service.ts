@@ -11,8 +11,7 @@ export class CandidateService {
     // 1. Admin & HR Manager: Global access
     if (
       currentUser.roles.includes(RoleType.ADMIN) ||
-      currentUser.roles.includes(RoleType.HR_MANAGER) ||
-      currentUser.roles.includes(RoleType.RECRUITER)
+      currentUser.roles.includes(RoleType.HR_MANAGER)
     ) {
       const candidate = await prisma.candidate.findUnique({
         where: { id: candidateId },
@@ -22,6 +21,23 @@ export class CandidateService {
               job: true,
               interviews: true,
             },
+          },
+        },
+      });
+      return candidate ? CandidatePolicy.sanitize(currentUser, candidate) : null;
+    }
+
+    // Recruiter: only candidates attached to assigned requisitions.
+    // Filter the INCLUDED applications as well; otherwise an allowed candidate
+    // would leak their applications to other jobs and departments.
+    if (currentUser.roles.includes(RoleType.RECRUITER)) {
+      const assignmentScope = CandidatePolicy.recruiterApplicationWhere(currentUser.id);
+      const candidate = await prisma.candidate.findFirst({
+        where: { id: candidateId, applications: { some: assignmentScope } },
+        include: {
+          applications: {
+            where: assignmentScope,
+            include: { job: true, interviews: true },
           },
         },
       });
@@ -128,12 +144,26 @@ export class CandidateService {
   static async listCandidatesForUser(currentUser: AuthenticatedUser) {
     if (
       currentUser.roles.includes(RoleType.ADMIN) ||
-      currentUser.roles.includes(RoleType.HR_MANAGER) ||
-      currentUser.roles.includes(RoleType.RECRUITER)
+      currentUser.roles.includes(RoleType.HR_MANAGER)
     ) {
       const candidates = await prisma.candidate.findMany({
         include: {
           applications: {
+            include: { job: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      return candidates.map((c) => CandidatePolicy.sanitize(currentUser, c));
+    }
+
+    if (currentUser.roles.includes(RoleType.RECRUITER)) {
+      const assignmentScope = CandidatePolicy.recruiterApplicationWhere(currentUser.id);
+      const candidates = await prisma.candidate.findMany({
+        where: { applications: { some: assignmentScope } },
+        include: {
+          applications: {
+            where: assignmentScope,
             include: { job: true },
           },
         },

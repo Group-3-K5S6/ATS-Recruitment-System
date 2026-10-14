@@ -1,6 +1,7 @@
 import { AuthenticatedUser } from '../rbac/types';
 import { RoleType } from '../rbac/roles';
 import { prisma } from '../database/prisma';
+import { Prisma } from '@prisma/client';
 
 export interface CandidateWithRelations {
   id: string;
@@ -30,6 +31,26 @@ export interface CandidateWithRelations {
 
 export class CandidatePolicy {
   /**
+   * S3-06 / AC2: An assigned requisition is the ONLY recruiter visibility scope.
+   * This intentionally excludes a stale Application.assignedRecruiterId or
+   * Job.recruiterId left behind after handing a requisition to another recruiter.
+   */
+  static recruiterApplicationWhere(recruiterId: string): Prisma.ApplicationWhereInput {
+    return {
+      job: {
+        requisition: {
+          is: {
+            OR: [
+              { leadRecruiterId: recruiterId },
+              { supportingRecruiters: { some: { recruiterId } } },
+            ],
+          },
+        },
+      },
+    };
+  }
+
+  /**
    * Check if user has permission to view a specific candidate
    */
   static async canView(user: AuthenticatedUser, candidateId: string): Promise<boolean> {
@@ -38,8 +59,19 @@ export class CandidatePolicy {
       return true;
     }
 
-    // 2. RECRUITER and APPROVER have general read access
-    if (user.roles.includes(RoleType.RECRUITER) || user.roles.includes(RoleType.APPROVER)) {
+    // Recruiter: restrict candidate IDs through at least one assigned requisition.
+    if (user.roles.includes(RoleType.RECRUITER)) {
+      const count = await prisma.candidate.count({
+        where: {
+          id: candidateId,
+          applications: { some: CandidatePolicy.recruiterApplicationWhere(user.id) },
+        },
+      });
+      return count > 0;
+    }
+
+    // Approver access is unchanged by S3-06 (when not also a recruiter).
+    if (user.roles.includes(RoleType.APPROVER)) {
       return true;
     }
 
@@ -93,7 +125,7 @@ export class CandidatePolicy {
     }
 
     if (user.roles.includes(RoleType.RECRUITER)) {
-      return true;
+      return CandidatePolicy.canView(user, candidateId);
     }
 
     if (user.roles.includes(RoleType.CANDIDATE)) {
@@ -110,12 +142,25 @@ export class CandidatePolicy {
   /**
    * Check if user can delete candidate
    */
-  static async canDelete(user: AuthenticatedUser): Promise<boolean> {
-    return (
-      user.roles.includes(RoleType.ADMIN) ||
-      user.roles.includes(RoleType.HR_MANAGER) ||
-      user.roles.includes(RoleType.RECRUITER)
-    );
+  static async canDelete(user: AuthenticatedUser, candidateId: string): Promise<boolean> {
+    if (user.roles.includes(RoleType.ADMIN) || user.roles.includes(RoleType.HR_MANAGER)) {
+      return true;
+    }
+
+    if (!user.roles.includes(RoleType.RECRUITER)) return false;
+
+    // Deleting a Candidate cascades to ALL its applications. Avoid deleting an
+    // application on an unassigned requisition even if another one is assigned.
+    const count = await prisma.candidate.count({
+      where: {
+        id: candidateId,
+        applications: {
+          some: CandidatePolicy.recruiterApplicationWhere(user.id),
+          every: CandidatePolicy.recruiterApplicationWhere(user.id),
+        },
+      },
+    });
+    return count > 0;
   }
 
   /**
