@@ -1,10 +1,12 @@
 /**
  * S3-06 / PR #81 — targeted API acceptance tests (AC1 / AC2 / AC3).
- * REVIEW-ONLY: RUN SOLELY IN ATS-PR81-WORKTREE against its disposable SQLite.
+ * REVIEW-ONLY: RUN SOLELY with disposable _ats_regression_*.db inside this worktree.
  * The test creates unique fixtures, then cleans up its own records.
  * These tests deliberately fail if authorization or audit behavior regresses.
  */
 import { randomUUID } from 'crypto';
+import { existsSync, realpathSync } from 'fs';
+import { basename, dirname, resolve } from 'path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { app } from '../src/app';
@@ -22,9 +24,20 @@ const applicationAId = `s306-app-a-${scope}`;
 const applicationBId = `s306-app-b-${scope}`;
 
 const assertDisposableDatabase = () => {
-  const location = process.cwd().replace(/\\/g, '/').toLowerCase();
-  if (process.env.NODE_ENV !== 'test' || !location.includes('ats-pr81-worktree/be')) {
-    throw new Error('S3-06 REVIEW TEST: only run from ATS-PR81-WORKTREE/be with NODE_ENV=test.');
+  // Fail closed: never run destructive acceptance tests against MAIN or an arbitrary database.
+  const candidate = /^file:\.\/(_ats_regression_[0-9a-f]{32}\.db)$/i.exec(process.env.DATABASE_URL ?? '');
+  const cwd = process.cwd();
+  const dir = resolve(cwd, 'prisma');
+  const file = candidate ? resolve(dir, candidate[1]) : '';
+  const canonicalDir = existsSync(dir) ? realpathSync(dir) : '';
+  const canonicalFile = file && existsSync(file) ? realpathSync(file) : '';
+  if (
+    process.env.NODE_ENV !== 'test' ||
+    basename(cwd).toLowerCase() !== 'be' ||
+    !canonicalFile || !canonicalDir ||
+    dirname(canonicalFile).toLowerCase() !== canonicalDir.toLowerCase()
+  ) {
+    throw new Error('S3-06 REVIEW TEST: requires NODE_ENV=test and disposable _ats_regression_*.db in this worktree.');
   }
 };
 
