@@ -25,6 +25,7 @@ import rbacManagementRoutes from "./modules/rbac-management/rbac.routes";
 import sharedCategoryRoutes from './modules/shared-categories/shared-category.routes';
 import recruitmentBudgetRoutes from './modules/recruitment-budgets/recruitment-budget.routes';
 import approvalWorkflowRoutes from './modules/approval-workflows/approval-workflow.routes';
+import jobPostingDraftRoutes from './modules/jobs/job-posting-draft.routes';
 
 export function createApp() {
   const app = express();
@@ -45,6 +46,7 @@ export function createApp() {
   app.use('/api/candidates', candidateRoutes);
   app.use('/api/requisitions', requisitionRoutes);
   app.use('/api/jobs', jobRoutes);
+  app.use('/api/job-posting-drafts', jobPostingDraftRoutes);
   app.use('/api/job-titles', jobTitleRoutes);
   app.use('/api/interviews', interviewRoutes);
   app.use('/api/evaluations', evaluationRoutes);

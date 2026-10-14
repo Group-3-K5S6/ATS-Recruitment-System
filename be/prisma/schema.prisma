@@ -228,9 +228,12 @@ model Job {
   jobTitleId      String?
   status          String   @default("DRAFT")
   description     String
-  location        String   @default("Hanoi")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  location        String    @default("Hanoi")
+  workMode        String?   @default("ONSITE")
+  applicationDeadline DateTime?
+  showSalary      Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   requisition        Requisition?        @relation(fields: [requisitionId], references: [id])
   department         Department          @relation(fields: [departmentId], references: [id])
