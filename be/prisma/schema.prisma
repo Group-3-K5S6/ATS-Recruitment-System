@@ -241,6 +241,9 @@ model Job {
   status          String   @default("DRAFT")
   description     String
   location        String   @default("Hanoi")
+  workMode            String?  @default("ONSITE")
+  applicationDeadline DateTime?
+  showSalary          Boolean  @default(false)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
