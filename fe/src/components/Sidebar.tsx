@@ -248,6 +248,24 @@ function Sidebar({
       path: "/job-postings/draft",
     });
   }
+  // S3-06: FE shortcut for HR Manager recruitment assignment.
+  if (
+    role === "HRManager" &&
+    !menuLoading &&
+    !menuError &&
+    !menu.some(
+      (item) =>
+        item.key === "recruitment-assignments" ||
+        item.label === "Phân công recruiter"
+    )
+  ) {
+    const index = menu.findIndex((item) => item.key === "requisitions");
+    menu.splice(index >= 0 ? index + 1 : menu.length, 0, {
+      key: "recruitment-assignments",
+      label: "Phân công recruiter",
+      path: "/recruitment-assignments",
+    });
+  }
   menu.push(
     {
       key: "profile",
@@ -268,6 +286,15 @@ function Sidebar({
   const handleMenuClick = (item: SidebarItem) => {
     if (item.key === "job-posting-draft") {
       navigate("/job-postings/draft");
+      setOpen(false);
+      return;
+    }
+    // S3-06: Open recruitment assignment page.
+    if (
+      item.key === "recruitment-assignments" ||
+      item.label === "Phân công recruiter"
+    ) {
+      navigate("/recruitment-assignments");
       setOpen(false);
       return;
     }
