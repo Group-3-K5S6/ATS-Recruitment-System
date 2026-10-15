@@ -42,6 +42,9 @@ model User {
   requisitionApprovalHistory RequisitionApprovalHistory[] @relation("ApprovalHistoryActor")
   managedJobs              Job[]                        @relation("HiringManagerJobs")
   assignedJobs         Job[]         @relation("RecruiterJobs")
+  // SCRUM-105: Duyệt và xuất bản tin tuyển dụng
+  approvedJobs         Job[]         @relation("JobApprover")
+  publishedJobs        Job[]         @relation("JobPublisher")
   assignedApplications Application[] @relation("RecruiterApplications")
   interviews           Interview[]   @relation("InterviewerInterviews")
   evaluations          Evaluation[]  @relation("InterviewerEvaluations")
@@ -241,6 +244,18 @@ model Job {
   status          String   @default("DRAFT")
   description     String
   location        String   @default("Hanoi")
+  workMode        String?  @default("ONSITE")
+  applicationDeadline DateTime?
+  showSalary      Boolean  @default(false)
+
+  // SCRUM-105: Duyệt và xuất bản tin tuyển dụng
+  approvedAt      DateTime?
+  approvedById    String?
+  approvalNotes   String?
+  publishedAt     DateTime?
+  publishedById   String?
+  rejectionReason String?
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -248,9 +263,15 @@ model Job {
   department         Department          @relation(fields: [departmentId], references: [id])
   hiringManager      User                @relation("HiringManagerJobs", fields: [hiringManagerId], references: [id])
   recruiter          User?               @relation("RecruiterJobs", fields: [recruiterId], references: [id])
+  approvedBy         User?               @relation("JobApprover", fields: [approvedById], references: [id])
+  publishedBy        User?               @relation("JobPublisher", fields: [publishedById], references: [id])
   jobTitle           JobTitle?           @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
   applications       Application[]
   interviewQuestions InterviewQuestion[]
+
+  @@index([approvedById])
+  @@index([publishedById])
+  @@index([status])
 }
 
 model Candidate {
