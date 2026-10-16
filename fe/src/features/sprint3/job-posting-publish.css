@@ -547,3 +547,4 @@
     width: 100%;
   }
 }
+.s310-preserve-lines { white-space: pre-wrap; overflow-wrap: anywhere; }

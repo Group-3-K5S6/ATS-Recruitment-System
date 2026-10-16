@@ -10,7 +10,7 @@ import type { Prisma } from '@prisma/client';
 
 export const createJobSchema = z.object({
   title: z.string().min(3),
-  requisitionId: z.string().uuid().optional(),
+  requisitionId: z.string().trim().min(1).optional(),
   jobTitleId: z.string().uuid().optional(),
   departmentId: z.string().uuid(),
   hiringManagerId: z.string().uuid(),
@@ -379,10 +379,16 @@ export class JobController {
       return;
     }
 
+    if (!['DRAFT', 'REJECTED'].includes(existing.status)) {
+      errorResponse(res, 'Tin không ở trạng thái có thể gửi duyệt.', 400, 'INVALID_STATUS');
+      return;
+    }
+
     const updated = await prisma.job.update({
       where: { id },
       data: {
         status: 'PENDING_APPROVAL',
+        rejectionReason: null,
       },
       include: {
         department: true,
@@ -442,6 +448,11 @@ export class JobController {
 
     if (existing.status === 'APPROVED') {
       errorResponse(res, 'Tin tuyển dụng đã ở trạng thái Đã duyệt.', 400, 'ALREADY_APPROVED');
+      return;
+    }
+
+    if (existing.status !== 'PENDING_APPROVAL') {
+      errorResponse(res, 'Tin phải được gửi duyệt trước khi phê duyệt.', 400, 'INVALID_STATUS');
       return;
     }
 
@@ -518,6 +529,11 @@ export class JobController {
         400,
         'INVALID_STATUS'
       );
+      return;
+    }
+
+    if (existing.status !== 'PENDING_APPROVAL') {
+      errorResponse(res, 'Chỉ được từ chối tin đang chờ duyệt.', 400, 'INVALID_STATUS');
       return;
     }
 
@@ -599,6 +615,11 @@ export class JobController {
         400,
         'INVALID_STATUS'
       );
+      return;
+    }
+
+    if (!existing.approvedById || !existing.approvedAt) {
+      errorResponse(res, 'Tin chưa có người duyệt và thời điểm duyệt hợp lệ.', 400, 'INVALID_APPROVAL');
       return;
     }
 

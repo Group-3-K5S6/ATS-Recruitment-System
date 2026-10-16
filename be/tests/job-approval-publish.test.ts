@@ -119,7 +119,7 @@ describe('SCRUM-105: BE-API duyệt và xuất bản tin tuyển dụng', () => 
   // =========================================================================
   describe('1. Phê duyệt & Từ chối tin tuyển dụng (Approval & Rejection flow)', () => {
     it('TC01: HR_MANAGER phê duyệt tin tuyển dụng thành công, chuyển sang APPROVED', async () => {
-      const job = await createTestJob('DRAFT');
+      const job = await createTestJob('PENDING_APPROVAL');
 
       const res = await request(app)
         .post(`/api/jobs/${job.id}/approve`)
@@ -206,6 +206,17 @@ describe('SCRUM-105: BE-API duyệt và xuất bản tin tuyển dụng', () => 
       expect(res.status).toBe(401);
     });
 
+    it('S3-10: HR_MANAGER không được duyệt thẳng DRAFT khi chưa gửi duyệt', async () => {
+      const job = await createTestJob('DRAFT');
+      const res = await request(app)
+        .post(`/api/jobs/${job.id}/approve`)
+        .set(authHeader(hrToken))
+        .send({ notes: 'Thử bỏ qua bước gửi duyệt' });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_STATUS');
+      expect((await prisma.job.findUnique({ where: { id: job.id } }))?.status).toBe('DRAFT');
+    });
+
     it('TC05: Duyệt tin không tồn tại trả về 404 NOT_FOUND', async () => {
       const nonExistentId = randomUUID();
       const res = await request(app)
@@ -230,7 +241,7 @@ describe('SCRUM-105: BE-API duyệt và xuất bản tin tuyển dụng', () => 
     });
 
     it('TC07: HR_MANAGER từ chối tin tuyển dụng với lý do hợp lệ, chuyển sang REJECTED', async () => {
-      const job = await createTestJob('DRAFT');
+      const job = await createTestJob('PENDING_APPROVAL');
 
       const res = await request(app)
         .post(`/api/jobs/${job.id}/reject`)
@@ -389,6 +400,14 @@ describe('SCRUM-105: BE-API duyệt và xuất bản tin tuyển dụng', () => 
       const metadata = JSON.parse(audit?.metadata || '{}');
       expect(metadata.publishedById).toBe(hrUser.id);
       expect(metadata.publishedAt).toBeDefined();
+    });
+
+    it('S3-10: Chặn xuất bản khi status APPROVED bị ghi thủ công nhưng thiếu dấu vết duyệt', async () => {
+      const job = await createTestJob('APPROVED', { approvedAt: null, approvedById: null });
+      const res = await request(app).post(`/api/jobs/${job.id}/publish`).set(authHeader(hrToken));
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_APPROVAL');
+      expect((await prisma.job.findUnique({ where: { id: job.id } }))?.publishedAt).toBeNull();
     });
 
     it('TC14: Lấy chi tiết tin (GET /api/jobs/:id) trả về đầy đủ approvedBy và publishedBy', async () => {
