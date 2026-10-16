@@ -6,7 +6,7 @@ import './SalaryVndInput.css';
 // Chỉ thêm dấu chấm khi không nhập; lúc gõ giữ nguyên chuỗi chữ số để con trỏ ổn định.
 const MAX_DIGITS = 15;
 
-export function formatVndDigits(rawValue: string): string {
+function formatVndDigits(rawValue: string): string {
   const digits = rawValue.replace(/\D/g, '');
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }

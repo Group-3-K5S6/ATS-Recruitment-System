@@ -142,12 +142,6 @@ function RecruitmentAssignment() {
     if (!selectedRequisitionId) return;
     let cancelled = false;
     const id = selectedRequisitionId;
-    setDetailsLoading(true);
-    setDetailsError("");
-    setHistoryLoading(true);
-    setHistoryError("");
-    setHistory([]);
-
     void atsApi<AssignmentRequisition>(`/api/requisitions/${encodeURIComponent(id)}`)
       .then((item) => {
         if (cancelled) return;
@@ -189,6 +183,12 @@ function RecruitmentAssignment() {
     setDraft(draftFromRequisition(requisition));
     setSaveMessage("");
     setToast("");
+    // Khởi tạo trạng thái modal tại sự kiện mở, không setState đồng bộ trong effect.
+    setDetailsLoading(true);
+    setDetailsError("");
+    setHistoryLoading(true);
+    setHistoryError("");
+    setHistory([]);
     setSelectedRequisitionId(requisition.id);
   };
 

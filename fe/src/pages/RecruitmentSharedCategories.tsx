@@ -83,6 +83,8 @@ export default function RecruitmentSharedCategories({
   const [data, setData] =
     useState<CategoryData>(initialData);
   const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState("");
+  const [isError, setIsError] = useState(false);
 
   const reload = async () => {
     const items = await api<ApiItem[]>("");
@@ -115,10 +117,6 @@ export default function RecruitmentSharedCategories({
 
   const [editingId, setEditingId] =
     useState<string | null>(null);
-
-  const [message, setMessage] = useState("");
-
-  const [isError, setIsError] = useState(false);
 
   const currentCategory = categories.find(
     (category) => category.key === activeCategory

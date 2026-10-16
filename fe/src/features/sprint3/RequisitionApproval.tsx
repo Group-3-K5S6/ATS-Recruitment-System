@@ -101,7 +101,8 @@ export default function RequisitionApproval() {
   }
 
   useEffect(() => {
-    void loadItems();
+    const timer = window.setTimeout(() => { void loadItems(); }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const pendingItems = useMemo(() => {
