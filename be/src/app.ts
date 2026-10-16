@@ -9,6 +9,7 @@ import authRoutes from './modules/auth/auth.routes';
 import candidateRoutes from './modules/candidates/candidate.routes';
 import requisitionRoutes from './modules/requisitions/requisition.routes';
 import jobRoutes from './modules/jobs/job.routes';
+import publicJobsRoutes from './modules/jobs/public-jobs.routes'; // S310_PUBLIC_V1
 import jobPostingDraftRoutes from './modules/jobs/job-posting-draft.routes';
 import interviewRoutes from './modules/interviews/interview.routes';
 import evaluationRoutes from './modules/evaluations/evaluation.routes';
@@ -45,6 +46,7 @@ export function createApp() {
   app.use('/api/auth', authRoutes);
   app.use('/api/candidates', candidateRoutes);
   app.use('/api/requisitions', requisitionRoutes);
+  app.use('/api/public/jobs', publicJobsRoutes); // anonymous, published only
   app.use('/api/jobs', jobRoutes);
   app.use('/api/job-posting-drafts', jobPostingDraftRoutes);
   app.use('/api/job-titles', jobTitleRoutes);

@@ -138,21 +138,15 @@ export class JobPolicy {
    * Cho phép nộp tin tuyển dụng để chờ duyệt
    */
   static async canSubmitForApproval(user: AuthenticatedUser, jobId: string): Promise<boolean> {
-    if (
-      user.roles.includes(RoleType.ADMIN) ||
-      user.roles.includes(RoleType.HR_MANAGER)
-    ) {
-      return true;
+    // Chia tách nhiệm vụ: chỉ RECRUITER được phân công mới gửi duyệt.
+    // HR_MANAGER / ADMIN không được tự gửi rồi tự phê duyệt,
+    // kể cả khi đồng thời được gán vai trò Recruiter.
+    if (user.roles.includes(RoleType.ADMIN) || user.roles.includes(RoleType.HR_MANAGER)) {
+      return false;
     }
-
+    if (!user.roles.includes(RoleType.RECRUITER)) return false;
     const job = await prisma.job.findUnique({ where: { id: jobId } });
-    if (!job) return false;
-
-    if (user.roles.includes(RoleType.RECRUITER)) {
-      return job.recruiterId === user.id;
-    }
-
-    return false;
+    return job?.recruiterId === user.id;
   }
 }
 

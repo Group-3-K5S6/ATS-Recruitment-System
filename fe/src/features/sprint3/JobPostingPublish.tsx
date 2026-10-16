@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, CheckCircle2, Eye, MapPin, Search, Send, Users, X } from "lucide-react";
-import { atsApi } from "./api";
-import "./job-posting-publish.css";
+import { useEffect, useMemo, useState } from 'react';
+import { AlertCircle, ArrowRight, CalendarDays, Check, CheckCircle2, Clock3, ExternalLink, Eye, FileText, Globe2, MapPin, RefreshCw, Search, ShieldCheck, Users, X } from 'lucide-react';
+import JobPublicContent, { type PublishedPresentation } from './JobPublicContent';
+import { atsApi } from './api';
+import './job-posting-publish.css';
 
-type JobStatus = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "PUBLISHED" | "REJECTED" | "CLOSED";
+type JobStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'PUBLISHED' | 'REJECTED' | 'CLOSED';
 type Job = {
   id: string;
   title: string;
@@ -13,32 +14,40 @@ type Job = {
   workMode?: string | null;
   applicationDeadline?: string | null;
   showSalary?: boolean;
+  approvedAt?: string | null;
+  approvedBy?: { fullName: string } | null;
   publishedAt?: string | null;
   publishedBy?: { fullName: string } | null;
   department?: { name?: string } | null;
   recruiter?: { fullName?: string } | null;
 };
-type Preview = {
-  job: Job & {
-    salary?: { showSalary: boolean; displayText: string };
-    requisition?: { requirements?: string | null } | null;
-  };
-  companyProfile?: { companyName?: string; tagline?: string | null; logoData?: string | null; location?: string | null } | null;
-};
+type Action = 'approve' | 'reject' | 'publish';
+type Preview = PublishedPresentation & { job: Job & PublishedPresentation['job'] };
 
 const statusText: Record<string, string> = {
-  DRAFT: "Bản nháp",
-  PENDING_APPROVAL: "Chờ duyệt",
-  APPROVED: "Đã duyệt – chờ xuất bản",
-  REJECTED: "Đã từ chối",
+  DRAFT: 'Bản nháp', PENDING_APPROVAL: 'Chờ duyệt',
+  APPROVED: 'Đã duyệt · chờ xuất bản', REJECTED: 'Đã từ chối',
+  PUBLISHED: 'Đã xuất bản',
 };
-function formatDate(v?: string | null) {
-  if (!v) return "Chưa thiết lập";
+const actionLabel: Record<Action, string> = {
+  approve: 'Duyệt tin', reject: 'Từ chối tin', publish: 'Xác nhận xuất bản',
+};
+function formatDateTime(v?: string | null) {
+  if (!v) return 'Chưa ghi nhận';
   const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? "Chưa thiết lập" : new Intl.DateTimeFormat("vi-VN").format(d);
+  return Number.isNaN(d.getTime()) ? 'Chưa ghi nhận' : new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(d);
 }
 function workModeLabel(v?: string | null) {
-  return v === "REMOTE" ? "Làm việc từ xa" : v === "HYBRID" ? "Kết hợp" : v === "ONSITE" ? "Tại văn phòng" : "Chưa xác định";
+  return v === 'REMOTE' ? 'Từ xa' : v === 'HYBRID' ? 'Kết hợp' : v === 'ONSITE' ? 'Tại văn phòng' : 'Đang cập nhật';
+}
+function publiclyAvailable(job: Job) {
+  return job.status === 'PUBLISHED' && !!job.approvedAt && !!job.publishedAt
+    && (!job.applicationDeadline || new Date(job.applicationDeadline).getTime() >= Date.now());
+}
+function actionDescription(action: Action) {
+  if (action === 'approve') return 'Tin được đánh dấu Đã duyệt, nhưng chưa xuất hiện công khai cho tới khi được xuất bản.';
+  if (action === 'reject') return 'Tin sẽ chuyển sang Đã từ chối và có thể được chỉnh sửa, gửi duyệt lại.';
+  return 'Sau khi xác nhận, tin sẽ xuất hiện ngay trên cổng tuyển dụng công khai. Hãy đảm bảo đã kiểm tra nội dung trước đó.';
 }
 
 export default function JobPostingPublish() {
@@ -47,104 +56,118 @@ export default function JobPostingPublish() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [search, setSearch] = useState("");
+  const [intent, setIntent] = useState<{ job: Job; action: Action } | null>(null);
+  const [notes, setNotes] = useState('');
+  const [dialogError, setDialogError] = useState('');
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [search, setSearch] = useState('');
+  const [view, setView] = useState<'pending' | 'published'>('pending');
 
   const loadJobs = async () => {
     try {
       setLoading(true);
-      setError("");
-      setJobs(await atsApi<Job[]>("/api/jobs"));
+      setError('');
+      setJobs(await atsApi<Job[]>('/api/jobs'));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Không tải được danh sách tin tuyển dụng.");
+      setError(e instanceof Error ? e.message : 'Không tải được danh sách tin tuyển dụng.');
     } finally { setLoading(false); }
   };
-  useEffect(() => { void loadJobs(); }, []);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void loadJobs(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
-  const actionable = useMemo(() => jobs.filter(j => ["DRAFT", "PENDING_APPROVAL", "APPROVED", "REJECTED"].includes(j.status)), [jobs]);
+  // HR Manager KHÔNG gửi duyệt bản nháp; chỉ xử lý tin Recruiter đã nộp.
+  const pending = useMemo(() => jobs.filter(job => ['PENDING_APPROVAL', 'APPROVED'].includes(job.status)), [jobs]);
+  const published = useMemo(() => jobs.filter(job => job.status === 'PUBLISHED'), [jobs]);
   const shown = useMemo(() => {
-    const k = search.trim().toLowerCase();
-    return actionable.filter(j => !k || [j.title, j.id, j.department?.name, j.location].some(t => (t || "").toLowerCase().includes(k)));
-  }, [actionable, search]);
+    const term = search.trim().toLocaleLowerCase('vi');
+    const source = view === 'pending' ? pending : published;
+    return source.filter(job => !term || [job.title, job.id, job.department?.name, job.location].some(value => (value || '').toLocaleLowerCase('vi').includes(term)));
+  }, [pending, published, view, search]);
 
   const showPreview = async (job: Job) => {
     try {
       setPreviewLoading(true);
-      setError("");
-      // Always fetch backend preview: includes brand profile and salary visibility.
+      setError('');
       setPreview(await atsApi<Preview>(`/api/jobs/${encodeURIComponent(job.id)}/preview`));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Không tải được dữ liệu xem trước.");
+      setError(e instanceof Error ? e.message : 'Không tải được bản xem trước.');
     } finally { setPreviewLoading(false); }
   };
-
-  type Action = "submit-for-approval" | "approve" | "reject" | "publish";
-  const perform = async (job: Job, action: Action) => {
-    let body: unknown = undefined;
-    if (action === "publish") {
-      if (job.status !== "APPROVED") return setError("Tin chưa được duyệt, không thể xuất bản.");
-      if (!window.confirm(`Xuất bản công khai tin “${job.title}” đã được duyệt?`)) return;
-    } else if (action === "approve") {
-      if (job.status !== "PENDING_APPROVAL") return setError("Chỉ duyệt tin ở trạng thái Chờ duyệt.");
-      const notes = window.prompt(`Ý kiến duyệt tin “${job.title}” (không bắt buộc):`, "");
-      if (notes === null) return;
-      body = { notes };
-    } else if (action === "reject") {
-      if (job.status !== "PENDING_APPROVAL") return setError("Chỉ từ chối tin đang chờ duyệt.");
-      const reason = window.prompt(`Nhập lý do từ chối tin “${job.title}” (tối thiểu 3 ký tự):`, "");
-      if (reason === null) return;
-      if (reason.trim().length < 3) return setError("Lý do từ chối phải có ít nhất 3 ký tự.");
-      body = { reason: reason.trim() };
-    } else {
-      if (!["DRAFT", "REJECTED"].includes(job.status)) return setError("Tin không ở trạng thái có thể gửi duyệt.");
-      if (!window.confirm(`Gửi tin “${job.title}” để HR Manager duyệt?`)) return;
-    }
+  const requestAction = (job: Job, action: Action) => {
+    setNotes('');
+    setDialogError('');
+    setIntent({ job, action });
+  };
+  const confirmAction = async () => {
+    if (!intent || busyId) return;
+    const { job, action } = intent;
+    if (action === 'reject' && notes.trim().length < 3) return setDialogError('Vui lòng nhập lý do từ chối từ 3 ký tự trở lên.');
+    const valid: Record<Action, string[]> = {
+      approve: ['PENDING_APPROVAL'],
+      reject: ['PENDING_APPROVAL'], publish: ['APPROVED'],
+    };
+    if (!valid[action].includes(job.status)) return setDialogError('Trạng thái tin đã thay đổi. Vui lòng tải lại danh sách.');
+    const body = action === 'reject' ? { reason: notes.trim() } : action === 'approve' ? { notes: notes.trim() } : undefined;
     try {
       setBusyId(job.id);
-      setError("");
-      setNotice("");
-      const updated = await atsApi<Job>(`/api/jobs/${encodeURIComponent(job.id)}/${action}`, "POST", body);
-      const expected: Record<Action, string> = { "submit-for-approval": "PENDING_APPROVAL", approve: "APPROVED", reject: "REJECTED", publish: "PUBLISHED" };
-      if (updated.status !== expected[action]) throw new Error("Backend trả trạng thái không đúng sau thao tác.");
-      setJobs(current => current.map(j => j.id === updated.id ? updated : j));
+      setDialogError('');
+      setError('');
+      setNotice('');
+      const updated = await atsApi<Job>(`/api/jobs/${encodeURIComponent(job.id)}/${action}`, 'POST', body);
+      const expected: Record<Action, string> = {
+        approve: 'APPROVED', reject: 'REJECTED', publish: 'PUBLISHED',
+      };
+      if (updated.status !== expected[action]) throw new Error('Backend trả về trạng thái không đúng sau thao tác.');
+      setIntent(null);
       setPreview(null);
-      setNotice(action === "publish" ? `Đã xuất bản tin “${job.title}”.` : action === "approve" ? `Đã duyệt tin “${job.title}”.` : action === "reject" ? `Đã từ chối tin “${job.title}”.` : `Đã gửi duyệt tin “${job.title}”.`);
+      if (action === 'publish') setView('published');
+      const text = action === 'publish' ? 'Đã xuất bản công khai' : action === 'approve' ? 'Đã duyệt' : 'Đã từ chối';
+      setNotice(`${text} tin “${job.title}”.`);
+      await loadJobs(); // Re-fetch audit names/timestamps, not just a partial mutation response.
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Thao tác không thành công.");
+      setDialogError(e instanceof Error ? e.message : 'Không thể hoàn thành thao tác.');
     } finally { setBusyId(null); }
   };
 
-  const actionButtons = (job: Job) => <div className="s310-actions">
-    <button type="button" className="s310-preview-button" disabled={previewLoading || busyId !== null} onClick={() => void showPreview(job)}><Eye size={16} /> Xem trước</button>
-    {(["DRAFT", "REJECTED"].includes(job.status)) && <button type="button" className="s310-publish-button" disabled={busyId !== null} onClick={() => void perform(job, "submit-for-approval")}><Send size={16} /> Gửi duyệt</button>}
-    {job.status === "PENDING_APPROVAL" && <>
-      <button type="button" className="s310-publish-button" disabled={busyId !== null} onClick={() => void perform(job, "approve")}>Duyệt</button>
-      <button type="button" className="s310-preview-button" disabled={busyId !== null} onClick={() => void perform(job, "reject")}>Từ chối</button>
-    </>}
-    {job.status === "APPROVED" && <button type="button" className="s310-publish-button" disabled={busyId !== null} onClick={() => void perform(job, "publish")}><Send size={16} /> Xuất bản</button>}
+  const renderActions = (job: Job) => <div className="s310-card-actions">
+    {job.status === 'PUBLISHED' ? publiclyAvailable(job)
+      ? <a className="s310-btn s310-btn-primary" href={`/careers/${encodeURIComponent(job.id)}`}><Globe2 size={16}/> Xem trang công khai <ExternalLink size={14}/></a>
+      : <span className="s310-muted-inline"><AlertCircle size={15}/> Tin chưa đủ điều kiện hiển thị công khai</span>
+      : <>
+        <button type="button" className="s310-btn s310-btn-secondary" disabled={previewLoading || busyId !== null} onClick={() => void showPreview(job)}><Eye size={16}/> Xem trước</button>
+        {job.status === 'PENDING_APPROVAL' && <><button type="button" className="s310-btn s310-btn-primary" disabled={busyId !== null} onClick={() => requestAction(job, 'approve')}><Check size={16}/> Duyệt</button><button type="button" className="s310-btn s310-btn-danger-outline" disabled={busyId !== null} onClick={() => requestAction(job, 'reject')}>Từ chối</button></>}
+        {job.status === 'APPROVED' && <button type="button" className="s310-btn s310-btn-primary" disabled={busyId !== null} onClick={() => requestAction(job, 'publish')}><Globe2 size={16}/> Xuất bản</button>}
+      </>}
   </div>;
 
-  return <section className="s310-page">
-    <header className="s310-header"><div><h1>Duyệt và xuất bản tin tuyển dụng</h1><p>Gửi duyệt → Duyệt → Xem trước → Xuất bản. Tin chưa duyệt không hiển thị công khai.</p></div>
-      <div className="s310-summary"><Send size={20}/><div><strong>{actionable.length}</strong><span>Tin cần xử lý</span></div></div>
-    </header>
+  return <section className="s310-page s310-reworked">
+    <header className="s310-header"><div><span className="s310-admin-eyebrow"><ShieldCheck size={14}/> QUẢN LÝ TIN TUYỂN DỤNG</span><h1>Duyệt & xuất bản</h1><p>Trưởng phòng Nhân sự duyệt hoặc từ chối tin đã được Recruiter gửi. Tin được duyệt mới có thể xuất bản.</p></div><a className="s310-admin-publiclink" href="/careers"><Globe2 size={18}/> Mở cổng công khai <ExternalLink size={15}/></a></header>
+    <div className="s310-flow"><div><span>01</span><strong>Gửi duyệt</strong><small>Recruiter tạo tin nháp</small></div><ArrowRight size={17}/><div><span>02</span><strong>Phê duyệt</strong><small>HR Manager kiểm tra</small></div><ArrowRight size={17}/><div><span>03</span><strong>Xuất bản</strong><small>Hiển thị trên cổng công khai</small></div></div>
     {error && <div className="s310-alert s310-alert-error" role="alert"><AlertCircle size={18}/>{error}</div>}
     {notice && <div className="s310-alert s310-alert-success" role="status"><CheckCircle2 size={18}/>{notice}</div>}
-    <div className="s310-toolbar"><div className="s310-search"><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Tìm theo tiêu đề, phòng ban, địa điểm hoặc mã tin..."/></div><span>{shown.length} tin cần xử lý</span></div>
-    <div className="s310-table-wrapper"><table className="s310-table"><thead><tr><th>Tin tuyển dụng</th><th>Phòng ban</th><th>Địa điểm</th><th>Hình thức</th><th>Recruiter</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
-      <tbody>{loading ? <tr><td colSpan={7}>Đang tải danh sách...</td></tr> : shown.length === 0 ? <tr><td colSpan={7}><div className="s310-empty">Không có tin cần xử lý.</div></td></tr> : shown.map(job=><tr key={job.id}>
-        <td><div className="s310-job-name"><strong>{job.title}</strong><span>{job.id}</span></div></td><td>{job.department?.name || "Chưa xác định"}</td><td>{job.location}</td><td>{workModeLabel(job.workMode)}</td><td>{job.recruiter?.fullName || "Chưa phân công"}</td><td><span className="s310-status">{statusText[job.status] || job.status}</span></td><td>{actionButtons(job)}</td>
-      </tr>)}</tbody></table></div>
-    {preview && <div className="s310-modal-backdrop"><div className="s310-modal" role="dialog" aria-modal="true" aria-label="Xem trước tin tuyển dụng">
-      <div className="s310-modal-toolbar"><div><strong>Xem trước tin tuyển dụng</strong><span>Dữ liệu lấy từ API xem trước, gồm thông tin công ty và hiển thị lương.</span></div><button type="button" className="s310-close" onClick={()=>setPreview(null)} aria-label="Đóng"><X size={20}/></button></div>
-      <div className="s310-public-preview"><div className="s310-public-heading"><div className="s310-company-logo">{preview.companyProfile?.companyName?.charAt(0) || "A"}</div><div><span>{preview.companyProfile?.companyName || "Thông tin tuyển dụng"}</span><h2>{preview.job.title}</h2><p>{preview.job.department?.name || "Chưa xác định"}</p></div></div>
-      {preview.companyProfile?.tagline && <p>{preview.companyProfile.tagline}</p>}
-      <div className="s310-meta"><span><MapPin size={16}/>{preview.job.location}</span><span><Users size={16}/>{workModeLabel(preview.job.workMode)}</span></div>
-      <div className="s310-public-section"><h3>Mô tả công việc</h3><p className="s310-preserve-lines">{preview.job.description}</p></div>
-      {preview.job.requisition?.requirements && <div className="s310-public-section"><h3>Yêu cầu ứng viên</h3><p className="s310-preserve-lines">{preview.job.requisition.requirements}</p></div>}
-      <div className="s310-public-section"><h3>Thông tin tuyển dụng</h3><dl><div><dt>Phòng ban</dt><dd>{preview.job.department?.name || "Chưa xác định"}</dd></div><div><dt>Địa điểm</dt><dd>{preview.job.location}</dd></div><div><dt>Hình thức</dt><dd>{workModeLabel(preview.job.workMode)}</dd></div><div><dt>Hạn nhận hồ sơ</dt><dd>{formatDate(preview.job.applicationDeadline)}</dd></div>{preview.job.salary?.showSalary && <div><dt>Mức lương</dt><dd>{preview.job.salary.displayText}</dd></div>}</dl></div>
-      <div className="s310-public-footer"><span>Đây là bản xem trước nội bộ; chỉ tin đã duyệt và xuất bản mới được công khai.</span>{preview.job.status === "APPROVED" && <button type="button" className="s310-publish-button" disabled={busyId !== null} onClick={()=>void perform(preview.job,"publish")}>Xuất bản</button>}</div>
-      </div></div></div>}
+    <div className="s310-workspace">
+      <div className="s310-workspace-top"><div className="s310-tabs" role="tablist" aria-label="Trạng thái tin tuyển dụng"><button role="tab" type="button" aria-selected={view === 'pending'} className={view === 'pending' ? 'active' : ''} onClick={() => { setView('pending'); setSearch(''); }}>Chờ duyệt / xuất bản <span>{pending.length}</span></button><button role="tab" type="button" aria-selected={view === 'published'} className={view === 'published' ? 'active' : ''} onClick={() => { setView('published'); setSearch(''); }}>Đã xuất bản <span>{published.length}</span></button></div><button type="button" className="s310-refresh" onClick={() => void loadJobs()} disabled={loading} title="Tải lại danh sách"><RefreshCw size={16}/> Làm mới</button></div>
+      <p className="s310-workspace-hint">{view === 'pending' ? 'Chỉ nhận tin Recruiter đã gửi; soạn bản nháp và gửi duyệt thuộc tài khoản Recruiter.' : 'Thông tin phê duyệt và xuất bản chỉ dành cho nhân sự nội bộ.'}</p>
+      <div className="s310-workspace-toolbar"><label className="s310-search"><Search size={18}/><input aria-label="Tìm tin tuyển dụng" value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm tên tin, phòng ban, địa điểm hoặc mã…" /></label><span>{shown.length} tin {view === 'pending' ? 'cần xử lý' : 'đã xuất bản'}</span></div>
+      <div className="s310-cards" role="tabpanel">
+        {loading ? <div className="s310-empty">Đang tải danh sách tin…</div> : shown.length === 0 ? <div className="s310-empty"><FileText size={28}/><strong>{search ? 'Không tìm thấy tin phù hợp' : view === 'pending' ? 'Chưa có tin nào chờ HR phê duyệt hoặc xuất bản' : 'Chưa có tin nào được xuất bản'}</strong><span>{search ? 'Thử từ khóa khác hoặc xóa ô tìm kiếm.' : 'Các tin theo trạng thái này sẽ được hiển thị tại đây.'}</span>{search && <button type="button" className="s310-btn s310-btn-secondary" onClick={() => setSearch('')}>Xóa tìm kiếm</button>}</div> : shown.map(job => <article className="s310-work-card" key={job.id}>
+          <div className="s310-work-card-main"><div className="s310-work-card-title"><span className="s310-card-icon"><FileText size={22}/></span><div><strong>{job.title}</strong><small>Mã tin: {job.id}</small></div></div><span className={`s310-stage s310-stage-${job.status.toLowerCase()}`}>{statusText[job.status] || job.status}</span></div>
+          <div className="s310-work-card-meta"><span><Users size={15}/>{job.department?.name || 'Chưa xác định phòng ban'}</span><span><MapPin size={15}/>{job.location || 'Chưa rõ địa điểm'}</span><span><Clock3 size={15}/>{workModeLabel(job.workMode)}</span><span className="s310-recruiter-tag">Recruiter: {job.recruiter?.fullName || 'Chưa phân công'}</span></div>
+          {job.status === 'PUBLISHED' && <div className="s310-public-audit"><div><small>NGƯỜI DUYỆT</small><strong>{job.approvedBy?.fullName || 'Chưa ghi nhận'}</strong><span><CalendarDays size={13}/>{formatDateTime(job.approvedAt)}</span></div><div><small>NGƯỜI XUẤT BẢN</small><strong>{job.publishedBy?.fullName || 'Chưa ghi nhận'}</strong><span><CalendarDays size={13}/>{formatDateTime(job.publishedAt)}</span></div></div>}
+          {job.status === 'PUBLISHED' && (!publiclyAvailable(job) || !job.applicationDeadline) && <div className="s310-card-warning"><AlertCircle size={15}/>{!publiclyAvailable(job) ? 'Tin cũ thiếu dữ liệu duyệt/xuất bản hoặc đã hết hạn; có thể không hiển thị ngoài cổng.' : 'Hạn nhận hồ sơ chưa được thiết lập. Nên bổ sung trước khi sử dụng thực tế.'}</div>}
+          <div className="s310-work-card-footer"><span className="s310-card-action-hint">{job.status === 'PENDING_APPROVAL' ? 'Đang chờ quyết định của HR Manager' : job.status === 'APPROVED' ? 'Tin đã duyệt, cần xác nhận trước khi công khai' : job.status === 'PUBLISHED' ? 'Tin đã chuyển sang khu vực công khai (nếu còn hiệu lực)' : 'Tin này chưa được công khai'}</span>{renderActions(job)}</div>
+        </article>)}
+      </div>
+    </div>
+
+    {preview && <div className="s310-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setPreview(null); }}><div className="s310-modal" role="dialog" aria-modal="true" aria-labelledby="s310-preview-title"><div className="s310-modal-toolbar"><div><strong id="s310-preview-title">Xem trước tin tuyển dụng</strong><span>Nội dung giống trang chi tiết công khai; chưa tự động xuất bản.</span></div><button type="button" className="s310-close" onClick={() => setPreview(null)} aria-label="Đóng xem trước"><X size={20}/></button></div><JobPublicContent data={preview}/><div className="s310-preview-bottom"><span><ShieldCheck size={15}/> Đây chỉ là bản xem trước dành cho nhân sự.</span><button type="button" className="s310-btn s310-btn-secondary" onClick={() => setPreview(null)}>Đóng xem trước</button></div></div></div>}
+    {intent && <div className="s310-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !busyId) setIntent(null); }}><form className="s310-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="s310-confirm-title" onSubmit={e => { e.preventDefault(); void confirmAction(); }}><header><span className={`s310-confirm-icon ${intent.action === 'reject' ? 'warn' : ''}`}>{intent.action === 'reject' ? <AlertCircle size={24}/> : intent.action === 'publish' ? <Globe2 size={24}/> : <ShieldCheck size={24}/>}</span><button type="button" aria-label="Đóng" className="s310-close" disabled={busyId !== null} onClick={() => setIntent(null)}><X size={19}/></button></header><h2 id="s310-confirm-title">{actionLabel[intent.action]}</h2><strong className="s310-confirm-job">{intent.job.title}</strong><p>{actionDescription(intent.action)}</p>
+      {intent.action === 'publish' && !intent.job.applicationDeadline && <div className="s310-card-warning"><AlertCircle size={16}/> Tin chưa có hạn nhận hồ sơ; hãy xem lại nội dung trước khi công khai.</div>}
+      {(intent.action === 'approve' || intent.action === 'reject') && <label className="s310-dialog-field">{intent.action === 'reject' ? 'Lý do từ chối (bắt buộc)' : 'Ý kiến duyệt (không bắt buộc)'}<textarea value={notes} onChange={e => { setNotes(e.target.value); setDialogError(''); }} rows={3} placeholder={intent.action === 'reject' ? 'Nhập lý do cụ thể để recruiter chỉnh sửa…' : 'Nhập ghi chú nếu cần…'}/></label>}
+      {dialogError && <div className="s310-alert s310-alert-error" role="alert"><AlertCircle size={15}/>{dialogError}</div>}
+      <footer><button type="button" className="s310-btn s310-btn-secondary" disabled={busyId !== null} onClick={() => setIntent(null)}>Quay lại</button><button type="submit" className={`s310-btn ${intent.action === 'reject' ? 's310-btn-danger' : 's310-btn-primary'}`} disabled={busyId !== null}>{busyId ? 'Đang xử lý…' : actionLabel[intent.action]}</button></footer></form></div>}
   </section>;
 }

@@ -619,6 +619,18 @@ describe('SCRUM-105: BE-API duyệt và xuất bản tin tuyển dụng', () => 
       expect(dbJob?.status).toBe('PENDING_APPROVAL');
     });
 
+    it('TC23b: HR Manager va Admin KHONG duoc tu gui duyet tin (403)', async () => {
+      const draft = await createTestJob('DRAFT', { recruiterId: recruiterUser.id });
+      for (const token of [hrToken, adminToken]) {
+        const res = await request(app)
+          .post(`/api/jobs/${draft.id}/submit-for-approval`)
+          .set(authHeader(token));
+        expect(res.status).toBe(403);
+      }
+      const after = await prisma.job.findUnique({ where: { id: draft.id } });
+      expect(after?.status).toBe('DRAFT');
+    });
+
     it('TC24: Lọc tin tuyển dụng theo trạng thái qua query param (GET /api/jobs?status=APPROVED)', async () => {
       const approvedJob = await createTestJob('APPROVED');
       const draftJob = await createTestJob('DRAFT');

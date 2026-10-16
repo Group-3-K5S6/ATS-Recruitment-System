@@ -22,6 +22,7 @@ import "./App.css";
 import CopyRequisition from "./features/sprint3/CopyRequisition";
 import JobPostingDraft from "./features/sprint3/JobPostingDraft";
 import JobPostingPublish from "./features/sprint3/JobPostingPublish";
+import PublicCareers from "./features/sprint3/PublicCareers"; // S310_PUBLIC_V1
 import ApprovalWorkflowConfig from "./features/sprint3/ApprovalWorkflowConfig";
 import Sprint3RouteGuard from "./features/sprint3/Sprint3RouteGuard";
 import RequisitionApproval from "./features/sprint3/RequisitionApproval";
@@ -43,7 +44,7 @@ import {
   NotFoundPage,
   ServerErrorPage,
 } from "./pages/ErrorPages";
-// @ts-ignore
+// @ts-expect-error -- BudgetManagement lacks a TypeScript declaration in the existing project.
 import BudgetManagement from "./components/BudgetManagement";
 
 import type { Role } from "./data/roleMenus";
@@ -1797,6 +1798,9 @@ function App() {
       <SessionIdleWatcher />
 
       <Routes>
+        {/* Public published jobs: no login required */}
+        <Route path="/careers" element={<PublicCareers />} />
+        <Route path="/careers/:id" element={<PublicCareers />} />
         {/* ROOT */}
 
 

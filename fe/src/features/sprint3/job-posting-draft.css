@@ -128,3 +128,19 @@
     gap: 14px;
   }
 }
+
+/* S3-09/10: Recruiter-only handoff to HR Manager. */
+.ats-jp-my-drafts{margin:0 0 22px;padding:20px 22px;background:#fff;border:1px solid #dce6f3;border-radius:14px;box-shadow:0 4px 20px rgba(22,47,80,.04)}
+.ats-jp-my-drafts-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.ats-jp-my-drafts-heading h2{font-size:17px;margin:0 0 4px;color:#213957}
+.ats-jp-my-drafts-heading p{font-size:12px;margin:0;color:#6b7e96;line-height:1.5}
+.ats-jp-refresh{display:inline-flex;align-items:center;gap:6px;padding:9px 12px;background:#f8fbff;color:#344f71;border:1px solid #dce6f3;border-radius:9px;cursor:pointer;font:inherit;font-size:12px;font-weight:700}
+.ats-jp-draft-list{display:grid;gap:9px}
+.ats-jp-draft-item{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 14px;background:#f8fbff;border:1px solid #e3ecf7;border-radius:11px}
+.ats-jp-draft-item>div{min-width:0;display:flex;flex-direction:column;gap:5px}
+.ats-jp-draft-item strong{font-size:13px;overflow-wrap:anywhere;color:#203650}
+.ats-jp-draft-item small{font-size:11px;color:#687e9a}
+.ats-jp-draft-item button{display:inline-flex;align-items:center;justify-content:center;gap:7px;flex-shrink:0;padding:10px 13px;background:#4c42df;border:1px solid #4c42df;border-radius:9px;font:inherit;font-size:12px;font-weight:750;color:white;cursor:pointer}
+.ats-jp-draft-item button:disabled,.ats-jp-refresh:disabled{opacity:.55;cursor:not-allowed}
+.ats-jp-draft-item button:focus-visible,.ats-jp-refresh:focus-visible{outline:3px solid #a8bcff;outline-offset:2px}
+@media(max-width:680px){.ats-jp-my-drafts{padding:16px}.ats-jp-my-drafts-heading,.ats-jp-draft-item{align-items:stretch;flex-direction:column}.ats-jp-draft-item button{width:100%}}
