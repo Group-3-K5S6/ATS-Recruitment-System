@@ -20,6 +20,7 @@ export enum PermissionCode {
   JOBS_READ = 'jobs:read',
   JOBS_CREATE = 'jobs:create',
   JOBS_UPDATE = 'jobs:update',
+  JOBS_APPROVE = 'jobs:approve',
   JOBS_PUBLISH = 'jobs:publish',
   JOBS_DELETE = 'jobs:delete',
 
@@ -104,6 +105,7 @@ export const ALL_PERMISSIONS: PermissionDefinition[] = [
   { code: PermissionCode.JOBS_READ, module: 'jobs', description: 'Xem danh sách và chi tiết tin tuyển dụng' },
   { code: PermissionCode.JOBS_CREATE, module: 'jobs', description: 'Tạo tin tuyển dụng mới' },
   { code: PermissionCode.JOBS_UPDATE, module: 'jobs', description: 'Cập nhật nội dung tin tuyển dụng' },
+  { code: PermissionCode.JOBS_APPROVE, module: 'jobs', description: 'Phê duyệt hoặc từ chối tin tuyển dụng' },
   { code: PermissionCode.JOBS_PUBLISH, module: 'jobs', description: 'Đăng tải hoặc đóng tin tuyển dụng' },
   { code: PermissionCode.JOBS_DELETE, module: 'jobs', description: 'Xóa tin tuyển dụng' },
 
