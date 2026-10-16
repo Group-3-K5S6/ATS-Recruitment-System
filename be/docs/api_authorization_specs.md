@@ -172,10 +172,50 @@ Tài liệu đặc tả toàn diện về **Authentication, Role-Based Access Co
 - **Permission**: `jobs:create`
 - **Allowed Roles**: `RECRUITER`, `HR_MANAGER`, `ADMIN`.
 
-#### `POST /api/jobs/:id/publish`
+#### `POST /api/job-posting-drafts` (SCRUM-103)
+- **Auth**: Required
+- **Permission**: `jobs:create`
+- **Allowed Roles**: `RECRUITER`, `HR_MANAGER`, `ADMIN`.
+- **Mục đích**: Soạn bản nháp tin tuyển dụng từ một Requisition đã duyệt (`status: 'APPROVED'`).
+
+#### `GET /api/jobs/:id/preview` (SCRUM-105)
+- **Auth**: Required
+- **Permission**: `jobs:read`
+- **Scope**:
+  - `HR_MANAGER`, `ADMIN`: Xem trước mọi tin tuyển dụng.
+  - `RECRUITER`: Xem trước tin tuyển dụng do mình phụ trách.
+  - `HIRING_MANAGER`: Xem trước tin tuyển dụng thuộc bộ phận mình.
+  - `CANDIDATE`, `INTERVIEWER`: Bị từ chối (403 Forbidden).
+- **Mục đích**: Xem trước giao diện công khai trước khi xuất bản, bao gồm chi tiết tin tuyển dụng, dải lương theo cấu hình `showSalary` và thông tin thương hiệu công ty (`CompanyProfile`).
+
+#### `POST /api/jobs/:id/approve` (SCRUM-105)
+- **Auth**: Required
+- **Permission**: `jobs:approve`
+- **Allowed Roles**: `HR_MANAGER`, `ADMIN`.
+- **Mục đích**: Trưởng phòng Nhân sự duyệt tin tuyển dụng, chuyển trạng thái sang `APPROVED`, ghi nhận `approvedById`, `approvedAt`, `approvalNotes`.
+- **Audit Action**: `JOB_POSTING_APPROVED`
+
+#### `POST /api/jobs/:id/reject` (SCRUM-105)
+- **Auth**: Required
+- **Permission**: `jobs:approve`
+- **Allowed Roles**: `HR_MANAGER`, `ADMIN`.
+- **Mục đích**: Trưởng phòng Nhân sự từ chối tin tuyển dụng kèm lý do bắt buộc, chuyển trạng thái sang `REJECTED`, ghi nhận `rejectionReason`.
+- **Audit Action**: `JOB_POSTING_REJECTED`
+
+#### `POST /api/jobs/:id/publish` (SCRUM-105)
 - **Auth**: Required
 - **Permission**: `jobs:publish`
-- **Allowed Roles**: `RECRUITER`, `HR_MANAGER`, `ADMIN`.
+- **Allowed Roles**: `HR_MANAGER`, `ADMIN` (để bảo đảm chuẩn thương hiệu công ty).
+- **Điều kiện nghiêm ngặt**: Tin tuyển dụng bắt buộc phải qua phê duyệt (`status === 'APPROVED'`). Nếu chưa duyệt sẽ bị từ chối `400 INVALID_STATUS`.
+- **Mục đích**: Xuất bản tin tuyển dụng công khai, chuyển trạng thái sang `PUBLISHED`, ghi nhận `publishedById` và `publishedAt`.
+- **Audit Action**: `JOB_POSTING_PUBLISHED`
+
+#### `POST /api/jobs/:id/unpublish` & `POST /api/jobs/:id/close` (SCRUM-105)
+- **Auth**: Required
+- **Permission**: `jobs:publish`
+- **Allowed Roles**: `HR_MANAGER`, `ADMIN`.
+- **Mục đích**: Gỡ tin khỏi hiển thị công khai, chuyển trạng thái sang `CLOSED`.
+- **Audit Action**: `JOB_POSTING_CLOSED`
 
 ---
 

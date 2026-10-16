@@ -266,6 +266,27 @@ function Sidebar({
       path: "/recruitment-assignments",
     });
   }
+  // S3-10: FE shortcut for HR Manager job publishing.
+  if (
+    role === "HRManager" &&
+    !menuLoading &&
+    !menuError &&
+    !menu.some(
+      (item) =>
+        item.key === "job-posting-publish" ||
+        item.label === "Duyệt & xuất bản tin"
+    )
+  ) {
+    const index = menu.findIndex(
+      (item) => item.key === "job-posting-draft"
+    );
+
+    menu.splice(index >= 0 ? index + 1 : menu.length, 0, {
+      key: "job-posting-publish",
+      label: "Duyệt & xuất bản tin",
+      path: "/job-postings/publish",
+    });
+  }
   menu.push(
     {
       key: "profile",
@@ -289,6 +310,7 @@ function Sidebar({
       setOpen(false);
       return;
     }
+    
     // S3-06: Open recruitment assignment page.
     if (
       item.key === "recruitment-assignments" ||
@@ -303,6 +325,17 @@ function Sidebar({
       setOpen(false);
       return;
     }
+    // S3-10: Open job publishing page.
+  if (
+    item.key === "job-posting-publish" ||
+    item.label === "Duyệt & xuất bản tin"
+  ) {
+    navigate("/job-postings/publish");
+    setOpen(false);
+    return;
+  }
+  
+
     // S3-02: Approver goes to the requisition approval page.
     if (item.key === "requisitions" && role === "Approver") {
       navigate("/requisition-approvals");

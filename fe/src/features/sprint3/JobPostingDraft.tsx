@@ -7,6 +7,8 @@ import {
   FileText,
   MapPin,
   Save,
+  Send,
+  RefreshCw,
   ShieldCheck,
 } from 'lucide-react';
 import { atsApi, fromError } from './api';
@@ -40,6 +42,8 @@ function todayLocal(): string {
   return `${year}-${month}-${day}`;
 }
 
+type MyJob = { id: string; title: string; status: string; location?: string; applicationDeadline?: string | null };
+
 export default function JobPostingDraft() {
   const [approved, setApproved] = useState<Requisition[]>([]);
   const [selectedId, setSelectedId] = useState('');
@@ -51,6 +55,41 @@ export default function JobPostingDraft() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const requestSequence = useRef(0);
+  const [myDrafts, setMyDrafts] = useState<MyJob[]>([]);
+  const [draftsBusy, setDraftsBusy] = useState(true);
+  const [submitId, setSubmitId] = useState<string | null>(null);
+  const [draftError, setDraftError] = useState('');
+
+  async function loadMyDrafts() {
+    setDraftsBusy(true);
+    try {
+      // GET /api/jobs đã giới hạn danh sách đúng Recruiter được phân công.
+      const list = await atsApi<MyJob[]>('/api/jobs');
+      setMyDrafts(list.filter(job => job.status === 'DRAFT' || job.status === 'REJECTED'));
+      setDraftError('');
+    } catch (cause: unknown) { setDraftError(fromError(cause)); }
+    finally { setDraftsBusy(false); }
+  }
+
+  async function submitMyDraft(job: MyJob) {
+    if (submitId !== null) return;
+    if (!window.confirm(`Gửi tin “${job.title}” cho Trưởng phòng Nhân sự phê duyệt?`)) return;
+    setSubmitId(job.id);
+    setDraftError('');
+    try {
+      const updated = await atsApi<{ status: string }>(`/api/jobs/${encodeURIComponent(job.id)}/submit-for-approval`, 'POST');
+      if (updated.status !== 'PENDING_APPROVAL') throw new Error('API chưa xác nhận tin ở trạng thái Chờ duyệt.');
+      setSuccess(`Đã gửi tin “${job.title}” cho Trưởng phòng Nhân sự phê duyệt.`);
+      await loadMyDrafts();
+    } catch (cause: unknown) { setDraftError(fromError(cause)); }
+    finally { setSubmitId(null); }
+  }
+
+  useEffect(() => {
+    // Lần tải đầu chỉ chạy sau effect; việc làm mới bằng nút bấm vẫn giữ nguyên.
+    const timer = window.setTimeout(() => { void loadMyDrafts(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -163,7 +202,8 @@ export default function JobPostingDraft() {
       if (!result.id || result.status !== 'DRAFT') {
         throw new Error('Backend chưa xác nhận bản nháp ở trạng thái DRAFT. Cần kiểm tra kết quả lưu.');
       }
-      setSuccess(`Đã lưu bản nháp tin tuyển dụng (mã: ${result.id}). Tin chưa được xuất bản.`);
+      setSuccess(`Đã lưu bản nháp (mã: ${result.id}). Chọn “Gửi duyệt” trong mục Bản nháp của tôi bên dưới.`);
+      await loadMyDrafts();
     } catch (cause: unknown) {
       setError(fromError(cause));
     } finally {
@@ -196,6 +236,20 @@ export default function JobPostingDraft() {
           <CheckCircle2 size={19} aria-hidden="true" /><span>{success}</span>
         </div>
       )}
+
+      <section className="ats-jp-my-drafts" aria-labelledby="ats-jp-my-drafts-title">
+        <div className="ats-jp-my-drafts-heading">
+          <div><h2 id="ats-jp-my-drafts-title">Bản nháp của tôi</h2><p>Recruiter gửi tin đã soạn cho Trưởng phòng Nhân sự. HR Manager không tự gửi duyệt.</p></div>
+          <button type="button" className="ats-jp-refresh" onClick={() => void loadMyDrafts()} disabled={draftsBusy || submitId !== null}><RefreshCw size={15}/> Làm mới</button>
+        </div>
+        {draftError && <div className="ats-jp-feedback ats-jp-feedback--error" role="alert"><AlertCircle size={17}/>{draftError}</div>}
+        {draftsBusy ? <p className="ats-jp-muted" role="status">Đang tải bản nháp…</p> : myDrafts.length === 0 ?
+          <p className="ats-jp-empty">Chưa có bản nháp cần gửi duyệt. Bạn có thể soạn tin mới bên dưới.</p> :
+          <div className="ats-jp-draft-list">{myDrafts.map(job => <div className="ats-jp-draft-item" key={job.id}>
+            <div><strong>{job.title}</strong><small>{job.status === 'REJECTED' ? 'Đã từ chối · kiểm tra và chỉnh sửa trước khi gửi lại' : 'Bản nháp'} · {job.location || 'Chưa rõ địa điểm'}</small></div>
+            <button type="button" disabled={submitId !== null} onClick={() => void submitMyDraft(job)}><Send size={15}/>{submitId === job.id ? 'Đang gửi…' : 'Gửi duyệt HR Manager'}</button>
+          </div>)}</div>}
+      </section>
 
       <div className="ats-jp-horizontal">
         <div className="ats-jp-flow-grid" aria-label="Các bước soạn tin tuyển dụng theo thứ tự từ trái sang phải">

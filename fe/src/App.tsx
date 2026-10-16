@@ -21,6 +21,8 @@ import {
 import "./App.css";
 import CopyRequisition from "./features/sprint3/CopyRequisition";
 import JobPostingDraft from "./features/sprint3/JobPostingDraft";
+import JobPostingPublish from "./features/sprint3/JobPostingPublish";
+import PublicCareers from "./features/sprint3/PublicCareers"; // S310_PUBLIC_V1
 import ApprovalWorkflowConfig from "./features/sprint3/ApprovalWorkflowConfig";
 import Sprint3RouteGuard from "./features/sprint3/Sprint3RouteGuard";
 import RequisitionApproval from "./features/sprint3/RequisitionApproval";
@@ -42,7 +44,7 @@ import {
   NotFoundPage,
   ServerErrorPage,
 } from "./pages/ErrorPages";
-// @ts-ignore
+// @ts-expect-error -- BudgetManagement lacks a TypeScript declaration in the existing project.
 import BudgetManagement from "./components/BudgetManagement";
 
 import type { Role } from "./data/roleMenus";
@@ -1746,6 +1748,47 @@ function Sprint3RecruitmentAssignmentWithSidebar() {
     </div>
   );
 }
+/* S3-10 FE: Giao diện duyệt và xuất bản tin tuyển dụng */
+function Sprint3JobPostingPublishWithSidebar() {
+  const navigate = useNavigate();
+  const user = getSessionUser();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const handleLogout = async () => {
+    try {
+      await logoutFromBackend();
+      clearSession();
+      navigate("/login", { replace: true });
+    } catch (error) {
+      console.error("Logout failed:", error);
+
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Không thể đăng xuất. Vui lòng thử lại."
+      );
+    }
+  };
+
+  return (
+    <div className="dashboard-layout">
+      <Sidebar
+        role={resolveRole(user.roles)}
+        userName={user.fullName}
+        onLogout={handleLogout}
+        selectedMenu="Duyệt & xuất bản tin"
+        onMenuSelect={() => navigate("/dashboard")}
+      />
+
+      <main className="dashboard-content">
+        <JobPostingPublish />
+      </main>
+    </div>
+  );
+}
 
 function App() {
 
@@ -1755,6 +1798,9 @@ function App() {
       <SessionIdleWatcher />
 
       <Routes>
+        {/* Public published jobs: no login required */}
+        <Route path="/careers" element={<PublicCareers />} />
+        <Route path="/careers/:id" element={<PublicCareers />} />
         {/* ROOT */}
 
 
@@ -1917,6 +1963,14 @@ function App() {
           element={
             <Sprint3RouteGuard allowedRole="HR_MANAGER">
               <Sprint3RecruitmentAssignmentWithSidebar />
+            </Sprint3RouteGuard>
+          }
+        />
+        <Route
+          path="/job-postings/publish"
+          element={
+            <Sprint3RouteGuard allowedRole="HR_MANAGER">
+              <Sprint3JobPostingPublishWithSidebar />
             </Sprint3RouteGuard>
           }
         />

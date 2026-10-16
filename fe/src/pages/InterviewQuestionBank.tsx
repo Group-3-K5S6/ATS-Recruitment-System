@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import type { Role } from "../data/roleMenus";
@@ -99,12 +99,12 @@ export default function InterviewQuestionBank({
   const [showAddModal, setShowAddModal] = useState(false);
   const [modalError, setModalError] = useState("");
 
-  const handleUnauthorized = () => {
+  const handleUnauthorized = useCallback(() => {
     clearLocalSession();
     navigate("/login");
-  };
+  }, [navigate]);
 
-  const loadLookups = async () => {
+  const loadLookups = useCallback(async () => {
     const token = getToken();
 
     if (!token) {
@@ -166,9 +166,9 @@ export default function InterviewQuestionBank({
         "Không thể tải chức danh và tiêu chí."
       );
     }
-  };
+  }, [handleUnauthorized]);
 
-  const loadQuestions = async () => {
+  const loadQuestions = useCallback(async () => {
     const token = getToken();
 
     if (!token) {
@@ -233,11 +233,12 @@ export default function InterviewQuestionBank({
     } finally {
       setLoading(false);
     }
-  };
+  }, [handleUnauthorized, searchText, filterJobId, filterCriterionId]);
 
   useEffect(() => {
-    void loadLookups();
-  }, []);
+    const timer = window.setTimeout(() => { void loadLookups(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadLookups]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -247,11 +248,7 @@ export default function InterviewQuestionBank({
     return () => {
       window.clearTimeout(timer);
     };
-  }, [
-    searchText,
-    filterJobId,
-    filterCriterionId,
-  ]);
+  }, [loadQuestions]);
 
   const selectedJob = useMemo(
     () =>
