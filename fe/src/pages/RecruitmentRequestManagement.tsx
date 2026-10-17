@@ -610,6 +610,11 @@ export default function RecruitmentRequestManagement({
             <div>
               <p className="recruitment-kicker">QUẢN LÝ TUYỂN DỤNG</p>
               <h1>Quản lý yêu cầu tuyển dụng</h1>
+              {role === "HRManager" && (
+                <button type="button" className="recruitment-action-button"
+                  onClick={() => navigate("/recruitment-requests/monitoring")}
+                >Danh sách &amp; cảnh báo trễ hạn</button>
+              )}
             </div>
           </header>
 
