@@ -5,6 +5,7 @@ import InterviewQuestionBank from "./pages/InterviewQuestionBank";
 import RecruitmentSharedCategories from "./pages/RecruitmentSharedCategories";
 
 import RecruitmentRequestManagement from "./pages/RecruitmentRequestManagement";
+import RequisitionDeadlineMonitor from "./features/sprint3/RequisitionDeadlineMonitor";
 import CreateRecruitmentRequest from "./pages/CreateRecruitmentRequest";
 
 
@@ -1113,6 +1114,30 @@ function RecruitmentSharedCategoriesRoute() {
   );
 }
 
+function S308RequisitionMonitorRoute() {
+  const navigate = useNavigate();
+  const user = getSessionUser();
+  if (!user) return <Navigate to="/login" replace />;
+  const role = resolveRole(user.roles);
+  if (role !== "HRManager") return <Navigate to="/403" replace />;
+  const logout = async () => {
+    try {
+      await logoutFromBackend();
+      clearSession();
+      navigate("/login", { replace: true });
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Đăng xuất thất bại.");
+    }
+  };
+  return (
+    <div className="dashboard-layout">
+      <Sidebar role={role} userName={user.fullName} onLogout={logout}
+        selectedMenu="Yêu cầu tuyển dụng" onMenuSelect={() => navigate("/dashboard")} />
+      <main className="dashboard-content"><RequisitionDeadlineMonitor /></main>
+    </div>
+  );
+}
+
 function RecruitmentRequestRoute() {
   const user = getSessionUser();
 
@@ -1893,6 +1918,7 @@ function App() {
   element={<RecruitmentSharedCategoriesRoute />}
 />
 
+        <Route path="/recruitment-requests/monitoring" element={<S308RequisitionMonitorRoute />} />
         <Route
           path="/recruitment-requests"
           element={<RecruitmentRequestRoute />}
