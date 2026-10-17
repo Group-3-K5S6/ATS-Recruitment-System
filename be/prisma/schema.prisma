@@ -120,6 +120,7 @@ model Department {
   requisitions      Requisition[]
   jobs              Job[]
   headcountBudgets  DepartmentHeadcountBudget[]
+  salaryBudgets     DepartmentSalaryBudget[]
   approvalWorkflows ApprovalWorkflow[]
 }
 
@@ -579,4 +580,19 @@ model RequisitionAssignmentHistory {
 
   @@index([requisitionId])
   @@index([actorId])
+}
+
+// S3-04: planned annual salary budget, independent from recruitment expenses.
+model DepartmentSalaryBudget {
+  id           String   @id @default(uuid())
+  departmentId String
+  year         Int
+  amountVnd    BigInt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  @@unique([departmentId, year])
+  @@index([year])
 }
