@@ -287,6 +287,20 @@ function Sidebar({
       path: "/job-postings/publish",
     });
   }
+  // S3-04: HR Manager / Admin budget management shortcut
+  if (
+    (role === "HRManager" || role === "Admin") &&
+    !menuLoading &&
+    !menuError &&
+    !menu.some((item) => item.key === "budget-management")
+  ) {
+    const index = menu.findIndex((item) => item.key === "job-titles");
+    menu.splice(index >= 0 ? index + 1 : menu.length, 0, {
+      key: "budget-management",
+      label: "Ngân sách & chỉ tiêu",
+      path: "/budget-management",
+    });
+  }
   menu.push(
     {
       key: "profile",
@@ -305,6 +319,12 @@ function Sidebar({
   };
 
   const handleMenuClick = (item: SidebarItem) => {
+    if (item.key === "budget-management") {
+      navigate("/budget-management");
+      setOpen(false);
+      return;
+    }
+
     if (item.key === "job-posting-draft") {
       navigate("/job-postings/draft");
       setOpen(false);

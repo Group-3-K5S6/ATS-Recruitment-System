@@ -46,7 +46,7 @@ import {
   ServerErrorPage,
 } from "./pages/ErrorPages";
 // @ts-expect-error -- BudgetManagement lacks a TypeScript declaration in the existing project.
-import BudgetManagement from "./components/BudgetManagement";
+import BudgetManagement from "./components/BudgetManagementLive";
 
 import type { Role } from "./data/roleMenus";
 
@@ -1815,6 +1815,45 @@ function Sprint3JobPostingPublishWithSidebar() {
   );
 }
 
+function Sprint3BudgetWithSidebar() {
+  const navigate = useNavigate();
+  const user = getSessionUser();
+
+  if (!user) return <Navigate to="/login" replace />;
+
+  if (!user.roles.some((role) =>
+    ["ADMIN", "HR_MANAGER", "RECRUITER"].includes(role)
+  )) {
+    return <Navigate to="/403" replace />;
+  }
+
+  const handleLogout = async () => {
+    try {
+      await logoutFromBackend();
+      clearSession();
+      navigate("/login", { replace: true });
+    } catch (error) {
+      window.alert(
+        error instanceof Error ? error.message : "Đăng xuất thất bại."
+      );
+    }
+  };
+
+  return (
+    <div className="dashboard-layout">
+      <Sidebar
+        role={resolveRole(user.roles)}
+        userName={user.fullName}
+        onLogout={handleLogout}
+        selectedMenu="Ngân sách & chỉ tiêu"
+        onMenuSelect={() => navigate("/dashboard")}
+      />
+      <main className="dashboard-content">
+        <BudgetManagement />
+      </main>
+    </div>
+  );
+}
 function App() {
 
   return (
@@ -1879,7 +1918,7 @@ function App() {
             <DashboardRoute />
           }
         />
-        <Route path="/budget-management" element={<BudgetManagement />} />
+        <Route path="/budget-management" element={<Sprint3BudgetWithSidebar />} />
 
 
         {/* SPRINT 2 */}

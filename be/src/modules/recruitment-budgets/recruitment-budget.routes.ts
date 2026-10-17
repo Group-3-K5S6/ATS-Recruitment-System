@@ -1,3 +1,4 @@
+import { AnnualSalaryBudgetController, annualSalaryBudgetSchema } from './annual-salary-budget.controller';
 import { Router } from 'express';
 import { RecruitmentBudgetController, createRecruitmentExpenseSchema, updateRecruitmentExpenseSchema, upsertHeadcountBudgetSchema } from './recruitment-budget.controller';
 import { authenticate } from '../../middleware/authenticate';
@@ -9,6 +10,13 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/headcount', requirePermission(PermissionCode.HEADCOUNT_BUDGETS_READ), RecruitmentBudgetController.headcountBudgets);
+
+router.get('/salary', requirePermission(PermissionCode.HEADCOUNT_BUDGETS_READ), AnnualSalaryBudgetController.list);
+router.put('/salary/:departmentId',
+  requirePermission(PermissionCode.HEADCOUNT_BUDGETS_MANAGE),
+  validateBody(annualSalaryBudgetSchema),
+  AnnualSalaryBudgetController.upsert
+);
 router.put(
   '/headcount/:departmentId',
   requirePermission(PermissionCode.HEADCOUNT_BUDGETS_MANAGE),
