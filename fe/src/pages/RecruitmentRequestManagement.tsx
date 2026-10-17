@@ -66,6 +66,7 @@ type ApprovalHistoryResponse = {
   requisitionId: string;
   title: string;
   currentStatus: string;
+  approvalChain: string | null;
   department: { id: string; name: string; code: string } | null;
   hiringManager: ApprovalPerson | null;
   designatedApprover: ApprovalPerson | null;
@@ -280,7 +281,7 @@ function parseApprovalChain(
   if (!value) {
     return {
       steps: [],
-      issue: "API không cung cấp snapshot chuỗi cấp duyệt cho yêu cầu này.",
+      issue: "Yêu cầu cũ hoặc duyệt một cấp không có snapshot. Các quyết định thực tế được hiển thị trong lịch sử bên dưới.",
     };
   }
 
@@ -1042,13 +1043,18 @@ export default function RecruitmentRequestManagement({
                   </h4>
                   {(() => {
                     const chain = parseApprovalChain(
-                      selectedApprovalRequest.approvalChain,
+                      approvalHistory.approvalChain,
                     );
 
                     if (chain.steps.length === 0) {
                       return (
                         <>
-                          <div className="approval-tracking-error" role="status">
+                          <div
+                            className={approvalHistory.approvalChain
+                              ? "approval-tracking-error"
+                              : "approval-history-readonly-note"}
+                            role="status"
+                          >
                             {chain.issue}
                           </div>
                           {approvalHistory.currentStatus === "PENDING_APPROVAL" &&
@@ -1202,10 +1208,9 @@ export default function RecruitmentRequestManagement({
                   )}
 
                   <p className="approval-history-data-limit">
-                    Trạng thái và thứ tự cấp lấy từ snapshot của yêu cầu. Với
-                    người duyệt ở cấp chưa xử lý, API chỉ cung cấp ID; tên người
-                    duyệt chỉ hiển thị khi có trong lịch sử hoặc là người đang
-                    được phân công.
+                    Khi có snapshot, trạng thái từng cấp lấy từ API lịch sử.
+                    Nếu không có snapshot, chỉ hiển thị các quyết định đã ghi
+                    nhận và người đang xử lý, không suy đoán chuỗi duyệt cũ.
                   </p>
                 </>
               ) : null}

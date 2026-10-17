@@ -220,6 +220,7 @@ describe('SCRUM-91 – Approval History API', () => {
       expect(data).toHaveProperty('requisitionId');
       expect(data).toHaveProperty('title');
       expect(data).toHaveProperty('currentStatus');
+      expect(data).toHaveProperty('approvalChain');
       expect(data).toHaveProperty('department');
       expect(data).toHaveProperty('hiringManager');
       expect(data).toHaveProperty('designatedApprover');
@@ -227,6 +228,36 @@ describe('SCRUM-91 – Approval History API', () => {
       expect(data).toHaveProperty('totalSteps');
       expect(data).toHaveProperty('history');
       expect(Array.isArray(data.history)).toBe(true);
+    });
+
+    it('Tra snapshot chuoi duyet tu API lich su', async () => {
+      const existing = await prisma.requisition.findUniqueOrThrow({
+        where: { id: pendingReqId },
+        select: { approvalChain: true },
+      });
+
+      const snapshot = JSON.stringify([
+        { step: 1, approverId, status: 'PENDING' },
+      ]);
+
+      try {
+        await prisma.requisition.update({
+          where: { id: pendingReqId },
+          data: { approvalChain: snapshot },
+        });
+
+        const result = await request(app)
+          .get(`/api/requisitions/${pendingReqId}/approval-history`)
+          .set(authHeader(hrManagerToken));
+
+        expect(result.status).toBe(200);
+        expect(result.body.data.approvalChain).toBe(snapshot);
+      } finally {
+        await prisma.requisition.update({
+          where: { id: pendingReqId },
+          data: { approvalChain: existing.approvalChain },
+        });
+      }
     });
   });
 

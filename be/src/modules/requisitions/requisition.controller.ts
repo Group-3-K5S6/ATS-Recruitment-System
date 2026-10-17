@@ -1405,6 +1405,7 @@ export class RequisitionController {
         requisitionId: requisition.id,
         title: requisition.title,
         currentStatus: requisition.status,
+        approvalChain: requisition.approvalChain,
         department: requisition.department,
         hiringManager: requisition.hiringManager,
         designatedApprover: requisition.approver,
