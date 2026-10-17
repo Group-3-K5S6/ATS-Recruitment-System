@@ -1,7 +1,7 @@
 import './create-recruitment-layout.css';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, FileText, Info, Save, Send, Wallet } from 'lucide-react';
 import './CreateRecruitmentRequest.css';
 import SalaryVndInput from '../components/SalaryVndInput';
@@ -58,6 +58,9 @@ function flattenDepartments(nodes: Department[]): Department[] {
 
 export default function CreateRecruitmentRequest() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const resubmitId = searchParams.get('resubmit');
+  const restoringIdRef = useRef<string | null>(null);
   // S3-05: nut sao chep chi hien cho Truong bo phan; BE van kiem tra quyen thuc.
   const canCopyExisting = (() => {
     try {
@@ -76,6 +79,7 @@ export default function CreateRecruitmentRequest() {
   const [notice, setNotice] = useState('');
   const [currentUserId, setCurrentUserId] = useState('');
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
+  const [editingReturned, setEditingReturned] = useState(false);
   const [drafts, setDrafts] = useState<RequisitionSummary[]>([]);
   const [showDrafts, setShowDrafts] = useState(false);
   const [loadingDrafts, setLoadingDrafts] = useState(false);
@@ -117,7 +121,7 @@ export default function CreateRecruitmentRequest() {
     try {
       const items = await request<RequisitionSummary[]>('/api/requisitions');
       setDrafts(items.filter(item =>
-        item.status === 'DRAFT' && item.hiringManagerId === currentUserId
+        (item.status === 'DRAFT' || item.status === 'CHANGES_REQUESTED') && item.hiringManagerId === currentUserId
       ));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Không tải được danh sách bản nháp.');
@@ -130,8 +134,8 @@ export default function CreateRecruitmentRequest() {
     setError(''); setNotice(''); setLoadingDrafts(true);
     try {
       const item = await request<SavedRequisition>(`/api/requisitions/${encodeURIComponent(id)}`);
-      if (item.status !== 'DRAFT' || item.hiringManagerId !== currentUserId) {
-        throw new Error('Chỉ có thể mở bản nháp do chính bạn tạo.');
+      if (!['DRAFT', 'CHANGES_REQUESTED'].includes(item.status) || item.hiringManagerId !== currentUserId) {
+        throw new Error('Chỉ có thể mở bản nháp hoặc yêu cầu cần bổ sung do chính bạn tạo.');
       }
       setForm({
         jobTitleId: item.jobTitleId || '',
@@ -146,8 +150,16 @@ export default function CreateRecruitmentRequest() {
         salaryExplanation: item.salaryExplanation || '',
       });
       setEditingDraftId(item.id);
+      setEditingReturned(item.status === 'CHANGES_REQUESTED');
+      if (item.status === 'CHANGES_REQUESTED') {
+        setSearchParams({ resubmit: item.id }, { replace: true });
+      } else if (resubmitId) {
+        setSearchParams({}, { replace: true });
+      }
       setShowDrafts(false);
-      setNotice(`Đã mở bản nháp ${item.id}. Điền thông tin còn thiếu, sau đó nhấn Gửi yêu cầu phê duyệt.`);
+      setNotice(item.status === 'CHANGES_REQUESTED'
+        ? `Đã mở yêu cầu cần bổ sung ${item.id}. Cập nhật thông tin rồi nhấn Gửi yêu cầu phê duyệt để nộp lại chính yêu cầu này.`
+        : `Đã mở bản nháp ${item.id}. Điền thông tin còn thiếu, sau đó nhấn Gửi yêu cầu phê duyệt.`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Không mở được bản nháp.');
     } finally {
@@ -155,8 +167,20 @@ export default function CreateRecruitmentRequest() {
     }
   }
 
+  useEffect(() => {
+    if (!resubmitId || !currentUserId || editingDraftId === resubmitId || restoringIdRef.current === resubmitId) return;
+    restoringIdRef.current = resubmitId;
+    void openDraft(resubmitId).finally(() => {
+      restoringIdRef.current = null;
+    });
+    // Khoi phuc yeu cau sau khi tai lai trang.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resubmitId, currentUserId, editingDraftId]);
+
   function startNewRequest() {
+    setSearchParams({}, { replace: true });
     setEditingDraftId(null);
+    setEditingReturned(false);
     setForm(initialData);
     setError('');
     setNotice('Đang tạo yêu cầu mới.');
@@ -169,6 +193,14 @@ export default function CreateRecruitmentRequest() {
 
   async function submit(isDraft: boolean) {
     setError(''); setNotice('');
+    if (resubmitId && (editingDraftId !== resubmitId || !editingReturned)) {
+      setError(`Chưa tải được yêu cầu cần bổ sung ${resubmitId}. Hãy mở lại yêu cầu trước khi gửi.`);
+      return;
+    }
+    if (isDraft && editingReturned) {
+      setError('Yêu cầu đã trả về để bổ sung. Vui lòng cập nhật thông tin và gửi lại phê duyệt, không chuyển thành bản nháp.');
+      return;
+    }
     if (!form.jobTitleId || !form.departmentId) {
       setError('Vui lòng chọn chức danh và phòng ban.'); return;
     }
@@ -208,7 +240,9 @@ export default function CreateRecruitmentRequest() {
         // Giữ mã bản nháp để lần lưu/gửi tiếp theo dùng PUT thay vì tạo bản ghi mới.
         setEditingDraftId(data.id);
       } else {
+        if (editingReturned) setSearchParams({}, { replace: true });
         setEditingDraftId(null);
+        setEditingReturned(false);
         setForm(initialData);
         setDrafts(previous => previous.filter(draft => draft.id !== data.id));
       }
@@ -331,8 +365,8 @@ export default function CreateRecruitmentRequest() {
                 <section className="ats-req-draft-area" aria-label="Bản nháp yêu cầu tuyển dụng">
                   <div className="ats-req-draft-toolbar">
                     <div>
-                      <strong>{editingDraftId ? 'Đang chỉnh sửa bản nháp' : 'Bản nháp đã lưu'}</strong>
-                      <p>{editingDraftId ? `Mã yêu cầu: ${editingDraftId}` : 'Mở bản nháp cũ để bổ sung thông tin và gửi phê duyệt mà không tạo yêu cầu trùng.'}</p>
+                      <strong>{editingReturned ? 'Đang bổ sung yêu cầu' : editingDraftId ? 'Đang chỉnh sửa bản nháp' : 'Bản nháp & yêu cầu cần bổ sung'}</strong>
+                      <p>{editingDraftId ? `Mã yêu cầu: ${editingDraftId}` : 'Mở bản nháp hoặc yêu cầu bị trả về để bổ sung và gửi lại, không tạo yêu cầu trùng.'}</p>
                     </div>
                     <div className="ats-req-draft-buttons">
                       {canCopyExisting && (
@@ -340,19 +374,19 @@ export default function CreateRecruitmentRequest() {
                           Sao chép yêu cầu đã có
                         </button>
                       )}
-                      {editingDraftId && <button type="button" className="ats-req-btn" onClick={startNewRequest}>Tạo mới</button>}
+                      {editingDraftId && !editingReturned && <button type="button" className="ats-req-btn" onClick={startNewRequest}>Tạo mới</button>}
                       <button type="button" className="ats-req-btn ats-req-btn--draft" disabled={loadingDrafts || saving || loading || !currentUserId} onClick={() => void showSavedDrafts()}>
-                        {loadingDrafts ? 'Đang tải...' : 'Xem bản nháp đã lưu'}
+                        {loadingDrafts ? 'Đang tải...' : 'Xem bản nháp / cần bổ sung'}
                       </button>
                     </div>
                   </div>
                   {showDrafts && (
                     <div className="ats-req-draft-list">
-                      {loadingDrafts ? <p>Đang tải danh sách bản nháp...</p> : drafts.length === 0 ?
-                        <p>Không tìm thấy bản nháp của bạn.</p> : drafts.map(draft => (
+                      {loadingDrafts ? <p>Đang tải danh sách yêu cầu có thể sửa...</p> : drafts.length === 0 ?
+                        <p>Không có bản nháp hoặc yêu cầu cần bổ sung của bạn.</p> : drafts.map(draft => (
                           <div className="ats-req-draft-row" key={draft.id}>
-                            <div><strong>{draft.title || 'Yêu cầu tuyển dụng'}</strong><span>{draft.department?.name || 'Chưa có phòng ban'} · {draft.id}</span></div>
-                            <button type="button" className="ats-req-btn ats-req-btn--draft" disabled={loadingDrafts} onClick={() => void openDraft(draft.id)}>Mở bản nháp</button>
+                            <div><strong>{draft.title || 'Yêu cầu tuyển dụng'}</strong><span>{draft.department?.name || 'Chưa có phòng ban'} · {draft.id} · {draft.status === 'CHANGES_REQUESTED' ? 'Cần bổ sung' : 'Bản nháp'}</span></div>
+                            <button type="button" className="ats-req-btn ats-req-btn--draft" disabled={loadingDrafts} onClick={() => void openDraft(draft.id)}>{draft.status === 'CHANGES_REQUESTED' ? 'Bổ sung và nộp lại' : 'Mở bản nháp'}</button>
                           </div>
                         ))}
                     </div>
@@ -373,8 +407,8 @@ export default function CreateRecruitmentRequest() {
               <div className="ats-req-footer-copy"><strong>Hoàn tất yêu cầu</strong><span>Kiểm tra thông tin trước khi gửi phê duyệt.</span></div>
               <div className="ats-req-actions">
 
-                <button className="ats-req-btn ats-req-btn--draft" type="button" disabled={saving} onClick={() => void submit(true)}><Save size={17} aria-hidden="true" /> {saving ? 'Đang lưu...' : 'Lưu nháp'}</button>
-                <button className="ats-req-btn ats-req-btn--submit" type="submit" disabled={saving}><Send size={17} aria-hidden="true" /> {saving ? 'Đang lưu...' : 'Gửi yêu cầu phê duyệt'}</button>
+                <button className="ats-req-btn ats-req-btn--draft" type="button" disabled={saving || editingReturned} onClick={() => void submit(true)}><Save size={17} aria-hidden="true" /> {saving ? 'Đang lưu...' : 'Lưu nháp'}</button>
+                <button className="ats-req-btn ats-req-btn--submit" type="submit" disabled={saving || Boolean(resubmitId && editingDraftId !== resubmitId)}><Send size={17} aria-hidden="true" /> {saving ? 'Đang lưu...' : 'Gửi yêu cầu phê duyệt'}</button>
               </div>
             </footer>
               </aside>

@@ -900,6 +900,36 @@ export class RequisitionController {
       return;
     }
 
+    // S3-02: khi người tạo nộp lại hồ sơ bị yêu cầu bổ sung, khởi động lại
+    // chuỗi duyệt đã chụp (snapshot), không lấy workflow mới để thay đổi hạn mức.
+    // Các quyết định cũ vẫn được lưu trong requisitionApprovalHistory.
+    let updatedApprovalChain = approvalRes.chain ?? null;
+    let updatedApproverId = approvalRes.approverId ?? null;
+    if (existing.status === 'CHANGES_REQUESTED' && !isDraft && updatedApprovalChain) {
+      let steps: ApprovalStepSnapshot[];
+      try {
+        const parsed: unknown = JSON.parse(updatedApprovalChain);
+        if (!Array.isArray(parsed) || parsed.length === 0 ||
+          parsed.some((step) => !step || typeof step !== 'object' ||
+            typeof step.approverId !== 'string' || !step.approverId.trim())) {
+          throw new Error('Invalid approval chain');
+        }
+        steps = parsed as ApprovalStepSnapshot[];
+      } catch {
+        errorResponse(res, 'Dữ liệu chuỗi phê duyệt không hợp lệ.', 409, 'INVALID_APPROVAL_CHAIN');
+        return;
+      }
+
+      const restarted = steps.map((step, index) => ({
+        ...step,
+        status: index === 0 ? 'PENDING' as const : 'WAITING' as const,
+        decisionAt: null,
+        notes: null,
+      }));
+      updatedApprovalChain = JSON.stringify(restarted);
+      updatedApproverId = restarted[0].approverId;
+    }
+
     const assignmentRequested = data.leadRecruiterId !== undefined || data.supportingRecruiterIds !== undefined;
     const updatedLeadRecruiterId = data.leadRecruiterId ?? existing.leadRecruiterId;
     const originalSupportingIds = existing.supportingRecruiters.map((entry) => entry.recruiterId);
@@ -941,10 +971,10 @@ export class RequisitionController {
               salaryMax !== null && salaryMax !== undefined
               ? salaryMax * headcount
               : budget,
-          approverId: approvalRes.approverId ?? null,
+          approverId: updatedApproverId,
           approvalWorkflowId: approvalRes.workflowId ?? null,
           approvalWorkflowVersion: approvalRes.workflowVersion ?? null,
-          approvalChain: approvalRes.chain ?? null,
+          approvalChain: updatedApprovalChain,
           jobTitleId: jobTitleId ?? null,
           reason,
           proposedSalaryMin: salaryMin,

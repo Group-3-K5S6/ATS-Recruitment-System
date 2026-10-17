@@ -336,6 +336,9 @@ describe('SCRUM-89: BE-API xử lý phê duyệt (SCRUM-37)', () => {
 
       expect(updateRes.status).toBe(200);
       expect(updateRes.body.data.status).toBe('PENDING_APPROVAL');
+      expect(updateRes.body.data.approverId).toBe(approverUser.id);
+      const restartedChain = JSON.parse(updateRes.body.data.approvalChain);
+      expect(restartedChain.map((step: { status: string }) => step.status)).toEqual(['PENDING', 'WAITING']);
 
       // 3. Toàn bộ lịch sử trước đó không bị mất
       const historyRes = await request(app)
@@ -345,6 +348,84 @@ describe('SCRUM-89: BE-API xử lý phê duyệt (SCRUM-37)', () => {
       expect(historyRes.body.data.history.length).toBeGreaterThanOrEqual(1);
       expect(historyRes.body.data.history[0].decision).toBe('REQUEST_CHANGES');
       expect(historyRes.body.data.history[0].notes).toBe('Vui lòng tăng ngân sách dự kiến.');
+
+      // 4. Nộp lại xong thực sự duyệt tiếp được qua cả hai cấp.
+      const firstApproval = await request(app)
+        .post(`/api/requisitions/${req.id}/approve`)
+        .set(authHeader(approverToken))
+        .send({ notes: 'Đã bổ sung đủ.' });
+      expect(firstApproval.status).toBe(200);
+      expect(firstApproval.body.data.status).toBe('PENDING_APPROVAL');
+      expect(firstApproval.body.data.approverId).toBe(hrManagerUser.id);
+
+      const finalApproval = await request(app)
+        .post(`/api/requisitions/${req.id}/approve`)
+        .set(authHeader(hrManagerToken))
+        .send({ notes: 'Đồng ý ở cấp cuối.' });
+      expect(finalApproval.status).toBe(200);
+      expect(finalApproval.body.data.status).toBe('APPROVED');
+
+      const finalHistory = await request(app)
+        .get(`/api/requisitions/${req.id}/approval-history`)
+        .set(authHeader(hiringManagerToken));
+      expect(finalHistory.status).toBe(200);
+      expect(finalHistory.body.data.history.map((entry: { decision: string }) => entry.decision))
+        .toEqual(['REQUEST_CHANGES', 'APPROVE', 'APPROVE']);
+    });
+
+    it('Nộp lại sau yêu cầu bổ sung ở cấp 2 vẫn có thể duyệt từ cấp 1', async () => {
+      const chain = [
+        { step: 1, approverId: approverUser.id, status: 'PENDING' },
+        { step: 2, approverId: hrManagerUser.id, status: 'WAITING' },
+      ];
+      const req = await createPendingRequisition({
+        approverId: approverUser.id,
+        approvalChain: JSON.stringify(chain),
+      });
+
+      const firstApproval = await request(app)
+        .post(`/api/requisitions/${req.id}/approve`)
+        .set(authHeader(approverToken))
+        .send({});
+      expect(firstApproval.status).toBe(200);
+      expect(firstApproval.body.data.approverId).toBe(hrManagerUser.id);
+
+      const requestChanges = await request(app)
+        .post(`/api/requisitions/${req.id}/request-changes`)
+        .set(authHeader(hrManagerToken))
+        .send({ notes: 'Cần chỉnh lại JD ở cấp 2.' });
+      expect(requestChanges.status).toBe(200);
+      expect(requestChanges.body.data.status).toBe('CHANGES_REQUESTED');
+
+      const resubmit = await request(app)
+        .put(`/api/requisitions/${req.id}`)
+        .set(authHeader(hiringManagerToken))
+        .send({ description: 'JD đã được điều chỉnh theo yêu cầu cấp 2.', isDraft: false });
+      expect(resubmit.status).toBe(200);
+      const resetSteps = JSON.parse(resubmit.body.data.approvalChain);
+      expect(resetSteps.map((step: { status: string }) => step.status)).toEqual(['PENDING', 'WAITING']);
+      expect(resubmit.body.data.approverId).toBe(approverUser.id);
+
+      const retryStep1 = await request(app)
+        .post(`/api/requisitions/${req.id}/approve`)
+        .set(authHeader(approverToken))
+        .send({});
+      expect(retryStep1.status).toBe(200);
+      expect(retryStep1.body.data.approverId).toBe(hrManagerUser.id);
+
+      const retryStep2 = await request(app)
+        .post(`/api/requisitions/${req.id}/approve`)
+        .set(authHeader(hrManagerToken))
+        .send({});
+      expect(retryStep2.status).toBe(200);
+      expect(retryStep2.body.data.status).toBe('APPROVED');
+
+      const history = await request(app)
+        .get(`/api/requisitions/${req.id}/approval-history`)
+        .set(authHeader(hiringManagerToken));
+      expect(history.status).toBe(200);
+      expect(history.body.data.history.map((entry: { decision: string }) => entry.decision))
+        .toEqual(['APPROVE', 'REQUEST_CHANGES', 'APPROVE', 'APPROVE']);
     });
   });
 

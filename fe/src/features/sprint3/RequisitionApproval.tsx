@@ -31,7 +31,7 @@ type RequisitionDetail = Requisition & {
   } | null;
 };
 
-type Decision = "APPROVE" | "REJECT";
+type Decision = "APPROVE" | "REJECT" | "REQUEST_CHANGES";
 
 function statusLabel(status: string) {
   const labels: Record<string, string> = {
@@ -168,8 +168,10 @@ export default function RequisitionApproval() {
       return;
     }
 
-    if (decision === "REJECT" && !notes.trim()) {
-      setError("Vui lòng nhập ý kiến trước khi từ chối yêu cầu.");
+    if ((decision === "REJECT" || decision === "REQUEST_CHANGES") && !notes.trim()) {
+      setError(decision === "REJECT"
+        ? "Vui lòng nhập ý kiến trước khi từ chối yêu cầu."
+        : "Vui lòng nhập nội dung cần bổ sung trước khi gửi yêu cầu bổ sung.");
 
       return;
     }
@@ -179,8 +181,9 @@ export default function RequisitionApproval() {
     setMessage("");
 
     try {
+      const endpoint = decision === "REQUEST_CHANGES" ? "request-changes" : "approve";
       await atsApi(
-        `/api/requisitions/${encodeURIComponent(selected.id)}/approve`,
+        `/api/requisitions/${encodeURIComponent(selected.id)}/${endpoint}`,
         "POST",
         {
           decision,
@@ -188,11 +191,11 @@ export default function RequisitionApproval() {
         },
       );
 
-      if (decision === "APPROVE") {
-        setMessage("Đã duyệt yêu cầu tuyển dụng.");
-      } else {
-        setMessage("Đã từ chối yêu cầu tuyển dụng.");
-      }
+      setMessage(decision === "APPROVE"
+        ? "Đã duyệt yêu cầu tuyển dụng."
+        : decision === "REJECT"
+          ? "Đã từ chối yêu cầu tuyển dụng."
+          : "Đã gửi yêu cầu bổ sung thông tin.");
 
       await loadItems();
 
@@ -206,30 +209,6 @@ export default function RequisitionApproval() {
     } finally {
       setSubmitting(false);
     }
-  }
-
-  function requestSupplement() {
-    setError("");
-    setMessage("");
-
-    if (!notes.trim()) {
-      setError(
-        "Vui lòng nhập nội dung cần bổ sung trước khi gửi yêu cầu bổ sung.",
-      );
-
-      return;
-    }
-
-    /*
-     * S3-02:
-     * Backend hiện tại chưa có decision REQUEST_CHANGES /
-     * REQUEST_SUPPLEMENT.
-     *
-     * Không giả lập thành công ở FE.
-     */
-    setError(
-      "Backend hiện chưa hỗ trợ hành động Yêu cầu bổ sung. Cần bổ sung API trước khi chức năng này có thể gửi thật.",
-    );
   }
 
   return (
@@ -607,7 +586,7 @@ export default function RequisitionApproval() {
                   s302-btn
                   s302-btn--supplement
                 "
-                onClick={requestSupplement}
+                onClick={() => void submitDecision("REQUEST_CHANGES")}
                 disabled={submitting}
               >
                 <MessageSquareMore size={17} />
