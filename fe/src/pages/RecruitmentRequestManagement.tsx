@@ -11,7 +11,6 @@ type RecruitmentStatus =
   | "Tạm dừng"
   | "Đã huỷ";
 
-type JobPostingStatus = "Đang đăng" | "Đã gỡ";
 type ActionType = "completed" | "paused" | "cancelled";
 
 type RecruitmentRequest = {
@@ -20,19 +19,17 @@ type RecruitmentRequest = {
   title: string;
   department: string;
   requiredCount: number;
-  hiredCount?: number;
-  pipelineCount: number;
   createdAt: string;
   status: RecruitmentStatus;
-  jobPostingStatus: JobPostingStatus;
-  lastActionReason?: string;
-  lastActionNote?: string;
+  backendStatus: string;
 };
 
 type ApprovalTrackingRequest = {
   id: string;
   title: string;
   status: string;
+  headcount?: number;
+  createdAt?: string;
   approvalChain?: string | null;
   department?: { name: string } | null;
 };
@@ -100,78 +97,39 @@ const statusOptions: StatusFilter[] = [
   "Đã huỷ",
 ];
 
-const initialRequests: RecruitmentRequest[] = [
-  {
-    id: "REQ-2026-001",
-    code: "REQ-2026-001",
-    title: "Lập trình viên Frontend",
-    department: "Công nghệ",
-    requiredCount: 2,
-    pipelineCount: 4,
-    createdAt: "2026-01-14",
-    status: "Đang tuyển",
-    jobPostingStatus: "Đang đăng",
-  },
-  {
-    id: "REQ-2026-002",
-    code: "REQ-2026-002",
-    title: "Trưởng nhóm Backend",
-    department: "Công nghệ",
-    requiredCount: 1,
-    pipelineCount: 7,
-    createdAt: "2026-01-10",
-    status: "Đang tuyển",
-    jobPostingStatus: "Đang đăng",
-  },
-  {
-    id: "REQ-2026-003",
-    code: "REQ-2026-003",
-    title: "Chuyên viên Digital Marketing",
-    department: "Marketing",
-    requiredCount: 3,
-    hiredCount: 3,
-    pipelineCount: 0,
-    createdAt: "2025-12-20",
-    status: "Đã tuyển đủ",
-    jobPostingStatus: "Đã gỡ",
-    lastActionReason: "Đã đạt đủ số lượng cần tuyển.",
-  },
-  {
-    id: "REQ-2026-004",
-    code: "REQ-2026-004",
-    title: "Nhân viên Nhân sự",
-    department: "Nhân sự",
-    requiredCount: 2,
-    pipelineCount: 2,
-    createdAt: "2026-02-01",
-    status: "Tạm dừng",
-    jobPostingStatus: "Đã gỡ",
-    lastActionReason: "Theo kế hoạch tái điều chỉnh tuyển dụng trong quý.",
-  },
-  {
-    id: "REQ-2026-005",
-    code: "REQ-2026-005",
-    title: "Kỹ sư QA Automation",
-    department: "Công nghệ",
-    requiredCount: 2,
-    pipelineCount: 5,
-    createdAt: "2025-11-16",
-    status: "Đã huỷ",
-    jobPostingStatus: "Đã gỡ",
-    lastActionReason: "Thay đổi mục tiêu tuyển dụng và cắt giảm đầu vào.",
-  },
-  {
-    id: "REQ-2026-006",
-    code: "REQ-2026-006",
-    title: "Chuyên viên Tài chính",
-    department: "Tài chính",
-    requiredCount: 1,
-    pipelineCount: 1,
-    createdAt: "2026-02-08",
-    status: "Đang tuyển",
-    jobPostingStatus: "Đang đăng",
-  },
-];
+type CloseRequisitionResult = {
+  id?: string;
+  status?: string;
+  warning?: boolean;
+  activeCandidateCount?: number;
+  unpublishedJobCount?: number;
+};
+
+function displayRecruitmentStatus(status: string): RecruitmentStatus {
+  if (status === "FILLED") return "Đã tuyển đủ";
+  if (status === "ON_HOLD") return "Tạm dừng";
+  if (status === "CANCELLED") return "Đã huỷ";
+  return "Đang tuyển";
+}
+
+function toRecruitmentRequest(item: ApprovalTrackingRequest): RecruitmentRequest {
+  return {
+    id: item.id,
+    code: item.id,
+    title: item.title,
+    department: item.department?.name || "Chưa xác định",
+    requiredCount: item.headcount ?? 0,
+    createdAt: item.createdAt?.slice(0, 10) || "Chưa xác định",
+    status: displayRecruitmentStatus(item.status),
+    backendStatus: item.status,
+  };
+}
+
+const closeApiActions: Record<ActionType, "FILLED" | "ON_HOLD" | "CANCEL"> = {
+  completed: "FILLED",
+  paused: "ON_HOLD",
+  cancelled: "CANCEL",
+};
 
 const actionTitleMap: Record<ActionType, string> = {
   completed: "Đã tuyển đủ",
@@ -212,10 +170,6 @@ function getStatusClassName(status: RecruitmentStatus) {
   }
 }
 
-function getPostingClassName(status: JobPostingStatus) {
-  return status === "Đang đăng" ? "status-blue" : "status-red";
-}
-
 function getApprovalStatusLabel(status: string) {
   const labels: Record<string, string> = {
     DRAFT: "Nháp",
@@ -224,6 +178,8 @@ function getApprovalStatusLabel(status: string) {
     REJECTED: "Từ chối",
     CHANGES_REQUESTED: "Chờ bổ sung",
     CANCELLED: "Đã huỷ",
+    ON_HOLD: "Tạm dừng",
+    FILLED: "Đã tuyển đủ",
   };
 
   return labels[status] || status;
@@ -326,19 +282,13 @@ function formatApprovalDate(value: string | null | undefined) {
   }).format(date);
 }
 
-function getAllowedActions(status: RecruitmentStatus): ActionType[] {
-  switch (status) {
-    case "Đang tuyển":
-      return ["completed", "paused", "cancelled"];
-    case "Đã tuyển đủ":
-      return ["paused", "cancelled"];
-    case "Tạm dừng":
-      return ["completed", "cancelled"];
-    case "Đã huỷ":
-      return [];
-    default:
-      return [];
+function getAllowedActions(status: string): ActionType[] {
+  if (["CANCELLED", "FILLED", "REJECTED"].includes(status)) return [];
+  if (status === "ON_HOLD") return ["completed", "cancelled"];
+  if (["APPROVED", "PENDING_APPROVAL", "DRAFT", "CHANGES_REQUESTED"].includes(status)) {
+    return ["completed", "paused", "cancelled"];
   }
+  return [];
 }
 
 function getActionButtonLabel(action: ActionType) {
@@ -359,7 +309,7 @@ export default function RecruitmentRequestManagement({
   userName,
 }: RecruitmentRequestManagementProps) {
   const navigate = useNavigate();
-  const [requests, setRequests] = useState<RecruitmentRequest[]>(initialRequests);
+  const [requests, setRequests] = useState<RecruitmentRequest[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("Tất cả");
   const [modalState, setModalState] = useState<ActionModalState | null>(null);
@@ -368,6 +318,7 @@ export default function RecruitmentRequestManagement({
   const [reasonError, setReasonError] = useState("");
   const [showPipelineWarning, setShowPipelineWarning] = useState(false);
   const [pipelineReviewed, setPipelineReviewed] = useState(false);
+  const [pipelineWarningCount, setPipelineWarningCount] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [toast, setToast] = useState<{ title: string; message: string } | null>(
     null,
@@ -393,6 +344,7 @@ export default function RecruitmentRequestManagement({
       .then((data) => {
         if (isCurrent) {
           setApprovalRequests(data);
+          setRequests(data.map(toRecruitmentRequest));
         }
       })
       .catch((error: unknown) => {
@@ -468,6 +420,7 @@ export default function RecruitmentRequestManagement({
     setReasonError("");
     setShowPipelineWarning(false);
     setPipelineReviewed(false);
+    setPipelineWarningCount(0);
     setIsSaving(false);
   }, [isSaving]);
 
@@ -525,63 +478,64 @@ export default function RecruitmentRequestManagement({
     setReasonError("");
     setShowPipelineWarning(false);
     setPipelineReviewed(false);
+    setPipelineWarningCount(0);
   };
 
   const handleConfirmAction = async () => {
-    if (!modalState || isSaving) {
-      return;
-    }
+    if (!modalState || isSaving || (role !== "HRManager" && role !== "Admin")) return;
 
     const cleanedReason = reason.trim();
-
     if (!cleanedReason) {
       setReasonError("Vui lòng nhập lý do để tiếp tục.");
       return;
     }
 
-    if (modalState.request.pipelineCount > 0 && !pipelineReviewed) {
-      setShowPipelineWarning(true);
-      return;
-    }
-
     setIsSaving(true);
+    setReasonError("");
+    try {
+      const data = await atsApi<CloseRequisitionResult>(
+        `/api/requisitions/${encodeURIComponent(modalState.request.id)}/close`,
+        "POST",
+        {
+          action: closeApiActions[modalState.action],
+          reason: note.trim() ? `${cleanedReason}\nGhi chú: ${note.trim()}` : cleanedReason,
+          force: pipelineReviewed,
+        },
+      );
 
-    await new Promise((resolve) => {
-      window.setTimeout(resolve, 500);
-    });
+      // Backend chua cap nhat yeu cau khi warning=true. Phai xin xac nhan ro rang.
+      if (data.warning) {
+        setPipelineWarningCount(data.activeCandidateCount ?? 0);
+        setShowPipelineWarning(true);
+        setPipelineReviewed(false);
+        return;
+      }
+      if (!data.status || data.id !== modalState.request.id) {
+        throw new Error("Phản hồi cập nhật trạng thái không hợp lệ; vui lòng tải lại trang.");
+      }
 
-    setRequests((previousRequests) =>
-      previousRequests.map((request) => {
-        if (request.id !== modalState.request.id) {
-          return request;
-        }
-
-        const nextStatus = actionStatusMap[modalState.action];
-
-        return {
-          ...request,
-          status: nextStatus,
-          jobPostingStatus:
-            request.jobPostingStatus === "Đang đăng" ? "Đã gỡ" : request.jobPostingStatus,
-          lastActionReason: cleanedReason,
-          lastActionNote: note.trim() || request.lastActionNote,
-        };
-      }),
-    );
-
-    const successMessage =
-      modalState.action === "completed"
-        ? "Yêu cầu đã được đánh dấu là đã tuyển đủ. Tin đăng trong dữ liệu mô phỏng đã được gỡ." 
-        : modalState.action === "paused"
-          ? "Yêu cầu đã được tạm dừng. Tin đăng trong dữ liệu mô phỏng đã được đánh dấu là đã gỡ." 
-          : "Yêu cầu đã được huỷ. Người dùng nên kiểm tra và xử lý hồ sơ đang tồn đọng trước khi đóng tiếp.";
-
-    setToast({
-      title: actionSuccessTitle[modalState.action],
-      message: successMessage,
-    });
-
-    closeModal();
+      const id = modalState.request.id;
+      setRequests((previous) => previous.map((item) => item.id === id
+        ? { ...item, backendStatus: data.status!, status: displayRecruitmentStatus(data.status!) }
+        : item));
+      setApprovalRequests((previous) => previous.map((item) => item.id === id
+        ? { ...item, status: data.status! }
+        : item));
+      setModalState(null);
+      setReason("");
+      setNote("");
+      setShowPipelineWarning(false);
+      setPipelineReviewed(false);
+      setPipelineWarningCount(0);
+      setToast({
+        title: actionSuccessTitle[modalState.action],
+        message: `Đã cập nhật trên hệ thống. Số tin công khai đã gỡ: ${data.unpublishedJobCount ?? 0}.`,
+      });
+    } catch (error: unknown) {
+      setReasonError(fromError(error));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -686,8 +640,8 @@ export default function RecruitmentRequestManagement({
 
           <section className="dashboard-panel recruitment-panel">
             <p className="recruitment-demo-notice">
-              Phần quản lý trạng thái tuyển dụng bên dưới đang dùng dữ liệu mô
-              phỏng có sẵn; không dùng dữ liệu này làm lịch sử phê duyệt.
+              Quản lý trạng thái tuyển dụng từ dữ liệu thực. Khi thao tác, Backend kiểm tra
+              ứng viên trong pipeline và đóng các tin đang công khai theo quy tắc hệ thống.
             </p>
             <div className="recruitment-toolbar">
               <div className="recruitment-search-box">
@@ -725,7 +679,6 @@ export default function RecruitmentRequestManagement({
                     <th>Vị trí tuyển dụng</th>
                     <th>Phòng ban</th>
                     <th>Số lượng</th>
-                    <th>Pipeline</th>
                     <th>Ngày tạo</th>
                     <th>Trạng thái</th>
                     <th>Thao tác</th>
@@ -734,7 +687,9 @@ export default function RecruitmentRequestManagement({
 
                 <tbody>
                   {filteredRequests.map((request) => {
-                    const allowedActions = getAllowedActions(request.status);
+                    const allowedActions = role === "HRManager" || role === "Admin"
+                      ? getAllowedActions(request.backendStatus)
+                      : [];
 
                     return (
                       <tr key={request.id}>
@@ -744,15 +699,11 @@ export default function RecruitmentRequestManagement({
                         <td>{request.title}</td>
                         <td>{request.department}</td>
                         <td>{request.requiredCount}</td>
-                        <td>{request.pipelineCount}</td>
                         <td>{request.createdAt}</td>
                         <td>
                           <div className="recruitment-status-stack">
                             <span className={getStatusClassName(request.status)}>
-                              {request.status}
-                            </span>
-                            <span className={getPostingClassName(request.jobPostingStatus)}>
-                              Tin đăng: {request.jobPostingStatus}
+                              {getApprovalStatusLabel(request.backendStatus)}
                             </span>
                           </div>
                         </td>
@@ -781,7 +732,13 @@ export default function RecruitmentRequestManagement({
               </table>
             </div>
 
-            {filteredRequests.length === 0 && (
+            {isLoadingApprovalRequests && (
+              <div className="recruitment-empty-state">Đang tải yêu cầu từ Backend...</div>
+            )}
+            {approvalRequestsError && (
+              <div className="approval-tracking-error" role="alert">{approvalRequestsError}</div>
+            )}
+            {filteredRequests.length === 0 && !isLoadingApprovalRequests && !approvalRequestsError && (
               <div className="recruitment-empty-state">
                 Không tìm thấy yêu cầu tuyển dụng phù hợp với điều kiện lọc.
               </div>
@@ -830,9 +787,9 @@ export default function RecruitmentRequestManagement({
                   <div className="recruitment-warning-box dangerous has-pipeline" role="alert">
                     <strong>Cần kiểm tra ứng viên trước khi tiếp tục</strong>
                     <p>
-                      Yêu cầu này còn <b>{modalState.request.pipelineCount}</b> ứng viên
-                      chưa xử lý trong pipeline. Hãy quay lại kiểm tra hồ sơ. Không có
-                      hồ sơ nào được tự động xử lý trong bước mô phỏng này.
+                      Backend phát hiện còn <b>{pipelineWarningCount}</b> ứng viên
+                      đang xử lý. Không có hồ sơ nào bị xóa. Bạn cần xác nhận
+                      rõ ràng trước khi tiếp tục.
                     </p>
                   </div>
 
@@ -877,10 +834,6 @@ export default function RecruitmentRequestManagement({
                 <div className="recruitment-request-row">
                   <span className="recruitment-request-label">Số lượng</span>
                   <span>
-                    {modalState.action === "completed" &&
-                    modalState.request.hiredCount !== undefined
-                      ? `${modalState.request.hiredCount} đã tuyển / `
-                      : ""}
                     {modalState.request.requiredCount} cần tuyển
                   </span>
                 </div>
@@ -889,22 +842,10 @@ export default function RecruitmentRequestManagement({
               <div
                 className={`recruitment-warning-box ${
                   modalState.action === "cancelled" ? "dangerous" : ""
-                } ${modalState.request.pipelineCount > 0 ? "has-pipeline" : "no-pipeline"}`}
+                } no-pipeline`}
               >
-                {modalState.request.pipelineCount > 0 ? (
-                  <>
-                    <strong>Cảnh báo hồ sơ đang tồn đọng</strong>
-                    <p>
-                      Còn <b>{modalState.request.pipelineCount}</b> ứng viên trong pipeline. Vui
-                      lòng kiểm tra và xử lý trước khi thực hiện thao tác này.
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <strong>Không còn ứng viên trong pipeline</strong>
-                    <p>Không còn hồ sơ cần xử lý trước khi đóng yêu cầu này.</p>
-                  </>
-                )}
+                <strong>Kiểm tra ứng viên</strong>
+                <p>Backend sẽ kiểm tra số ứng viên đang xử lý trước khi cập nhật trạng thái.</p>
               </div>
 
               <div className="recruitment-modal-field">
@@ -946,17 +887,17 @@ export default function RecruitmentRequestManagement({
               >
                 {modalState.action === "paused" && (
                   <p>
-                    Tin tuyển dụng trong dữ liệu mô phỏng sẽ được đánh dấu là <strong>Đã gỡ</strong> sau khi xác nhận.
+                    Tin tuyển dụng đang công khai sẽ được đóng qua Backend sau khi xác nhận.
                   </p>
                 )}
                 {modalState.action === "completed" && (
                   <p>
-                    Yêu cầu sẽ được cập nhật thành <strong>Đã tuyển đủ</strong> và tin đăng mô phỏng được đánh dấu đã gỡ nếu đang được hiển thị.
+                    Yêu cầu sẽ được cập nhật thành <strong>Đã tuyển đủ</strong> và các tin đăng công khai liên quan sẽ được đóng.
                   </p>
                 )}
                 {modalState.action === "cancelled" && (
                   <p>
-                    Yêu cầu sẽ chuyển sang trạng thái <strong>Đã huỷ</strong>. Tin đăng đang hoạt động, nếu có, sẽ được đánh dấu đã gỡ trong dữ liệu mô phỏng; hồ sơ tồn đọng không được tự động xử lý.
+                    Yêu cầu sẽ chuyển sang trạng thái <strong>Đã huỷ</strong>. Các tin công khai liên quan sẽ được đóng; hồ sơ ứng viên không bị xóa.
                   </p>
                 )}
               </div>
