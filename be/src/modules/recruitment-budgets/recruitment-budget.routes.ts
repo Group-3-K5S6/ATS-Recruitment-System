@@ -9,6 +9,11 @@ import { PermissionCode } from '../../rbac/permissions';
 const router = Router();
 router.use(authenticate);
 
+router.get(
+  '/headcount/requisition-availability',
+  requirePermission(PermissionCode.REQUISITIONS_READ),
+  RecruitmentBudgetController.requisitionHeadcountAvailability
+);
 router.get('/headcount', requirePermission(PermissionCode.HEADCOUNT_BUDGETS_READ), RecruitmentBudgetController.headcountBudgets);
 
 router.get('/salary', requirePermission(PermissionCode.HEADCOUNT_BUDGETS_READ), AnnualSalaryBudgetController.list);

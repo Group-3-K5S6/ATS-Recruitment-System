@@ -8,7 +8,7 @@ import { AuditAction } from '../../rbac/types';
 import { RoleType } from '../../rbac/roles';
 import { ApprovalWorkflowService } from '../approval-workflows/approval-workflow.service';
 import { ApprovalStepSnapshot } from '../approval-workflows/approval-workflow.types';
-import { Prisma } from '@prisma/client';
+import { Prisma, Requisition as RequisitionRecord } from '@prisma/client';
 import { CandidatePolicy } from '../../policies/candidate.policy';
 
 
@@ -81,6 +81,8 @@ export const approveRequisitionSchema = z.object({
   notes: z.string().optional(),
   comment: z.string().optional(),
   reason: z.string().optional(),
+  headcountOverride: z.boolean().optional(),
+  headcountOverrideReason: z.string().trim().min(1).max(1000).optional(),
 });
 
 const requisitionListQuerySchema = z.object({
@@ -344,18 +346,33 @@ export class RequisitionController {
           code: 'NO_ACTIVE_APPROVER',
           status: 400,
         };
+      } else if (resolved.reason === 'NO_WORKFLOW_CONFIGURED' && !resolvedApproverId) {
+        return {
+          success: false,
+          message: 'Phòng ban chưa có luồng phê duyệt hoạt động hoặc người phê duyệt hợp lệ.',
+          code: 'NO_ACTIVE_APPROVER',
+          status: 400,
+        };
       }
     }
 
     if (!params.isDraft && resolvedApproverId && !approvalWorkflowId) {
       const manualApprover = await prisma.user.findUnique({
         where: { id: resolvedApproverId },
-        select: { id: true, isActive: true },
+        select: {
+          id: true,
+          isActive: true,
+          roles: { include: { role: { select: { name: true } } } },
+        },
       });
-      if (!manualApprover || !manualApprover.isActive) {
+      if (
+        !manualApprover ||
+        !manualApprover.isActive ||
+        !manualApprover.roles.some(({ role }) => role.name === RoleType.APPROVER)
+      ) {
         return {
           success: false,
-          message: 'Người phê duyệt không tồn tại hoặc đã bị vô hiệu hóa.',
+          message: 'Người phê duyệt không tồn tại, không hoạt động hoặc không có vai trò phù hợp.',
           code: 'NO_ACTIVE_APPROVER',
           status: 400,
         };
@@ -1047,15 +1064,36 @@ export class RequisitionController {
 
   static async approve(req: Request, res: Response): Promise<void> {
     const { id } = req.params;
-    let { decision, notes, comment, reason } = req.body;
+    let { decision, notes, comment, reason, headcountOverride, headcountOverrideReason } = req.body;
     const user = req.user!;
 
     // Chuẩn hóa và lấy ý kiến/lý do
     const feedback = String(notes ?? comment ?? reason ?? '').trim();
+    const overrideReason = String(headcountOverrideReason ?? '').trim();
 
     let normalizedDecision = String(decision || 'APPROVE').toUpperCase();
     if (normalizedDecision === 'REQUEST_ADDITIONAL_INFO') {
       normalizedDecision = 'REQUEST_CHANGES';
+    }
+
+    if (
+      (headcountOverride === true || overrideReason) &&
+      normalizedDecision !== 'APPROVE'
+    ) {
+      errorResponse(res, 'Chỉ có thể ghi đè headcount khi phê duyệt yêu cầu.', 400, 'VALIDATION_ERROR');
+      return;
+    }
+    if (overrideReason && headcountOverride !== true) {
+      errorResponse(res, 'Cần xác nhận ghi đè khi gửi lý do vượt chỉ tiêu.', 400, 'VALIDATION_ERROR');
+      return;
+    }
+    if (headcountOverride === true && !user.roles.includes(RoleType.HR_MANAGER)) {
+      errorResponse(res, 'Chỉ Trưởng phòng Nhân sự được ghi đè chỉ tiêu headcount.', 403, 'FORBIDDEN_SCOPE');
+      return;
+    }
+    if (headcountOverride === true && !overrideReason) {
+      errorResponse(res, 'Vui lòng nhập lý do khi ghi đè chỉ tiêu headcount.', 400, 'VALIDATION_ERROR');
+      return;
     }
 
     // Tiêu chí SCRUM-37: Duyệt, Từ chối, Yêu cầu bổ sung — hai hành động sau bắt buộc nhập ý kiến
@@ -1170,6 +1208,10 @@ export class RequisitionController {
 
     // Requisition khong co approval chain la duyet don cap.
     if (currentStepNumber === null) currentStepNumber = 1;
+    if (headcountOverride === true && newStatus !== 'APPROVED') {
+      errorResponse(res, 'Chỉ có thể ghi đè chỉ tiêu tại bước phê duyệt cuối.', 400, 'VALIDATION_ERROR');
+      return;
+    }
 
     // Loi nghiep vu ngan sach: rollback toan bo transaction.
     class ApprovalBudgetError extends Error {
@@ -1188,9 +1230,18 @@ export class RequisitionController {
       }
     }
 
-    let updated;
+    type HeadcountOverrideDetails = {
+      reason: string;
+      year: number;
+      allocatedHeadcount: number;
+      approvedHeadcount: number;
+      requestedHeadcount: number;
+      remainingHeadcount: number;
+    };
+    let updated: RequisitionRecord | null = null;
+    let headcountOverrideDetails: HeadcountOverrideDetails | null = null;
     try {
-      updated = await prisma.$transaction(async (tx) => {
+      const outcome = await prisma.$transaction(async (tx) => {
         const claimed = await tx.requisition.updateMany({
           where: {
             id,
@@ -1206,6 +1257,7 @@ export class RequisitionController {
         });
 
         if (claimed.count !== 1) return null;
+        let transactionOverrideDetails: HeadcountOverrideDetails | null = null;
 
         // PR67: chi kiem tra headcount khi phe duyet CAP CUOI.
         // Duyet cap trung gian va tu choi khong tieu ton ngan sach.
@@ -1251,21 +1303,40 @@ export class RequisitionController {
 
           const approvedHeadcount = approved._sum.headcount ?? 0;
           const requestedHeadcount = existing.headcount;
+          const details = {
+            year,
+            allocatedHeadcount: budget.headcount,
+            approvedHeadcount,
+            requestedHeadcount,
+            remainingHeadcount: budget.headcount - approvedHeadcount,
+          };
 
-          if (approvedHeadcount + requestedHeadcount > budget.headcount) {
+          if (headcountOverride === true && approvedHeadcount + requestedHeadcount <= budget.headcount) {
             throw new ApprovalBudgetError(
-              'HEADCOUNT_BUDGET_EXCEEDED',
-              `Không thể duyệt: phòng ban đã dùng ${approvedHeadcount}/${budget.headcount} headcount năm ${year}; yêu cầu thêm ${requestedHeadcount}.`,
-              {
-                year,
-                allocatedHeadcount: budget.headcount,
-                approvedHeadcount,
-                requestedHeadcount,
-                remainingHeadcount: budget.headcount - approvedHeadcount,
-              }
+              'HEADCOUNT_OVERRIDE_NOT_REQUIRED',
+              'Không thể ghi đè vì yêu cầu không vượt chỉ tiêu headcount.',
+              details
             );
           }
+
+          if (approvedHeadcount + requestedHeadcount > budget.headcount) {
+            if (headcountOverride !== true) {
+              throw new ApprovalBudgetError(
+                'HEADCOUNT_BUDGET_EXCEEDED',
+                `Không thể duyệt: phòng ban đã dùng ${approvedHeadcount}/${budget.headcount} headcount năm ${year}; yêu cầu thêm ${requestedHeadcount}. Chỉ Trưởng phòng Nhân sự mới có thể ghi đè với lý do.`,
+                details
+              );
+            }
+            transactionOverrideDetails = { ...details, reason: overrideReason };
+          }
         }
+
+        const approvalNotes = [
+          feedback || null,
+          transactionOverrideDetails
+            ? `Ghi đè chỉ tiêu headcount: ${transactionOverrideDetails.reason}`
+            : null,
+        ].filter((note): note is string => note !== null).join('\n') || null;
 
         await tx.requisitionApprovalHistory.create({
           data: {
@@ -1275,12 +1346,19 @@ export class RequisitionController {
             toStatus: newStatus,
             decision: normalizedDecision,
             step: currentStepNumber,
-            notes: feedback || null,
+            notes: approvalNotes,
           },
         });
 
-        return tx.requisition.findUniqueOrThrow({ where: { id } });
+        return {
+          requisition: await tx.requisition.findUniqueOrThrow({ where: { id } }),
+          headcountOverrideDetails: transactionOverrideDetails,
+        };
       });
+      if (outcome) {
+        updated = outcome.requisition;
+        headcountOverrideDetails = outcome.headcountOverrideDetails;
+      }
     } catch (error) {
       if (error instanceof ApprovalBudgetError) {
         errorResponse(res, error.message, 409, error.code, error.details);
@@ -1320,7 +1398,13 @@ export class RequisitionController {
       decision: normalizedDecision,
       stepDecision: normalizedDecision,
       step: currentStepNumber,
-      notes: feedback || null,
+      notes: [
+        feedback || null,
+        headcountOverrideDetails
+          ? `Ghi đè chỉ tiêu headcount: ${headcountOverrideDetails.reason}`
+          : null,
+      ].filter((note): note is string => note !== null).join('\n') || null,
+      headcountOverride: headcountOverrideDetails,
     });
 
     const message =

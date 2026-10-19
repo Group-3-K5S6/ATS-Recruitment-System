@@ -142,6 +142,8 @@
 .ats-req-alert svg { flex-shrink: 0; margin-top: 1px; }
 .ats-req-alert--error { background: #fff1f2; border-color: #fecdd3; color: #a12c3f; }
 .ats-req-alert--success { background: #ecfdf3; border-color: #bbefd2; color: #16734a; }
+.ats-req-alert--warning { background: #fff7ed; border-color: #fed7aa; color: #9a3412; }
+.ats-req-alert--info { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
 .ats-req-loading { padding: 50px 25px; border-radius: 14px; border: 1px solid #e0e7f0; background: #fff; text-align: center; font-size: 14px; color: #667e9c; }
 
 @media (max-width: 980px) {

@@ -21,6 +21,18 @@ type FormData = {
   salaryExplanation: string;
 };
 type ApiResult<T> = { success: boolean; data?: T; error?: { message?: string } };
+type HeadcountAvailability = {
+  departmentId: string;
+  year: number;
+  allocatedHeadcount: number | null;
+  approvedHeadcount: number;
+  remainingHeadcount: number | null;
+};
+type HeadcountAvailabilityState = {
+  key: string;
+  data?: HeadcountAvailability;
+  error?: string;
+};
 
 type RequisitionSummary = {
   id: string;
@@ -83,6 +95,21 @@ export default function CreateRecruitmentRequest() {
   const [drafts, setDrafts] = useState<RequisitionSummary[]>([]);
   const [showDrafts, setShowDrafts] = useState(false);
   const [loadingDrafts, setLoadingDrafts] = useState(false);
+  const [headcountAvailabilityState, setHeadcountAvailabilityState] = useState<HeadcountAvailabilityState | null>(null);
+  const headcountYear = form.targetDate
+    ? Number(form.targetDate.slice(0, 4))
+    : new Date().getFullYear();
+  const headcountAvailabilityKey = form.departmentId
+    ? `${form.departmentId}:${headcountYear}`
+    : '';
+  const currentHeadcountAvailability = headcountAvailabilityState?.key === headcountAvailabilityKey
+    ? headcountAvailabilityState.data
+    : null;
+  const headcountAvailabilityError = headcountAvailabilityState?.key === headcountAvailabilityKey
+    ? headcountAvailabilityState.error || ''
+    : '';
+  const headcountAvailabilityLoading = Boolean(form.departmentId) &&
+    headcountAvailabilityState?.key !== headcountAvailabilityKey;
 
   async function request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
     const token = sessionStorage.getItem('accessToken');
@@ -115,6 +142,27 @@ export default function CreateRecruitmentRequest() {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!form.departmentId) return;
+
+    let active = true;
+
+    request<HeadcountAvailability>(
+      `/api/recruitment-budget/headcount/requisition-availability?departmentId=${encodeURIComponent(form.departmentId)}&year=${headcountYear}`,
+    ).then(availability => {
+      if (active) setHeadcountAvailabilityState({ key: headcountAvailabilityKey, data: availability });
+    }).catch(e => {
+      if (active) {
+        setHeadcountAvailabilityState({
+          key: headcountAvailabilityKey,
+          error: e instanceof Error ? e.message : 'Không tải được chỉ tiêu headcount.',
+        });
+      }
+    });
+
+    return () => { active = false; };
+  }, [form.departmentId, headcountYear, headcountAvailabilityKey]);
 
   async function showSavedDrafts() {
     setError(''); setNotice(''); setLoadingDrafts(true); setShowDrafts(true);
@@ -336,6 +384,25 @@ export default function CreateRecruitmentRequest() {
                       <span>Ngày cần nhân sự</span>
                       <span className="ats-req-input-with-icon"><CalendarDays size={18} aria-hidden="true" /><input type="date" min={today()} name="targetDate" value={form.targetDate} onChange={update} /></span>
                     </label>
+                    {form.departmentId && (
+                      <div
+                        className={`ats-req-field--full ats-req-alert ${headcountAvailabilityError || (currentHeadcountAvailability?.remainingHeadcount != null && form.headcount > currentHeadcountAvailability.remainingHeadcount) ? 'ats-req-alert--warning' : 'ats-req-alert--info'}`}
+                        role={headcountAvailabilityError || (currentHeadcountAvailability?.remainingHeadcount != null && form.headcount > currentHeadcountAvailability.remainingHeadcount) ? 'alert' : 'status'}
+                      >
+                        <Info size={19} aria-hidden="true" />
+                        <span>
+                          {headcountAvailabilityLoading
+                            ? 'Đang tải chỉ tiêu headcount...'
+                            : headcountAvailabilityError
+                              ? headcountAvailabilityError
+                              : currentHeadcountAvailability?.allocatedHeadcount == null
+                                ? 'Phòng ban chưa có chỉ tiêu headcount cho năm tuyển dụng. Yêu cầu vẫn có thể gửi để phê duyệt.'
+                                : currentHeadcountAvailability?.remainingHeadcount != null && form.headcount > currentHeadcountAvailability.remainingHeadcount
+                                    ? `Yêu cầu vượt chỉ tiêu còn lại ${currentHeadcountAvailability.remainingHeadcount} người của năm ${currentHeadcountAvailability.year}. Yêu cầu vẫn có thể gửi; phê duyệt vượt chỉ tiêu cần Trưởng phòng Nhân sự xác nhận và nêu lý do.`
+                                    : `Headcount còn lại năm ${currentHeadcountAvailability?.year}: ${currentHeadcountAvailability?.remainingHeadcount} người (đã duyệt ${currentHeadcountAvailability?.approvedHeadcount}/${currentHeadcountAvailability?.allocatedHeadcount}).`}
+                        </span>
+                      </div>
+                    )}
                     <label className="ats-req-field ats-req-field--full">
                       <span>Giải trình nếu mức lương vượt khung chức danh</span>
                       <textarea rows={3} name="salaryExplanation" value={form.salaryExplanation} onChange={update} placeholder="Nêu lý do đề xuất mức lương khác với dải lương chuẩn (nếu có)..." />
