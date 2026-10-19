@@ -773,9 +773,10 @@ export class JobController {
     }
 
     // Nạp thông tin thương hiệu công ty
-    const companyProfile = await prisma.companyProfile.findUnique({
+    const savedCompanyProfile = await prisma.companyProfile.findUnique({
       where: { id: 'default' },
-    }) || {
+    });
+    const companyProfile = savedCompanyProfile?.isPublished ? savedCompanyProfile : {
       id: 'default',
       companyName: 'ATS Recruitment',
       tagline: 'Kiến tạo tương lai cùng đội ngũ tinh hoa',
