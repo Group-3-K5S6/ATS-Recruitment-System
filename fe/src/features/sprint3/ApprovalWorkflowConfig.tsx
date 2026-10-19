@@ -125,6 +125,21 @@ export default function ApprovalWorkflowConfig() {
     }));
     setError('');
   }
+  function selectDepartment(id: string) {
+    setDepartmentId(id);
+    setError('');
+    setMessage('');
+    setPreviewSalary('');
+    const saved = existing.find(workflow => workflow.departmentId === id);
+    setRanges(saved
+      ? saved.ranges.map((range, index) => ({
+        id: index + 1,
+        minSalary: String(range.minSalary),
+        maxSalary: range.maxSalary === null ? '' : String(range.maxSalary),
+        approverIds: [...range.approverIds],
+      }))
+      : [createBand(1, '0')]);
+  }
   function addRange() {
     const last = ranges[ranges.length - 1];
     const nextMin = last && last.maxSalary !== '' && Number.isSafeInteger(Number(last.maxSalary))
@@ -167,6 +182,10 @@ export default function ApprovalWorkflowConfig() {
   }
   async function save() {
     setError(''); setMessage('');
+    if (workflowIssue) {
+      setError('Không thể lưu vì chưa tải được cấu hình đã lưu. Hãy tải lại trang và thử lại.');
+      return;
+    }
     const issue = validate();
     if (issue) { setError(issue); return; }
     setSaving(true);
@@ -204,10 +223,10 @@ export default function ApprovalWorkflowConfig() {
         <div><span className="aw-summary-icon">◎</span><span><b>{selectedDepartment || 'Chưa chọn'}</b><small>Phòng ban áp dụng</small></span></div>
       </div>
 
-      {workflowIssue && <div className="aw-notice" role="status">
+      {workflowIssue && <div className="aw-notice" role="alert">
         <span className="aw-notice-icon" aria-hidden="true">!</span>
-        <div><strong>Chưa kết nối chức năng lưu luồng phê duyệt</strong>
-          <p>Backend cần cung cấp API quản lý cấu hình. Bạn vẫn có thể chỉnh sửa và xem trước giao diện; chưa thể nghiệm thu thao tác lưu.</p>
+        <div><strong>Không tải được cấu hình luồng đã lưu</strong>
+          <p>Không thể xác định cấu hình hiện tại. Hãy tải lại trang trước khi chỉnh sửa hoặc lưu để tránh tạo phiên bản dựa trên dữ liệu chưa tải.</p>
           <details><summary>Chi tiết kỹ thuật</summary><p>{workflowIssue}</p></details>
         </div>
       </div>}
@@ -224,7 +243,7 @@ export default function ApprovalWorkflowConfig() {
           <label className="aw-field" htmlFor="aw-department">
             <span className="aw-field-label">Phòng ban <span className="aw-required">*</span></span>
             <select id="aw-department" className="aw-select" disabled={loading || saving || !departments.length}
-              value={departmentId} onChange={e => { setDepartmentId(e.target.value); setError(''); }}>
+              value={departmentId} onChange={e => selectDepartment(e.target.value)}>
               <option value="">{loading ? 'Đang tải phòng ban...' : departments.length ? '— Chọn phòng ban —' : 'Chưa có phòng ban khả dụng'}</option>
               {departments.map(d => <option value={d.id} key={d.id}>{d.name}</option>)}
             </select>
@@ -314,7 +333,7 @@ export default function ApprovalWorkflowConfig() {
 
       <footer className="aw-footer">
         <div><b>Lưu thành phiên bản mới</b><p>Cấu hình cũ và các yêu cầu đang phê duyệt được giữ nguyên.</p></div>
-        <button type="button" className="aw-button aw-button-primary" disabled={loading || saving} onClick={() => void save()}>
+        <button type="button" className="aw-button aw-button-primary" disabled={loading || saving || Boolean(workflowIssue)} onClick={() => void save()}>
           {saving ? 'Đang lưu...' : 'Lưu cấu hình'}
         </button>
       </footer>

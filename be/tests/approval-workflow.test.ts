@@ -17,6 +17,7 @@ describe('SCRUM-87: API cấu hình luồng phê duyệt & Tích hợp Requisiti
   let testDeptId: string;
   let testDept3Id: string;
   let testDeptActiveId: string;
+  let testDeptReloadId: string;
   let testJobTitleId: string;
 
   let approver1: any;
@@ -71,6 +72,15 @@ describe('SCRUM-87: API cấu hình luồng phê duyệt & Tích hợp Requisiti
       },
     });
     testDeptActiveId = testDeptActive.id;
+
+    const testDeptReload = await prisma.department.create({
+      data: {
+        id: randomUUID(),
+        name: `Phòng ban Test S3-01 Reload ${randomUUID().slice(0, 6)}`,
+        code: `DEPT-S301-RELOAD-${randomUUID().slice(0, 6)}`,
+      },
+    });
+    testDeptReloadId = testDeptReload.id;
 
     // 3. Tạo chức danh test
     const jobTitle = await prisma.jobTitle.create({
@@ -160,7 +170,7 @@ describe('SCRUM-87: API cấu hình luồng phê duyệt & Tích hợp Requisiti
       where: { departmentId: { in: [testDeptId, testDept3Id, testDeptActiveId] }, year: 2099 },
     });
     // 1. Xóa tất cả requisition, workflow và department test trước
-    const testDeptIds = [testDeptId, testDept3Id, testDeptActiveId].filter(Boolean);
+    const testDeptIds = [testDeptId, testDept3Id, testDeptActiveId, testDeptReloadId].filter(Boolean);
     if (testDeptIds.length > 0) {
       await prisma.requisition.deleteMany({
         where: { departmentId: { in: testDeptIds } },
@@ -279,6 +289,71 @@ describe('SCRUM-87: API cấu hình luồng phê duyệt & Tích hợp Requisiti
       expect(res.body.success).toBe(true);
       expect(res.body.data.departmentId).toBe(testDeptId);
       expect(res.body.data.ranges).toHaveLength(3);
+    });
+
+    it('lưu, tải lại rồi lưu phiên bản mới vẫn giữ đúng dải lương và thứ tự người duyệt', async () => {
+      const initialRanges = [
+        { minSalary: 0, maxSalary: 20000000, approverIds: [approver1.id] },
+        { minSalary: 20000001, maxSalary: null, approverIds: [approver1.id, approver2.id] },
+      ];
+      const firstSave = await request(app)
+        .post('/api/approval-workflows')
+        .set(authHeader(hrToken))
+        .send({ departmentId: testDeptReloadId, activation: 'NEW_REQUESTS_ONLY', ranges: initialRanges });
+
+      expect(firstSave.status).toBe(201);
+      expect(firstSave.body.data.version).toBe(1);
+
+      const firstDatabaseSnapshot = await prisma.approvalWorkflow.findUniqueOrThrow({
+        where: { id: firstSave.body.data.id },
+        include: { ranges: { orderBy: { orderIndex: 'asc' } } },
+      });
+      expect(firstDatabaseSnapshot.isActive).toBe(true);
+      expect(firstDatabaseSnapshot.ranges.map((range) => ({
+        minSalary: range.minSalary,
+        maxSalary: range.maxSalary,
+        approverIds: JSON.parse(range.approverIds),
+      }))).toEqual(initialRanges);
+
+      const loaded = await request(app)
+        .get(`/api/approval-workflows/${testDeptReloadId}`)
+        .set(authHeader(hrToken));
+      expect(loaded.status).toBe(200);
+      expect(loaded.body.data).toMatchObject({
+        id: firstSave.body.data.id,
+        departmentId: testDeptReloadId,
+        version: 1,
+        ranges: initialRanges,
+      });
+
+      const loadedAgain = await request(app)
+        .get(`/api/approval-workflows/${testDeptReloadId}`)
+        .set(authHeader(hrToken));
+      expect(loadedAgain.body.data.version).toBe(1);
+      expect(await prisma.approvalWorkflow.count({ where: { departmentId: testDeptReloadId } })).toBe(1);
+
+      const editedRanges = [
+        { minSalary: 0, maxSalary: 30000000, approverIds: [approver1.id] },
+        { minSalary: 30000001, maxSalary: null, approverIds: [approver1.id, approver2.id] },
+      ];
+      const secondSave = await request(app)
+        .post('/api/approval-workflows')
+        .set(authHeader(hrToken))
+        .send({ departmentId: testDeptReloadId, activation: 'NEW_REQUESTS_ONLY', ranges: editedRanges });
+
+      expect(secondSave.status).toBe(201);
+      expect(secondSave.body.data.version).toBe(2);
+      expect(secondSave.body.data.ranges).toEqual(editedRanges);
+
+      const versions = await prisma.approvalWorkflow.findMany({
+        where: { departmentId: testDeptReloadId },
+        include: { ranges: { orderBy: { orderIndex: 'asc' } } },
+        orderBy: { version: 'asc' },
+      });
+      expect(versions.map((workflow) => ({ version: workflow.version, isActive: workflow.isActive })))
+        .toEqual([{ version: 1, isActive: false }, { version: 2, isActive: true }]);
+      expect(versions[0].ranges.map((range) => JSON.parse(range.approverIds)))
+        .toEqual([[approver1.id], [approver1.id, approver2.id]]);
     });
 
     it('Từ chối người dùng không có quyền (RECRUITER, CANDIDATE) truy cập API cấu hình -> 403', async () => {
