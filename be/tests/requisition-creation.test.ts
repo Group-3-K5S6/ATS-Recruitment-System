@@ -10,6 +10,7 @@ describe('S2-10 - Tạo yêu cầu tuyển dụng', () => {
     let token: string;
     let departmentId: string;
     let jobTitleId: string;
+    let approvalWorkflowId: string;
 
     beforeAll(async () => {
         const login = await loginAndGetToken('hr_manager@ats.local');
@@ -28,9 +29,36 @@ describe('S2-10 - Tạo yêu cầu tuyển dụng', () => {
         });
 
         jobTitleId = jobTitle.id;
+
+        const approver = await loginAndGetToken('approver@ats.local');
+        const latestWorkflow = await prisma.approvalWorkflow.findFirst({
+            where: { departmentId },
+            orderBy: { version: 'desc' },
+            select: { version: true },
+        });
+        const workflow = await prisma.approvalWorkflow.create({
+            data: {
+                departmentId,
+                version: (latestWorkflow?.version ?? 0) + 1,
+                ranges: {
+                    create: [{
+                        minSalary: 0,
+                        maxSalary: null,
+                        approverIds: JSON.stringify([approver.user.id]),
+                    }],
+                },
+            },
+        });
+        approvalWorkflowId = workflow.id;
     });
 
     afterAll(async () => {
+        if (approvalWorkflowId) {
+            await prisma.approvalWorkflow.deleteMany({
+                where: { id: approvalWorkflowId },
+            });
+        }
+
         if (jobTitleId) {
             await prisma.jobTitle.deleteMany({
                 where: { id: jobTitleId },

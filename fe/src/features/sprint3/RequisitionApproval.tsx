@@ -33,6 +33,16 @@ type RequisitionDetail = Requisition & {
 
 type Decision = "APPROVE" | "REJECT" | "REQUEST_CHANGES";
 
+function isHrManager(): boolean {
+  try {
+    const stored = sessionStorage.getItem("atsUser");
+    const account = stored ? JSON.parse(stored) as { roles?: string[] } : null;
+    return Array.isArray(account?.roles) && account.roles.includes("HR_MANAGER");
+  } catch {
+    return false;
+  }
+}
+
 function statusLabel(status: string) {
   const labels: Record<string, string> = {
     DRAFT: "Nháp",
@@ -80,6 +90,10 @@ export default function RequisitionApproval() {
   const [submitting, setSubmitting] = useState(false);
 
   const [notes, setNotes] = useState("");
+
+  const [headcountOverride, setHeadcountOverride] = useState(false);
+
+  const [headcountOverrideReason, setHeadcountOverrideReason] = useState("");
 
   const [error, setError] = useState("");
 
@@ -138,6 +152,8 @@ export default function RequisitionApproval() {
     setError("");
     setMessage("");
     setNotes("");
+    setHeadcountOverride(false);
+    setHeadcountOverrideReason("");
 
     try {
       const detail = await atsApi<RequisitionDetail>(
@@ -159,6 +175,8 @@ export default function RequisitionApproval() {
 
     setSelected(null);
     setNotes("");
+    setHeadcountOverride(false);
+    setHeadcountOverrideReason("");
     setError("");
     setMessage("");
   }
@@ -175,6 +193,10 @@ export default function RequisitionApproval() {
 
       return;
     }
+    if (decision === "APPROVE" && headcountOverride && !headcountOverrideReason.trim()) {
+      setError("Vui lòng nhập lý do khi xác nhận ghi đè chỉ tiêu headcount.");
+      return;
+    }
 
     setSubmitting(true);
     setError("");
@@ -188,11 +210,16 @@ export default function RequisitionApproval() {
         {
           decision,
           notes: notes.trim() || undefined,
+          ...(decision === "APPROVE" && headcountOverride
+            ? { headcountOverride: true, headcountOverrideReason: headcountOverrideReason.trim() }
+            : {}),
         },
       );
 
       setMessage(decision === "APPROVE"
-        ? "Đã duyệt yêu cầu tuyển dụng."
+        ? headcountOverride
+          ? "Đã duyệt yêu cầu tuyển dụng với xác nhận ghi đè chỉ tiêu headcount."
+          : "Đã duyệt yêu cầu tuyển dụng."
         : decision === "REJECT"
           ? "Đã từ chối yêu cầu tuyển dụng."
           : "Đã gửi yêu cầu bổ sung thông tin.");
@@ -549,6 +576,40 @@ export default function RequisitionApproval() {
                   Từ chối và yêu cầu bổ sung bắt buộc phải nhập ý kiến.
                 </small>
               </section>
+
+              {isHrManager() && (
+                <section className="s302-budget-override">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={headcountOverride}
+                      onChange={(event) => {
+                        setHeadcountOverride(event.target.checked);
+                        setHeadcountOverrideReason("");
+                        setError("");
+                      }}
+                    />
+                    Xác nhận ghi đè chỉ tiêu headcount tại bước phê duyệt cuối
+                  </label>
+                  {headcountOverride && (
+                    <div>
+                      <label htmlFor="headcount-override-reason">Lý do ghi đè <span aria-hidden="true">*</span></label>
+                      <textarea
+                        id="headcount-override-reason"
+                        value={headcountOverrideReason}
+                        onChange={(event) => {
+                          setHeadcountOverrideReason(event.target.value);
+                          setError("");
+                        }}
+                        placeholder="Nhập lý do xác nhận vượt chỉ tiêu..."
+                        rows={3}
+                        required
+                      />
+                    </div>
+                  )}
+                  <small>Chỉ Trưởng phòng Nhân sự được xác nhận; thao tác và lý do sẽ được lưu vào lịch sử phê duyệt và nhật ký kiểm toán.</small>
+                </section>
+              )}
 
               {/* ERROR */}
 

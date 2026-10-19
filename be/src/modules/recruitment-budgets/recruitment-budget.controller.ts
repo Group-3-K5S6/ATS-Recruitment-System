@@ -54,6 +54,65 @@ async function canManageRequisition(user: AuthenticatedUser, requisitionId: stri
 }
 
 export class RecruitmentBudgetController {
+  static async requisitionHeadcountAvailability(req: Request, res: Response): Promise<void> {
+    const { departmentId } = req.query;
+    const rawYear = req.query.year;
+    const year = rawYear === undefined
+      ? new Date().getFullYear()
+      : typeof rawYear === 'string'
+        ? Number(rawYear)
+        : Number.NaN;
+
+    if (!Number.isInteger(year) || year < 2000 || year > 9999 ||
+      typeof departmentId !== 'string' || !departmentId.trim()) {
+      errorResponse(res, 'Phòng ban và năm cần tuyển không hợp lệ.', 400, 'VALIDATION_ERROR');
+      return;
+    }
+
+    const user = req.user!;
+    const hasOrganizationScope =
+      user.roles.includes(RoleType.ADMIN) || user.roles.includes(RoleType.HR_MANAGER);
+    if (
+      !hasOrganizationScope &&
+      (!user.roles.includes(RoleType.HIRING_MANAGER) || user.departmentId !== departmentId)
+    ) {
+      errorResponse(res, 'Bạn chỉ được xem chỉ tiêu headcount của phòng ban mình.', 403, 'FORBIDDEN_SCOPE');
+      return;
+    }
+
+    const department = await prisma.department.findFirst({
+      where: { id: departmentId, isActive: true },
+      select: { id: true },
+    });
+    if (!department) {
+      errorResponse(res, 'Không tìm thấy phòng ban đang hoạt động.', 404, 'NOT_FOUND');
+      return;
+    }
+
+    const start = new Date(Date.UTC(year, 0, 1));
+    const end = new Date(Date.UTC(year + 1, 0, 1));
+    const [budget, approved] = await Promise.all([
+      prisma.departmentHeadcountBudget.findUnique({
+        where: { departmentId_year: { departmentId, year } },
+        select: { headcount: true },
+      }),
+      prisma.requisition.aggregate({
+        where: { departmentId, status: 'APPROVED', targetDate: { gte: start, lt: end } },
+        _sum: { headcount: true },
+      }),
+    ]);
+    const approvedHeadcount = approved._sum.headcount ?? 0;
+    const allocatedHeadcount = budget?.headcount ?? null;
+
+    successResponse(res, {
+      departmentId,
+      year,
+      allocatedHeadcount,
+      approvedHeadcount,
+      remainingHeadcount: allocatedHeadcount === null ? null : allocatedHeadcount - approvedHeadcount,
+    });
+  }
+
   static async headcountBudgets(req: Request, res: Response): Promise<void> {
     if (![RoleType.ADMIN, RoleType.HR_MANAGER, RoleType.RECRUITER].some((role) => req.user!.roles.includes(role))) {
       errorResponse(res, 'Bạn không có quyền xem chỉ tiêu headcount toàn công ty.', 403, 'FORBIDDEN_SCOPE');

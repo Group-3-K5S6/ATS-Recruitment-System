@@ -802,6 +802,54 @@
   font-size: 11px;
 }
 
+.s302-budget-override {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+  background: #fff7ed;
+  color: #7c2d12;
+  font-size: 14px;
+}
+
+.s302-budget-override > label {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-weight: 650;
+}
+
+.s302-budget-override input[type="checkbox"] {
+  margin-top: 3px;
+}
+
+.s302-budget-override > div {
+  display: grid;
+  gap: 7px;
+}
+
+.s302-budget-override > div label {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.s302-budget-override textarea {
+  width: 100%;
+  min-height: 78px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #fdba74;
+  border-radius: 8px;
+  font: inherit;
+}
+
+.s302-budget-override small {
+  color: #9a3412;
+  line-height: 1.5;
+}
+
 /* =========================================================
    ALERT
 ========================================================= */
