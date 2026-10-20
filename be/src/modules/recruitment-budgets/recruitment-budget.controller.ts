@@ -50,7 +50,7 @@ function requisitionScope(user: AuthenticatedUser): Prisma.RequisitionWhereInput
 }
 
 async function canManageRequisition(user: AuthenticatedUser, requisitionId: string): Promise<boolean> {
-  return RequisitionPolicy.canUpdate(user, requisitionId);
+  return RequisitionPolicy.canManageExpenses(user, requisitionId);
 }
 
 export class RecruitmentBudgetController {

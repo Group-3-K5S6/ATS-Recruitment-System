@@ -7,10 +7,11 @@
 import { randomUUID } from 'crypto';
 import { existsSync, realpathSync } from 'fs';
 import { basename, dirname, resolve } from 'path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { app } from '../src/app';
 import { prisma } from '../src/database/prisma';
+import { RequisitionPolicy } from '../src/policies/requisition.policy';
 import { authHeader, loginAndGetToken } from './test-helper';
 import { hashPassword } from '../src/utils/password';
 
@@ -26,6 +27,7 @@ const candidateAId = `s306-cand-a-${scope}`;
 const candidateBId = `s306-cand-b-${scope}`;
 const applicationAId = `s306-app-a-${scope}`;
 const applicationBId = `s306-app-b-${scope}`;
+const expenseIds: string[] = [];
 const extraRecruiterPassword = randomUUID();
 
 const assertDisposableDatabase = () => {
@@ -141,6 +143,10 @@ describe('S3-06 / PR81 — Recruiter assignment, scope and history', () => {
     // Restrict all deletes to this test's randomly generated IDs.
     await prisma.application.deleteMany({ where: { id: { in: [applicationAId, applicationBId] } } });
     await prisma.job.deleteMany({ where: { id: { in: [jobAId, jobBId] } } });
+    await prisma.recruitmentExpense.deleteMany({ where: { id: { in: expenseIds } } });
+    await prisma.auditLog.deleteMany({
+      where: { resourceId: { in: [...expenseIds, requisitionAId, requisitionBId, requisitionCId, requisitionDId, requisitionEId] } },
+    });
     await prisma.requisitionAssignmentHistory.deleteMany({ where: { requisitionId: { in: [requisitionAId, requisitionBId, requisitionCId, requisitionDId, requisitionEId] } } });
     await prisma.requisitionSupportingRecruiter.deleteMany({ where: { requisitionId: { in: [requisitionAId, requisitionBId, requisitionCId, requisitionDId, requisitionEId] } } });
     await prisma.requisition.deleteMany({ where: { id: { in: [requisitionAId, requisitionBId, requisitionCId, requisitionDId, requisitionEId] } } });
@@ -222,6 +228,14 @@ describe('S3-06 / PR81 — Recruiter assignment, scope and history', () => {
     expect(res.status).toBe(403);
     const unchanged = await prisma.requisition.findUniqueOrThrow({ where: { id: requisitionCId } });
     expect(unchanged.title).toBe(`S3-06 recruiter as hiring manager ${scope}`);
+  });
+
+  it('keeps Recruiter expense management scope independent from requisition-edit assignment', async () => {
+    const res = await request(app).post(`/api/recruitment-budget/requisitions/${requisitionBId}/expenses`)
+      .set(authHeader(recruiter1Token))
+      .send({ category: 'other', amount: 125, date: '2026-10-20' });
+    expect(res.status).toBe(201);
+    expenseIds.push(res.body.data.id);
   });
 
   it('AC2: Admin, HR Manager, and Hiring Manager retain requisition update access', async () => {
@@ -343,5 +357,46 @@ describe('S3-06 / PR81 — Recruiter assignment, scope and history', () => {
     expect(actions).toContain('HANDOVER');
     expect(actions).toContain('UPDATE_SUPPORTING');
     expect(res.body.data.every((x: { actorId: string }) => x.actorId === hrId)).toBe(true);
+  });
+
+  it('AC2: a handover during an edit request revokes the former lead access', async () => {
+    let signalAuthorization!: () => void;
+    let releaseAuthorization!: () => void;
+    const authorizationChecked = new Promise<void>((resolve) => { signalAuthorization = resolve; });
+    const authorizationReleased = new Promise<void>((resolve) => { releaseAuthorization = resolve; });
+    const canUpdate = RequisitionPolicy.canUpdate.bind(RequisitionPolicy);
+    let paused = false;
+    const policySpy = vi.spyOn(RequisitionPolicy, 'canUpdate').mockImplementation(async (...args) => {
+      const allowed = await canUpdate(...args);
+      if (!paused && args[0].id === recruiter1Id && args[1] === requisitionAId) {
+        paused = true;
+        signalAuthorization();
+        await authorizationReleased;
+      }
+      return allowed;
+    });
+
+    try {
+      const original = await prisma.requisition.findUniqueOrThrow({ where: { id: requisitionAId } });
+      const update = request(app).put(`/api/requisitions/${requisitionAId}`)
+        .set(authHeader(recruiter1Token))
+        .send({ isDraft: true, title: `S3-06 stale authorization ${scope}` })
+        .then((res) => res);
+      await authorizationChecked;
+
+      const handover = await request(app).put(`/api/requisitions/${requisitionAId}/assign`)
+        .set(authHeader(hrToken))
+        .send({ leadRecruiterId: recruiter2Id, supportingRecruiterIds: [] });
+      expect(handover.status).toBe(200);
+
+      releaseAuthorization();
+      const res = await update;
+      expect(res.status).toBe(403);
+      const unchanged = await prisma.requisition.findUniqueOrThrow({ where: { id: requisitionAId } });
+      expect(unchanged.title).toBe(original.title);
+    } finally {
+      releaseAuthorization();
+      policySpy.mockRestore();
+    }
   });
 });
