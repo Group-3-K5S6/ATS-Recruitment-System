@@ -30,6 +30,7 @@ describe('SCRUM-103 (BE-S3-09): API Lưu bản nháp tin tuyển dụng', () => 
   let interviewerToken: string;
 
   let testDeptId: string;
+  let testHiringManagerId: string;
   let testJobTitleId: string;
   let approvedReqId: string;
   let draftReqId: string;
@@ -59,6 +60,16 @@ describe('SCRUM-103 (BE-S3-09): API Lưu bản nháp tin tuyển dụng', () => 
     return `${y}-${m}-${d}`;
   }
 
+  function validJobPayload(requisitionId: string | undefined, title: string) {
+    return {
+      ...(requisitionId ? { requisitionId } : {}),
+      title,
+      description: 'Mô tả công việc đủ dài cho tin tuyển dụng.',
+      departmentId: testDeptId,
+      hiringManagerId: testHiringManagerId,
+    };
+  }
+
   beforeAll(async () => {
     // 1. Đăng nhập các vai trò kiểm thử
     const recruiterLogin = await loginAndGetToken('recruiter1@ats.local');
@@ -67,6 +78,7 @@ describe('SCRUM-103 (BE-S3-09): API Lưu bản nháp tin tuyển dụng', () => 
 
     const hrLogin = await loginAndGetToken('hr_manager@ats.local');
     hrManagerToken = hrLogin.token;
+    testHiringManagerId = hrLogin.user.id;
 
     const adminLogin = await loginAndGetToken('admin@ats.local');
     adminToken = adminLogin.token;
@@ -381,6 +393,47 @@ describe('SCRUM-103 (BE-S3-09): API Lưu bản nháp tin tuyển dụng', () => 
     expect(res.status).toBe(400);
     expect(res.body.success).toBe(false);
     expect(res.body.error.code).toBe('INVALID_STATUS');
+  });
+
+  it('S3-09: POST /api/jobs rejects unapproved requisitions without creating a job', async () => {
+    for (const requisitionId of [draftReqId, pendingReqId]) {
+      const before = await prisma.job.count({ where: { requisitionId } });
+      const res = await request(app)
+        .post('/api/jobs')
+        .set(authHeader(adminToken))
+        .send(validJobPayload(requisitionId, 'Tin từ yêu cầu chưa duyệt'));
+      if (res.body.data?.id) createdJobIds.push(res.body.data.id);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_STATUS');
+      expect(await prisma.job.count({ where: { requisitionId } })).toBe(before);
+    }
+  });
+
+  it('S3-09: POST /api/jobs can create a draft from an approved requisition', async () => {
+    const res = await request(app)
+      .post('/api/jobs')
+      .set(authHeader(adminToken))
+      .send(validJobPayload(approvedReqId, 'Tin từ yêu cầu đã duyệt'));
+    if (res.body.data?.id) createdJobIds.push(res.body.data.id);
+
+    expect(res.status).toBe(201);
+    expect(res.body.data).toMatchObject({
+      requisitionId: approvedReqId,
+      status: 'DRAFT',
+    });
+  });
+
+  it('POST /api/jobs still supports a draft without a requisition', async () => {
+    const res = await request(app)
+      .post('/api/jobs')
+      .set(authHeader(adminToken))
+      .send(validJobPayload(undefined, 'Tin nháp chưa gắn yêu cầu'));
+    if (res.body.data?.id) createdJobIds.push(res.body.data.id);
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.status).toBe('DRAFT');
+    expect(res.body.data.requisitionId).toBeNull();
   });
 
   // =========================================================================
