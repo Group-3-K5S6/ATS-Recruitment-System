@@ -202,6 +202,7 @@ export default function RequisitionApproval() {
     setError("");
     setMessage("");
 
+    const confirmingHeadcountOverride = decision === "APPROVE" && headcountOverride;
     try {
       const endpoint = decision === "REQUEST_CHANGES" ? "request-changes" : "approve";
       await atsApi(
@@ -217,14 +218,20 @@ export default function RequisitionApproval() {
       );
 
       setMessage(decision === "APPROVE"
-        ? headcountOverride
-          ? "Đã duyệt yêu cầu tuyển dụng với xác nhận ghi đè chỉ tiêu headcount."
+        ? confirmingHeadcountOverride
+          ? "Đã ghi nhận xác nhận ngoại lệ headcount. Yêu cầu vẫn chờ người duyệt hiện tại xử lý."
           : "Đã duyệt yêu cầu tuyển dụng."
         : decision === "REJECT"
           ? "Đã từ chối yêu cầu tuyển dụng."
           : "Đã gửi yêu cầu bổ sung thông tin.");
 
       await loadItems();
+
+      if (confirmingHeadcountOverride) {
+        setHeadcountOverride(false);
+        setHeadcountOverrideReason("");
+        return;
+      }
 
       window.setTimeout(() => {
         setSelected(null);
@@ -589,7 +596,7 @@ export default function RequisitionApproval() {
                         setError("");
                       }}
                     />
-                    Xác nhận ghi đè chỉ tiêu headcount tại bước phê duyệt cuối
+                    Xác nhận ngoại lệ headcount tại bước phê duyệt cuối
                   </label>
                   {headcountOverride && (
                     <div>
@@ -607,7 +614,7 @@ export default function RequisitionApproval() {
                       />
                     </div>
                   )}
-                  <small>Chỉ Trưởng phòng Nhân sự được xác nhận; thao tác và lý do sẽ được lưu vào lịch sử phê duyệt và nhật ký kiểm toán.</small>
+                  <small>Xác nhận này lưu người xác nhận, lý do và nhật ký kiểm toán; người duyệt hiện tại vẫn phải phê duyệt.</small>
                 </section>
               )}
 
@@ -681,7 +688,7 @@ export default function RequisitionApproval() {
                 ) : (
                   <CheckCircle2 size={17} />
                 )}
-                Duyệt
+                {headcountOverride ? "Xác nhận ngoại lệ" : "Duyệt"}
               </button>
             </div>
           </div>

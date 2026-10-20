@@ -136,6 +136,227 @@ async function validateRecruiterSelection(
   return null;
 }
 
+type HeadcountBudgetDetails = {
+  year: number;
+  allocatedHeadcount: number;
+  approvedHeadcount: number;
+  requestedHeadcount: number;
+  remainingHeadcount: number;
+};
+
+function matchesHeadcountOverrideConfirmation(
+  metadata: string | null,
+  details: HeadcountBudgetDetails,
+  reason: string,
+  approverId: string | null,
+  approvalChain: string | null,
+  requisitionUpdatedAt: Date
+): boolean {
+  if (!metadata) return false;
+
+  try {
+    const parsed: unknown = JSON.parse(metadata);
+    if (!parsed || typeof parsed !== 'object') return false;
+
+    const confirmation = parsed as Record<string, unknown>;
+    return confirmation.reason === reason &&
+      confirmation.year === details.year &&
+      confirmation.allocatedHeadcount === details.allocatedHeadcount &&
+      confirmation.approvedHeadcount === details.approvedHeadcount &&
+      confirmation.requestedHeadcount === details.requestedHeadcount &&
+      confirmation.approverId === approverId &&
+      confirmation.approvalChain === approvalChain &&
+      confirmation.requisitionUpdatedAt === requisitionUpdatedAt.toISOString();
+  } catch {
+    return false;
+  }
+}
+
+async function confirmHeadcountOverride(
+  req: Request,
+  res: Response,
+  requisitionId: string,
+  actorId: string,
+  reason: string
+): Promise<void> {
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const existing = await tx.requisition.findUnique({ where: { id: requisitionId } });
+      if (!existing) {
+        return { error: { status: 404, code: 'NOT_FOUND', message: 'Không tìm thấy yêu cầu tuyển dụng.' } };
+      }
+      if (existing.status !== 'PENDING_APPROVAL') {
+        return {
+          error: {
+            status: 400,
+            code: 'INVALID_STATUS',
+            message: 'Chỉ có thể xác nhận ngoại lệ cho yêu cầu đang chờ phê duyệt.',
+          },
+        };
+      }
+
+      let currentStepNumber = 1;
+      if (existing.approvalChain) {
+        let steps: ApprovalStepSnapshot[];
+        try {
+          const parsed: unknown = JSON.parse(existing.approvalChain);
+          if (
+            !Array.isArray(parsed) ||
+            parsed.some((step) => !step || typeof step !== 'object')
+          ) {
+            throw new Error('Approval chain must contain step objects.');
+          }
+          steps = parsed as ApprovalStepSnapshot[];
+        } catch {
+          return {
+            error: {
+              status: 409,
+              code: 'INVALID_APPROVAL_CHAIN',
+              message: 'Dữ liệu chuỗi phê duyệt không hợp lệ.',
+            },
+          };
+        }
+
+        const currentStepIndex = steps.findIndex((step) => step.status === 'PENDING');
+        if (currentStepIndex === -1) {
+          return {
+            error: {
+              status: 409,
+              code: 'NO_PENDING_APPROVAL_STEP',
+              message: 'Không tìm thấy cấp phê duyệt hợp lệ đang chờ.',
+            },
+          };
+        }
+        if (currentStepIndex !== steps.length - 1) {
+          return {
+            error: {
+              status: 400,
+              code: 'VALIDATION_ERROR',
+              message: 'Chỉ có thể xác nhận ngoại lệ tại bước phê duyệt cuối.',
+            },
+          };
+        }
+        currentStepNumber = steps[currentStepIndex].step || currentStepIndex + 1;
+      }
+
+      if (!existing.targetDate) {
+        return {
+          error: {
+            status: 409,
+            code: 'TARGET_DATE_REQUIRED',
+            message: 'Yêu cầu cần có ngày tuyển dụng để xác định năm ngân sách headcount.',
+          },
+        };
+      }
+
+      const year = existing.targetDate.getUTCFullYear();
+      const budget = await tx.departmentHeadcountBudget.findUnique({
+        where: { departmentId_year: { departmentId: existing.departmentId, year } },
+        select: { headcount: true },
+      });
+      if (!budget) {
+        return {
+          error: {
+            status: 409,
+            code: 'HEADCOUNT_BUDGET_NOT_CONFIGURED',
+            message: `Phòng ban chưa được thiết lập chỉ tiêu headcount năm ${year}.`,
+          },
+        };
+      }
+
+      const start = new Date(Date.UTC(year, 0, 1));
+      const end = new Date(Date.UTC(year + 1, 0, 1));
+      const approved = await tx.requisition.aggregate({
+        where: {
+          departmentId: existing.departmentId,
+          status: 'APPROVED',
+          id: { not: requisitionId },
+          targetDate: { gte: start, lt: end },
+        },
+        _sum: { headcount: true },
+      });
+      const details: HeadcountBudgetDetails = {
+        year,
+        allocatedHeadcount: budget.headcount,
+        approvedHeadcount: approved._sum.headcount ?? 0,
+        requestedHeadcount: existing.headcount,
+        remainingHeadcount: budget.headcount - (approved._sum.headcount ?? 0),
+      };
+
+      if (details.approvedHeadcount + details.requestedHeadcount <= details.allocatedHeadcount) {
+        return {
+          error: {
+            status: 409,
+            code: 'HEADCOUNT_OVERRIDE_NOT_REQUIRED',
+            message: 'Không thể ghi đè vì yêu cầu không vượt chỉ tiêu headcount.',
+            details,
+          },
+        };
+      }
+
+      await tx.requisitionApprovalHistory.create({
+        data: {
+          requisitionId,
+          actorId,
+          fromStatus: existing.status,
+          toStatus: existing.status,
+          decision: 'HEADCOUNT_OVERRIDE_CONFIRMED',
+          step: currentStepNumber,
+          notes: reason,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          action: AuditAction.REQUISITION_HEADCOUNT_OVERRIDE_CONFIRMED,
+          resourceType: 'requisition',
+          resourceId: requisitionId,
+          ipAddress: (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1',
+          userAgent: req.headers['user-agent'] || 'Unknown',
+          metadata: JSON.stringify({
+            ...details,
+            reason,
+            approverId: existing.approverId,
+            approvalChain: existing.approvalChain,
+            requisitionUpdatedAt: existing.updatedAt.toISOString(),
+          }),
+        },
+      });
+
+      return { requisition: existing };
+    });
+
+    if (result.error) {
+      errorResponse(
+        res,
+        result.error.message,
+        result.error.status,
+        result.error.code,
+        'details' in result.error ? result.error.details : undefined
+      );
+      return;
+    }
+
+    successResponse(
+      res,
+      result.requisition,
+      200,
+      'Đã ghi nhận xác nhận ngoại lệ headcount. Yêu cầu vẫn chờ người duyệt hiện tại xử lý.'
+    );
+  } catch (error) {
+    const code = error && typeof error === 'object' && 'code' in error
+      ? String(error.code)
+      : '';
+    if (['P2034', 'P2028', 'P1008', 'SQLITE_BUSY'].includes(code)) {
+      errorResponse(res, 'Yêu cầu đã được xử lý hoặc đang được cập nhật. Vui lòng tải lại.', 409, 'APPROVAL_CONFLICT');
+      return;
+    }
+
+    console.error('[Requisition] Headcount override confirmation failed:', error);
+    errorResponse(res, 'Không thể xác nhận ngoại lệ headcount.', 500, 'SERVER_ERROR');
+  }
+}
+
 export class RequisitionController {
   static async list(req: Request, res: Response): Promise<void> {
     const user = req.user!;
@@ -1095,6 +1316,10 @@ export class RequisitionController {
       errorResponse(res, 'Vui lòng nhập lý do khi ghi đè chỉ tiêu headcount.', 400, 'VALIDATION_ERROR');
       return;
     }
+    if (headcountOverride === true) {
+      await confirmHeadcountOverride(req, res, id, user.id, overrideReason);
+      return;
+    }
 
     // Tiêu chí SCRUM-37: Duyệt, Từ chối, Yêu cầu bổ sung — hai hành động sau bắt buộc nhập ý kiến
     if (normalizedDecision === 'REJECT' || normalizedDecision === 'REQUEST_CHANGES') {
@@ -1155,9 +1380,7 @@ export class RequisitionController {
         const currentStepIndex = steps.findIndex(
           (s) =>
             s.status === 'PENDING' &&
-            (s.approverId === user.id ||
-              user.roles.includes(RoleType.ADMIN) ||
-              user.roles.includes(RoleType.HR_MANAGER))
+            (s.approverId === user.id || user.roles.includes(RoleType.ADMIN))
         );
 
         if (currentStepIndex === -1) {
@@ -1208,10 +1431,6 @@ export class RequisitionController {
 
     // Requisition khong co approval chain la duyet don cap.
     if (currentStepNumber === null) currentStepNumber = 1;
-    if (headcountOverride === true && newStatus !== 'APPROVED') {
-      errorResponse(res, 'Chỉ có thể ghi đè chỉ tiêu tại bước phê duyệt cuối.', 400, 'VALIDATION_ERROR');
-      return;
-    }
 
     // Loi nghiep vu ngan sach: rollback toan bo transaction.
     class ApprovalBudgetError extends Error {
@@ -1232,6 +1451,7 @@ export class RequisitionController {
 
     type HeadcountOverrideDetails = {
       reason: string;
+      confirmedBy: string;
       year: number;
       allocatedHeadcount: number;
       approvedHeadcount: number;
@@ -1311,30 +1531,59 @@ export class RequisitionController {
             remainingHeadcount: budget.headcount - approvedHeadcount,
           };
 
-          if (headcountOverride === true && approvedHeadcount + requestedHeadcount <= budget.headcount) {
-            throw new ApprovalBudgetError(
-              'HEADCOUNT_OVERRIDE_NOT_REQUIRED',
-              'Không thể ghi đè vì yêu cầu không vượt chỉ tiêu headcount.',
-              details
-            );
-          }
-
           if (approvedHeadcount + requestedHeadcount > budget.headcount) {
-            if (headcountOverride !== true) {
+            const confirmation = await tx.requisitionApprovalHistory.findFirst({
+              where: {
+                requisitionId: id,
+                decision: 'HEADCOUNT_OVERRIDE_CONFIRMED',
+                step: currentStepNumber,
+              },
+              orderBy: { createdAt: 'desc' },
+              select: { actorId: true, notes: true },
+            });
+            const confirmationAudit = confirmation
+              ? await tx.auditLog.findFirst({
+                  where: {
+                    actorId: confirmation.actorId,
+                    action: AuditAction.REQUISITION_HEADCOUNT_OVERRIDE_CONFIRMED,
+                    resourceType: 'requisition',
+                    resourceId: id,
+                  },
+                  orderBy: { createdAt: 'desc' },
+                  select: { metadata: true },
+                })
+              : null;
+
+            if (
+              !confirmation?.notes ||
+              !confirmationAudit ||
+              !matchesHeadcountOverrideConfirmation(
+                confirmationAudit.metadata,
+                details,
+                confirmation.notes,
+                existing.approverId,
+                existing.approvalChain,
+                existing.updatedAt
+              )
+            ) {
               throw new ApprovalBudgetError(
                 'HEADCOUNT_BUDGET_EXCEEDED',
                 `Không thể duyệt: phòng ban đã dùng ${approvedHeadcount}/${budget.headcount} headcount năm ${year}; yêu cầu thêm ${requestedHeadcount}. Chỉ Trưởng phòng Nhân sự mới có thể ghi đè với lý do.`,
                 details
               );
             }
-            transactionOverrideDetails = { ...details, reason: overrideReason };
+            transactionOverrideDetails = {
+              ...details,
+              reason: confirmation.notes,
+              confirmedBy: confirmation.actorId,
+            };
           }
         }
 
         const approvalNotes = [
           feedback || null,
           transactionOverrideDetails
-            ? `Ghi đè chỉ tiêu headcount: ${transactionOverrideDetails.reason}`
+            ? `Ghi đè chỉ tiêu headcount (được xác nhận bởi ${transactionOverrideDetails.confirmedBy}): ${transactionOverrideDetails.reason}`
             : null,
         ].filter((note): note is string => note !== null).join('\n') || null;
 
