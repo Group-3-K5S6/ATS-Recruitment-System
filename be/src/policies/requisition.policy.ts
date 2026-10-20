@@ -66,17 +66,25 @@ export class RequisitionPolicy {
   static async canUpdate(user: AuthenticatedUser, requisitionId: string): Promise<boolean> {
     if (
       user.roles.includes(RoleType.ADMIN) ||
-      user.roles.includes(RoleType.HR_MANAGER) ||
-      user.roles.includes(RoleType.RECRUITER)
+      user.roles.includes(RoleType.HR_MANAGER)
     ) {
       return true;
     }
 
     const req = await prisma.requisition.findUnique({
       where: { id: requisitionId },
+      include: { supportingRecruiters: true },
     });
 
     if (!req) return false;
+
+    if (
+      user.roles.includes(RoleType.RECRUITER) &&
+      (req.leadRecruiterId === user.id ||
+        req.supportingRecruiters.some((s) => s.recruiterId === user.id))
+    ) {
+      return true;
+    }
 
     if (user.roles.includes(RoleType.HIRING_MANAGER)) {
       return req.hiringManagerId === user.id || (!!user.departmentId && req.departmentId === user.departmentId);
