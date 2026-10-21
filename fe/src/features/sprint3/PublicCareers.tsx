@@ -2,17 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, BriefcaseBusiness, Building2, ChevronRight, Globe2, MapPin, RefreshCw, Search, SlidersHorizontal } from 'lucide-react';
 import JobPublicContent, { type PublishedPresentation } from './JobPublicContent';
+import { filterPublicJobs, publicJobFilterOptions, type PublicJobListing } from '../sprint4/publicJobFilters';
 import './job-posting-publish.css';
 import './public-careers.css';
 
 const API = import.meta.env.VITE_ATS_API_URL || 'http://localhost:4000';
-type Listing = {
-  id: string;
-  title: string;
-  location: string;
-  workMode?: string | null;
-  department?: { name?: string } | null;
-};
 type Envelope<T> = { success: boolean; data?: T; error?: { message?: string } };
 
 async function publicGet<T>(path: string, signal: AbortSignal): Promise<T> {
@@ -54,11 +48,12 @@ function staffDestination(): { path: string; label: string } {
 export default function PublicCareers() {
   const { id } = useParams<{ id: string }>();
   const staffNav = staffDestination();
-  const [jobs, setJobs] = useState<Listing[]>([]);
+  const [jobs, setJobs] = useState<PublicJobListing[]>([]);
   const [detail, setDetail] = useState<PublishedPresentation | null>(null);
   const [search, setSearch] = useState('');
   const [workMode, setWorkMode] = useState('ALL');
   const [department, setDepartment] = useState('ALL');
+  const [location, setLocation] = useState('ALL');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
@@ -72,7 +67,7 @@ export default function PublicCareers() {
       setDetail(null);
       const promise = id
         ? publicGet<PublishedPresentation>(`/api/public/jobs/${encodeURIComponent(id)}`, abort.signal).then(setDetail)
-        : publicGet<Listing[]>('/api/public/jobs', abort.signal).then(setJobs);
+        : publicGet<PublicJobListing[]>('/api/public/jobs', abort.signal).then(setJobs);
       promise.catch(e => { if (!abort.signal.aborted) setError(e instanceof Error ? e.message : 'Đã có lỗi xảy ra.'); })
         .finally(() => { if (!abort.signal.aborted) setLoading(false); });
     }, 0);
@@ -82,18 +77,13 @@ export default function PublicCareers() {
     };
   }, [id, retry]);
 
-  const departments = useMemo(() => [...new Set(jobs.map(j => j.department?.name).filter((v): v is string => !!v))].sort((a, b) => a.localeCompare(b, 'vi')), [jobs]);
-  const filtered = useMemo(() => {
-    const term = search.trim().toLocaleLowerCase('vi');
-    return jobs.filter(job => {
-      const matchesTerm = !term || [job.title, job.department?.name, job.location].some(v => (v || '').toLocaleLowerCase('vi').includes(term));
-      return matchesTerm && (workMode === 'ALL' || job.workMode === workMode)
-        && (department === 'ALL' || job.department?.name === department);
-    });
-  }, [jobs, search, workMode, department]);
-
-  const hasFilters = search !== '' || workMode !== 'ALL' || department !== 'ALL';
-  const resetFilters = () => { setSearch(''); setWorkMode('ALL'); setDepartment('ALL'); };
+  const { departments, locations } = useMemo(() => publicJobFilterOptions(jobs), [jobs]);
+  const activeCount = useMemo(() => jobs.filter(job => filterPublicJobs([job], { keyword: '', department: 'ALL', location: 'ALL', workMode: 'ALL' }).length > 0).length, [jobs]);
+  const filtered = useMemo(() => filterPublicJobs(jobs, {
+    keyword: search, department, location, workMode,
+  }), [jobs, search, department, location, workMode]);
+  const hasFilters = search.trim() !== '' || workMode !== 'ALL' || department !== 'ALL' || location !== 'ALL';
+  const resetFilters = () => { setSearch(''); setWorkMode('ALL'); setDepartment('ALL'); setLocation('ALL'); };
 
   return <div className="s310-careers-page">
     <a className="s310-skip-link" href="#careers-main">Bỏ qua điều hướng</a>
@@ -139,11 +129,12 @@ export default function PublicCareers() {
         </section>
 
         <section id="careers-list" className="s310-careers-positions" aria-labelledby="s310-positions-heading">
-          <div className="s310-positions-heading"><div><span className="s310-section-eyebrow">TUYỂN DỤNG</span><h2 id="s310-positions-heading">Vị trí đang mở</h2><p>Chỉ các tin đã được duyệt và xuất bản mới xuất hiện tại đây.</p></div><span className="s310-positions-counter"><Globe2 size={16}/> {loading ? 'Đang tải' : `${jobs.length} vị trí công khai`}</span></div>
+          <div className="s310-positions-heading"><div><span className="s310-section-eyebrow">TUYỂN DỤNG</span><h2 id="s310-positions-heading">Vị trí đang mở</h2><p>Chỉ các tin đã được duyệt và xuất bản mới xuất hiện tại đây.</p></div><span className="s310-positions-counter"><Globe2 size={16}/> {loading ? 'Đang tải' : `${activeCount} vị trí công khai`}</span></div>
           <div className="s310-careers-filters">
-            <label className="s310-careers-search"><Search size={18} aria-hidden="true"/><span className="s310-visually-hidden">Tìm theo vị trí, phòng ban hoặc địa điểm</span><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Tìm vị trí, phòng ban hoặc địa điểm…"/></label>
+            <label className="s310-careers-search"><Search size={18} aria-hidden="true"/><span className="s310-visually-hidden">Tìm trong tiêu đề và mô tả công việc</span><input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Tìm theo chức danh hoặc mô tả…"/></label>
             <label className="s310-careers-select"><SlidersHorizontal size={16}/><span className="s310-visually-hidden">Hình thức làm việc</span><select value={workMode} onChange={e=>setWorkMode(e.target.value)}><option value="ALL">Mọi hình thức</option><option value="ONSITE">Tại văn phòng</option><option value="HYBRID">Kết hợp</option><option value="REMOTE">Từ xa</option></select></label>
             <label className="s310-careers-select"><Building2 size={16}/><span className="s310-visually-hidden">Phòng ban</span><select value={department} onChange={e=>setDepartment(e.target.value)}><option value="ALL">Mọi phòng ban</option>{departments.map(name => <option value={name} key={name}>{name}</option>)}</select></label>
+            <label className="s310-careers-select"><MapPin size={16}/><span className="s310-visually-hidden">Địa điểm làm việc</span><select aria-label="Lọc địa điểm làm việc" value={location} onChange={e=>setLocation(e.target.value)}><option value="ALL">Mọi địa điểm</option>{locations.map(name => <option value={name} key={name}>{name}</option>)}</select></label>
           </div>
           {loading ? <div className="s310-careers-loading" role="status">Đang tải danh sách vị trí…</div>
             : error ? <div className="s310-careers-feedback" role="alert"><h3>Không thể tải danh sách</h3><p>{error}</p><button className="s310-careers-outline" onClick={() => setRetry(v => v + 1)} type="button"><RefreshCw size={16}/> Thử lại</button></div>
