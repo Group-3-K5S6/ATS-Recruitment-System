@@ -252,7 +252,7 @@ export class PublicJobsController {
   static async getById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const job = await prisma.job.findFirst({
-        where: { AND: [{ id: req.params.id }, publishedWhere()] },
+        where: { id: req.params.id, status: { in: ['PUBLISHED', 'CLOSED'] }, approvedAt: { not: null }, publishedAt: { not: null } },
         select: {
           id: true,
           title: true,
@@ -260,6 +260,7 @@ export class PublicJobsController {
           location: true,
           workMode: true,
           applicationDeadline: true,
+          status: true,
           showSalary: true,
           department: { select: { id: true, name: true, code: true } },
           jobTitle: { select: { minSalary: true, maxSalary: true } },
@@ -286,7 +287,7 @@ export class PublicJobsController {
 
       const profile = await prisma.companyProfile.findUnique({
         where: { id: 'default' },
-        select: { companyName: true, tagline: true, isPublished: true },
+        select: { companyName: true, tagline: true, benefits: true, isPublished: true },
       });
 
       // Deliberately exclude internal approver/publisher IDs, emails, notes and audit logs.
@@ -298,12 +299,16 @@ export class PublicJobsController {
           location: job.location,
           workMode: job.workMode,
           applicationDeadline: job.applicationDeadline,
+          status: job.status,
+          isExpired: job.status === 'CLOSED' ||
+            Boolean(job.applicationDeadline &&
+              new Date(job.applicationDeadline).getTime() < Date.now()),
           department: job.department,
           requisition: { requirements: job.requisition?.requirements ?? null },
           salary: { showSalary: job.showSalary, displayText },
         },
         companyProfile: profile?.isPublished
-          ? { companyName: profile.companyName, tagline: profile.tagline }
+          ? { companyName: profile.companyName, tagline: profile.tagline, benefits: profile.benefits }
           : { companyName: 'ATS Recruitment', tagline: 'Kiến tạo tương lai cùng đội ngũ tinh hoa' },
       });
     } catch (err) {

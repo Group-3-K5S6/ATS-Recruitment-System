@@ -33,6 +33,113 @@
 .s310-job-detail-layout{color:#263958}.s310-job-detail-layout .s310-public-heading{display:block;background:linear-gradient(125deg,#f0f3ff,#f9fbff 70%);padding:33px 38px;border-bottom:1px solid #e7ebf3}.s310-public-heading-eyebrow{font-size:10px!important;letter-spacing:.13em;font-weight:800;color:#5146cc!important}.s310-job-detail-layout .s310-public-heading h2{font-size:clamp(24px,3vw,34px);letter-spacing:-.035em;line-height:1.26;margin:10px 0 9px;color:#162b51}.s310-job-detail-layout .s310-public-heading p{font-size:13px;color:#64748b}.s310-detail-tags{display:flex;flex-wrap:wrap;gap:9px;margin-top:22px}.s310-detail-tags>span{background:#fff;border:1px solid #e0e6f2;border-radius:8px;display:inline-flex;align-items:center;gap:7px;padding:9px 12px;color:#536784;font-size:12px;font-weight:600}.s310-detail-tags svg{color:#5850dc}.s310-detail-grid{display:grid;grid-template-columns:minmax(0,1fr) 275px;align-items:start;gap:34px;padding:32px 38px 40px}.s310-detail-body{min-width:0}.s310-detail-company-note{padding:16px 18px;background:#f7f9fd;border-left:3px solid #6862eb;color:#445674;border-radius:0 9px 9px 0;font-size:13px;line-height:1.7}.s310-job-detail-layout .s310-public-section{padding:0;margin:24px 0 0}.s310-job-detail-layout .s310-public-section h3{font-size:17px;margin:0 0 14px;color:#17315c}.s310-job-detail-layout .s310-public-section .s310-preserve-lines{font-size:14px;line-height:1.9;color:#495c78;white-space:pre-wrap;overflow-wrap:anywhere}.s310-detail-aside{border:1px solid #e0e7ef;border-radius:13px;overflow:hidden;background:#fff}.s310-detail-aside-header{padding:19px 18px;display:flex;align-items:center;gap:10px;background:#f5f7fd;font-size:14px;font-weight:800;color:#203b67}.s310-detail-aside dl{margin:0;padding:0 18px}.s310-detail-aside dl>div{padding:14px 0;border-bottom:1px solid #edf1f6}.s310-detail-aside dl>div:last-child{border-bottom:0}.s310-detail-aside dt{display:flex;align-items:center;gap:8px;color:#7283a0;font-size:11px;margin:0 0 7px}.s310-detail-aside dt svg{color:#6c65dd}.s310-detail-aside dd{margin:0;color:#1d3359;font-size:12px;font-weight:750;line-height:1.6}.s310-detail-smallnote{display:flex;align-items:flex-start;gap:7px;padding:13px 18px;background:#fafbff;color:#8995a8;line-height:1.6;font-size:10px;margin:0;border-top:1px solid #e9edf4}.s310-detail-smallnote svg{flex-shrink:0;margin-top:1px}
 @media(max-width:900px){.s310-careers-hero{grid-template-columns:1fr}.s310-careers-hero-art{display:none}.s310-careers-filters{grid-template-columns:1fr 1fr}.s310-careers-search{grid-column:1/-1}.s310-detail-grid{grid-template-columns:1fr}.s310-detail-aside{max-width:none}}
 @media(max-width:650px){.s310-careers-header-inner{padding:10px 16px;min-height:68px;gap:10px}.s310-brand-mark{width:38px;height:38px}.s310-brand-words strong{font-size:15px}.s310-brand-words small{font-size:10px}.s310-careers-topnav{gap:12px}.s310-careers-topnav .s310-topnav-active{display:none}.s310-topnav-staff{font-size:11px!important}.s310-careers-main{padding:18px 14px 50px}.s310-careers-hero{border-radius:16px;min-height:0}.s310-careers-hero-copy{padding:34px 25px}.s310-careers-hero h1{font-size:31px}.s310-careers-hero p{font-size:13px}.s310-careers-positions{padding-top:35px}.s310-positions-heading{align-items:flex-start;flex-direction:column;gap:12px}.s310-positions-heading h2{font-size:26px}.s310-careers-filters{grid-template-columns:1fr;padding:12px}.s310-careers-search{grid-column:auto}.s310-careers-item{padding:18px;align-items:flex-start;gap:12px;flex-wrap:wrap}.s310-careers-job-icon{width:42px;height:42px;flex-basis:42px}.s310-careers-job-main{flex-basis:calc(100% - 60px)}.s310-careers-job-main>strong{font-size:16px}.s310-careers-job-link{width:100%;justify-content:center}.s310-job-detail-layout .s310-public-heading{padding:24px 20px}.s310-detail-grid{padding:22px 20px;gap:14px}.s310-careers-bottom{flex-direction:column;align-items:stretch}.s310-careers-footer{padding:24px 18px;align-items:flex-start;flex-direction:column}.s310-careers-breadcrumb{flex-wrap:wrap}}
+/* S4-02 - Candidate job detail */
+
+.s402-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.s402-section-title svg {
+  color: #4f46e5;
+  flex-shrink: 0;
+}
+
+.s402-apply-area {
+  padding: 18px;
+  border-top: 1px solid #edf1f6;
+}
+
+.s402-apply-button {
+  width: 100%;
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: #4f46e5;
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(79, 70, 229, 0.18);
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease;
+}
+
+.s402-apply-button:hover {
+  background: #4338ca;
+  transform: translateY(-1px);
+}
+
+.s402-apply-button:focus-visible {
+  outline: 3px solid #a5b4fc;
+  outline-offset: 3px;
+}
+
+.s402-expired-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.s402-expired-notice svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.s402-expired-notice > div {
+  display: grid;
+  gap: 4px;
+}
+
+.s402-expired-notice strong {
+  font-size: 13px;
+}
+
+.s402-expired-notice span {
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.s402-apply-info {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid #c7d2fe;
+  border-radius: 10px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+@media (max-width: 650px) {
+  .s402-apply-area {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.97);
+    border-top: 1px solid #e2e8f0;
+    box-shadow: 0 -6px 20px rgba(15, 23, 42, 0.08);
+  }
+
+  .s402-apply-button {
+    min-height: 52px;
+    font-size: 15px;
+  }
+}
 @media(prefers-reduced-motion:reduce){.s310-careers-page *{scroll-behavior:auto!important;transition:none!important}}
 
 /* S4-01: four accessible search/filter controls including location. */
