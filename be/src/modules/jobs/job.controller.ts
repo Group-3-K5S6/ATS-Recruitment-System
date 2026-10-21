@@ -282,6 +282,21 @@ export class JobController {
       return;
     }
 
+    if (data.requisitionId) {
+      const requisition = await prisma.requisition.findUnique({
+        where: { id: data.requisitionId },
+        select: { id: true, status: true },
+      });
+      if (!requisition) {
+        errorResponse(res, 'Không tìm thấy yêu cầu tuyển dụng.', 404, 'NOT_FOUND');
+        return;
+      }
+      if (requisition.status !== 'APPROVED') {
+        errorResponse(res, 'Chỉ yêu cầu ở trạng thái Đã duyệt mới được tạo tin tuyển dụng.', 400, 'INVALID_STATUS');
+        return;
+      }
+    }
+
     const deadlineDate = data.applicationDeadline ? new Date(data.applicationDeadline) : null;
 
     const job = await prisma.job.create({
