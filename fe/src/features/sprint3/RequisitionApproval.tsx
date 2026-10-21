@@ -43,6 +43,23 @@ function isHrManager(): boolean {
   }
 }
 
+function isHrManagerWithoutApprovalRole(): boolean {
+  try {
+    const stored = sessionStorage.getItem("atsUser");
+    const account = stored
+      ? JSON.parse(stored) as { roles?: string[] }
+      : null;
+    const roles = Array.isArray(account?.roles)
+      ? account.roles
+      : [];
+
+    return roles.includes("HR_MANAGER")
+      && !roles.includes("APPROVER")
+      && !roles.includes("ADMIN");
+  } catch {
+    return false;
+  }
+}
 function statusLabel(status: string) {
   const labels: Record<string, string> = {
     DRAFT: "Nháp",
@@ -182,7 +199,7 @@ export default function RequisitionApproval() {
   }
 
   async function submitDecision(decision: Decision) {
-    if (isHrManager() && (decision !== "APPROVE" || !headcountOverride)) {
+    if (isHrManagerWithoutApprovalRole() && (decision !== "APPROVE" || !headcountOverride)) {
       setError("HR Manager chỉ được xác nhận ngoại lệ headcount tại trang này.");
       return;
     }
@@ -653,7 +670,7 @@ export default function RequisitionApproval() {
             {/* FOOTER */}
 
             <div className="s302-modal-footer">
-              {!isHrManager() && (
+              {!isHrManagerWithoutApprovalRole() && (
                 <>
                 <button
                   type="button"
@@ -681,7 +698,7 @@ export default function RequisitionApproval() {
                 </button>
                 </>
               )}
-              {(!isHrManager() || headcountOverride) && (
+              {(!isHrManagerWithoutApprovalRole() || headcountOverride) && (
                 <button
                   type="button"
                   className="
