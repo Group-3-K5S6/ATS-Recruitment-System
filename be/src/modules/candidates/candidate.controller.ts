@@ -65,6 +65,22 @@ export class CandidateController {
     const data = req.body;
     const user = req.user!;
 
+    // If applying for a specific job, check if job exists and is still accepting applications
+    if (data.jobId) {
+      const job = await prisma.job.findUnique({ where: { id: data.jobId } });
+      if (!job) {
+        errorResponse(res, 'Không tìm thấy tin tuyển dụng.', 404, 'NOT_FOUND');
+        return;
+      }
+      const isExpired =
+        job.status === 'CLOSED' ||
+        (job.applicationDeadline && new Date(job.applicationDeadline).getTime() < Date.now());
+      if (isExpired) {
+        errorResponse(res, 'Tin tuyển dụng đã hết hạn nhận hồ sơ.', 400, 'JOB_EXPIRED');
+        return;
+      }
+    }
+
     // Prevent client identity spoofing: if user is CANDIDATE, force userId = user.id
     const targetUserId = user.roles.includes(RoleType.CANDIDATE) ? user.id : undefined;
 
@@ -82,6 +98,23 @@ export class CandidateController {
             currentCompany: data.currentCompany ?? existing.currentCompany,
           },
         });
+
+        if (data.jobId) {
+          const existingApp = await prisma.application.findFirst({
+            where: { candidateId: existing.id, jobId: data.jobId },
+          });
+          if (!existingApp) {
+            await prisma.application.create({
+              data: {
+                candidateId: existing.id,
+                jobId: data.jobId,
+                stage: 'APPLIED',
+                status: 'ACTIVE',
+              },
+            });
+          }
+        }
+
         await recordRequestAudit(req, AuditAction.CANDIDATE_UPDATED, 'candidate', updated.id);
         successResponse(res, CandidatePolicy.sanitize(user, updated), 200, 'Candidate profile updated');
         return;

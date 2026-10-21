@@ -33,6 +33,7 @@ import DepartmentManagement from "./pages/DepartmentManagement";
 import JobTitleSalaryManagement from "./pages/JobTitleSalaryManagement";
 import UserProfilePage from "./pages/UserProfilePage";
 import CompanyProfilePage from "./pages/CompanyProfilePage";
+import JobDetailPage from "./pages/JobDetailPage";
 
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./components/Dashboard";
@@ -1920,15 +1921,16 @@ function App() {
             </Sprint3RouteGuard>
           }
         />
+        {/* SCRUM-30 / SCRUM-107: Chi tiết tin tuyển dụng cho Ứng viên */}
+        <Route path="/jobs/:id" element={<JobDetailPage />} />
+
+        <Route path="/approval-workflows" element={<Sprint3RouteGuard allowedRole="HR_MANAGER"><Sprint3ApprovalWithSidebar /></Sprint3RouteGuard>} />
         <Route
           path="*"
           element={
             <NotFoundPage />
           }
         />
-
-
-        <Route path="/approval-workflows" element={<Sprint3RouteGuard allowedRole="HR_MANAGER"><Sprint3ApprovalWithSidebar /></Sprint3RouteGuard>} />
       </Routes>
 
     </BrowserRouter>
