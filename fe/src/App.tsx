@@ -29,6 +29,7 @@ import Sprint3RouteGuard from "./features/sprint3/Sprint3RouteGuard";
 import { REQUISITION_APPROVAL_ROLES } from "./features/sprint3/routeAccess";
 import RequisitionApproval from "./features/sprint3/RequisitionApproval";
 import RecruitmentAssignment from "./features/sprint3/RecruitmentAssignment";
+import CandidateCvParser from "./features/sprint4/CandidateCvParser";
 
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
@@ -1690,6 +1691,47 @@ function Sprint3PostingWithSidebar() {
     </div>
   );
 }
+// S4-04 FE: Recruiter bóc tách thông tin cơ bản từ CV PDF.
+function Sprint4CandidateCvParserWithSidebar() {
+  const navigate = useNavigate();
+  const user = getSessionUser();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const handleLogout = async () => {
+    try {
+      await logoutFromBackend();
+      clearSession();
+      navigate("/login", { replace: true });
+    } catch (error) {
+      console.error("Logout failed:", error);
+
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Không thể đăng xuất. Vui lòng thử lại.",
+      );
+    }
+  };
+
+  return (
+    <div className="dashboard-layout">
+      <Sidebar
+        role={resolveRole(user.roles)}
+        userName={user.fullName}
+        onLogout={handleLogout}
+        selectedMenu="Ứng viên"
+        onMenuSelect={() => navigate("/dashboard")}
+      />
+
+      <main className="dashboard-content">
+        <CandidateCvParser />
+      </main>
+    </div>
+  );
+}
 
 /* S3-02 FE: Giao diện duyệt / từ chối yêu cầu tuyển dụng */
 function Sprint3RequisitionApprovalWithSidebar() {
@@ -1998,6 +2040,14 @@ function App() {
           element={
             <Sprint3RouteGuard allowedRole="RECRUITER">
               <Sprint3PostingWithSidebar />
+            </Sprint3RouteGuard>
+          }
+        />
+                <Route
+          path="/candidates"
+          element={
+            <Sprint3RouteGuard allowedRole="RECRUITER">
+              <Sprint4CandidateCvParserWithSidebar />
             </Sprint3RouteGuard>
           }
         />

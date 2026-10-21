@@ -335,6 +335,12 @@ function Sidebar({
   };
 
   const handleMenuClick = (item: SidebarItem) => {
+        // S4-04: Recruiter mở màn hình bóc tách CV ứng viên.
+    if (item.key === "candidates" && role === "Recruiter") {
+      navigate("/candidates");
+      setOpen(false);
+      return;
+    }
     if (item.key === "headcount-override") {
       navigate("/requisition-approvals");
       setOpen(false);
