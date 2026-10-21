@@ -298,6 +298,12 @@ model Application {
   stage               String   @default("APPLIED")
   status              String   @default("ACTIVE")
   assignedRecruiterId String?
+  // S4-03: thông tin nhận hồ sơ công khai; không thay đổi hồ sơ lịch sử
+  trackingCode        String?  @unique
+  applicantEmailNormalized String?
+  coverLetter         String?
+  source              String?
+  cvUrl               String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -306,6 +312,9 @@ model Application {
   assignedRecruiter User?       @relation("RecruiterApplications", fields: [assignedRecruiterId], references: [id])
   interviews        Interview[]
   offers            Offer[]
+
+  // Ngăn cùng email (chuẩn hóa) nộp lại vào cùng vị trí, kể cả khi tạo 2 Candidate song song
+  @@unique([jobId, applicantEmailNormalized])
 }
 
 model Interview {

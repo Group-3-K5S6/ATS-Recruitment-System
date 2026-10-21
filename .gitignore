@@ -41,3 +41,7 @@ dist/
 *.sqlite-shm
 *.bak
 *.s1-*-backup
+
+# CV nguoi ung tuyen khong dua vao Git
+uploads/
+**/uploads/

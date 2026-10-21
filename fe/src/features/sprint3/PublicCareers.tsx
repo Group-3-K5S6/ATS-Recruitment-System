@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, BriefcaseBusiness, Building2, ChevronRight, Globe2, MapPin, RefreshCw, Search, SlidersHorizontal } from 'lucide-react';
 import JobPublicContent, { type PublishedPresentation } from './JobPublicContent';
+import JobApplicationForm from './JobApplicationForm';
 import { filterPublicJobs, publicJobFilterOptions, type PublicJobListing } from '../sprint4/publicJobFilters';
 import './job-posting-publish.css';
 import './public-careers.css';
@@ -57,7 +58,7 @@ export default function PublicCareers() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
-  const [applyNotice, setApplyNotice] = useState("");
+  const [showApplicationForm, setShowApplicationForm] = useState(false);
 
   useEffect(() => {
     const abort = new AbortController();
@@ -87,10 +88,12 @@ export default function PublicCareers() {
   const resetFilters = () => { setSearch(''); setWorkMode('ALL'); setDepartment('ALL'); setLocation('ALL'); };
 
 const handleApply = () => {
-  setApplyNotice(
-    "Chức năng gửi hồ sơ đang chờ API ứng tuyển từ Backend. Hệ thống chưa gửi hồ sơ của bạn."
-  );
+  setShowApplicationForm(true);
+  window.requestAnimationFrame(() => document.getElementById('s403-application-anchor')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
 };
+
+const closedForApplications = detail?.job.status === 'CLOSED'
+  || detail?.job.isExpired === true;
 
   return <div className="s310-careers-page">
     <a className="s310-skip-link" href="#careers-main">Bỏ qua điều hướng</a>
@@ -121,19 +124,14 @@ const handleApply = () => {
           </section>
           : detail ? <>
             <Link className="s310-careers-inlineback" to="/careers"><ArrowLeft size={16}/> Xem tất cả vị trí đang tuyển</Link>
-            {applyNotice && (
-  <div className="s402-apply-info" role="status">
-    {applyNotice}
-  </div>
-)}
-
-<div className="s310-careers-detail">
-  <JobPublicContent
-    data={detail}
-    candidateActions
-    onApply={handleApply}
-  />
-</div>
+            <div className="s310-careers-detail">
+              <JobPublicContent data={detail} candidateActions onApply={handleApply}/>
+              {showApplicationForm && !closedForApplications && id && (
+                <div id="s403-application-anchor">
+                  <JobApplicationForm key={id} jobId={id}/>
+                </div>
+              )}
+            </div>
             <div className="s310-careers-bottom"><div><strong>Muốn tìm vị trí khác?</strong><span>Khám phá các cơ hội đang được công khai.</span></div><Link to="/careers" className="s310-careers-outline">Xem danh sách <ArrowRight size={16}/></Link></div>
           </> : null}
       </> : <>
