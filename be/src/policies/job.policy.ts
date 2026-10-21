@@ -105,6 +105,20 @@ export class JobPolicy {
     );
   }
 
+  /** Recruiters may unpublish only postings assigned to them. */
+  static async canUnpublish(user: AuthenticatedUser, jobId: string): Promise<boolean> {
+    if (user.roles.includes(RoleType.ADMIN) || user.roles.includes(RoleType.HR_MANAGER)) {
+      return true;
+    }
+    if (!user.roles.includes(RoleType.RECRUITER)) return false;
+
+    const job = await prisma.job.findUnique({
+      where: { id: jobId },
+      select: { recruiterId: true },
+    });
+    return job?.recruiterId === user.id;
+  }
+
   /**
    * SCRUM-105: Xem trước tin tuyển dụng đúng như giao diện công khai trước khi xuất bản
    */

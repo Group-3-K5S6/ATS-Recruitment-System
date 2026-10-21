@@ -297,7 +297,11 @@ export class JobController {
       }
     }
 
-    const deadlineDate = data.applicationDeadline ? new Date(data.applicationDeadline) : null;
+    const deadlineDate = data.applicationDeadline
+      ? (data.applicationDeadline.match(/^\d{4}-\d{2}-\d{2}$/)
+        ? new Date(`${data.applicationDeadline}T16:59:59.999Z`)
+        : new Date(data.applicationDeadline))
+      : null;
 
     const job = await prisma.job.create({
       data: {
@@ -346,7 +350,10 @@ export class JobController {
 
     const updateData: Prisma.JobUpdateInput = { ...req.body };
     if (req.body.applicationDeadline) {
-      updateData.applicationDeadline = new Date(req.body.applicationDeadline);
+      const deadline = req.body.applicationDeadline as string;
+      updateData.applicationDeadline = deadline.match(/^\d{4}-\d{2}-\d{2}$/)
+        ? new Date(`${deadline}T16:59:59.999Z`)
+        : new Date(deadline);
     }
 
     const updated = await prisma.job.update({
@@ -684,11 +691,11 @@ export class JobController {
     const { id } = req.params;
     const user = req.user!;
 
-    const canPublish = await JobPolicy.canPublish(user, id);
-    if (!canPublish) {
+    const canUnpublish = await JobPolicy.canUnpublish(user, id);
+    if (!canUnpublish) {
       errorResponse(
         res,
-        'Chỉ Trưởng phòng Nhân sự hoặc Quản trị viên mới có quyền gỡ tin tuyển dụng.',
+        'Bạn chỉ được gỡ tin tuyển dụng được phân công; HR Manager và Admin có quyền toàn hệ thống.',
         403,
         'FORBIDDEN_SCOPE'
       );
