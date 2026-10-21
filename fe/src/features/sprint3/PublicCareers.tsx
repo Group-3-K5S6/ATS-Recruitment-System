@@ -62,6 +62,7 @@ export default function PublicCareers() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
+  const [applyNotice, setApplyNotice] = useState("");
 
   useEffect(() => {
     const abort = new AbortController();
@@ -94,6 +95,11 @@ export default function PublicCareers() {
 
   const hasFilters = search !== '' || workMode !== 'ALL' || department !== 'ALL';
   const resetFilters = () => { setSearch(''); setWorkMode('ALL'); setDepartment('ALL'); };
+  const handleApply = () => {
+  setApplyNotice(
+    "Chức năng gửi hồ sơ đang chờ API ứng tuyển từ Backend. Hệ thống chưa gửi hồ sơ của bạn."
+  );
+};
 
   return <div className="s310-careers-page">
     <a className="s310-skip-link" href="#careers-main">Bỏ qua điều hướng</a>
@@ -124,7 +130,19 @@ export default function PublicCareers() {
           </section>
           : detail ? <>
             <Link className="s310-careers-inlineback" to="/careers"><ArrowLeft size={16}/> Xem tất cả vị trí đang tuyển</Link>
-            <div className="s310-careers-detail"><JobPublicContent data={detail}/></div>
+            {applyNotice && (
+  <div className="s402-apply-info" role="status">
+    {applyNotice}
+  </div>
+)}
+
+<div className="s310-careers-detail">
+  <JobPublicContent
+    data={detail}
+    candidateActions
+    onApply={handleApply}
+  />
+</div>
             <div className="s310-careers-bottom"><div><strong>Muốn tìm vị trí khác?</strong><span>Khám phá các cơ hội đang được công khai.</span></div><Link to="/careers" className="s310-careers-outline">Xem danh sách <ArrowRight size={16}/></Link></div>
           </> : null}
       </> : <>

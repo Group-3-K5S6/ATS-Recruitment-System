@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import type { Role } from "../data/roleMenus";
@@ -335,6 +335,12 @@ function Sidebar({
   };
 
   const handleMenuClick = (item: SidebarItem) => {
+    // S4-02: Candidate xem danh sách việc làm công khai.
+    if (item.key === "candidate-jobs") {
+      navigate("/careers");
+      setOpen(false);
+      return;
+    }
     if (item.key === "headcount-override") {
       navigate("/requisition-approvals");
       setOpen(false);
