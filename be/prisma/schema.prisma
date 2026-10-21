@@ -306,6 +306,21 @@ model Application {
   assignedRecruiter User?       @relation("RecruiterApplications", fields: [assignedRecruiterId], references: [id])
   interviews        Interview[]
   offers            Offer[]
+  withdrawalTokens  ApplicationWithdrawalToken[]
+}
+
+// One-time, hashed email confirmation link used to withdraw an application.
+model ApplicationWithdrawalToken {
+  id            String    @id @default(uuid())
+  applicationId String
+  tokenHash     String    @unique
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, expiresAt])
 }
 
 model Interview {

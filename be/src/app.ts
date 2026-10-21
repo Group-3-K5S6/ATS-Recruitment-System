@@ -27,6 +27,7 @@ import rbacManagementRoutes from "./modules/rbac-management/rbac.routes";
 import sharedCategoryRoutes from './modules/shared-categories/shared-category.routes';
 import recruitmentBudgetRoutes from './modules/recruitment-budgets/recruitment-budget.routes';
 import approvalWorkflowRoutes from './modules/approval-workflows/approval-workflow.routes';
+import applicationWithdrawalRoutes from './modules/applications/application-withdrawal.routes';
 
 export function createApp() {
   const app = express();
@@ -45,6 +46,7 @@ export function createApp() {
   // API Routes
   app.use('/api/auth', authRoutes);
   app.use('/api/candidates', candidateRoutes);
+  app.use('/api/applications', applicationWithdrawalRoutes);
   app.use('/api/requisitions', requisitionRoutes);
   app.use('/api/public/jobs', publicJobsRoutes); // anonymous, published only
   app.use('/api/jobs', jobRoutes);
