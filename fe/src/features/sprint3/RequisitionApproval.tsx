@@ -182,6 +182,11 @@ export default function RequisitionApproval() {
   }
 
   async function submitDecision(decision: Decision) {
+    if (isHrManager() && (decision !== "APPROVE" || !headcountOverride)) {
+      setError("HR Manager chỉ được xác nhận ngoại lệ headcount tại trang này.");
+      return;
+    }
+
     if (!selected || submitting) {
       return;
     }
@@ -648,48 +653,52 @@ export default function RequisitionApproval() {
             {/* FOOTER */}
 
             <div className="s302-modal-footer">
-              <button
-                type="button"
-                className="
-                  s302-btn
-                  s302-btn--supplement
-                "
-                onClick={() => void submitDecision("REQUEST_CHANGES")}
-                disabled={submitting}
-              >
-                <MessageSquareMore size={17} />
-                Yêu cầu bổ sung
-              </button>
-
-              <button
-                type="button"
-                className="
-                  s302-btn
-                  s302-btn--reject
-                "
-                onClick={() => void submitDecision("REJECT")}
-                disabled={submitting}
-              >
-                <XCircle size={17} />
-                Từ chối
-              </button>
-
-              <button
-                type="button"
-                className="
-                  s302-btn
-                  s302-btn--approve
-                "
-                onClick={() => void submitDecision("APPROVE")}
-                disabled={submitting}
-              >
-                {submitting ? (
-                  <Loader2 className="s302-spin" size={17} />
-                ) : (
-                  <CheckCircle2 size={17} />
-                )}
-                {headcountOverride ? "Xác nhận ngoại lệ" : "Duyệt"}
-              </button>
+              {!isHrManager() && (
+                <>
+                <button
+                  type="button"
+                  className="
+                    s302-btn
+                    s302-btn--supplement
+                  "
+                  onClick={() => void submitDecision("REQUEST_CHANGES")}
+                  disabled={submitting}
+                >
+                  <MessageSquareMore size={17} />
+                  Yêu cầu bổ sung
+                </button>
+                <button
+                  type="button"
+                  className="
+                    s302-btn
+                    s302-btn--reject
+                  "
+                  onClick={() => void submitDecision("REJECT")}
+                  disabled={submitting}
+                >
+                  <XCircle size={17} />
+                  Từ chối
+                </button>
+                </>
+              )}
+              {(!isHrManager() || headcountOverride) && (
+                <button
+                  type="button"
+                  className="
+                    s302-btn
+                    s302-btn--approve
+                  "
+                  onClick={() => void submitDecision("APPROVE")}
+                  disabled={submitting}
+                >
+                  {submitting ? (
+                    <Loader2 className="s302-spin" size={17} />
+                  ) : (
+                    <CheckCircle2 size={17} />
+                  )}
+                  {headcountOverride ? "Xác nhận ngoại lệ" : "Duyệt"}
+                </button>
+              )}
             </div>
           </div>
         </div>

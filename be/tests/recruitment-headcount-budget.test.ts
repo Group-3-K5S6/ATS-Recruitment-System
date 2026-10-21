@@ -255,6 +255,11 @@ describe('S3-04: budget headcount and final-approval override', () => {
       .set(authHeader(hrManagerToken))
       .send({ decision: 'APPROVE' });
     expect(hrCannotApproveForVp.status).toBe(403);
+    await expect(prisma.requisition.findUnique({ where: { id: requisitionId } }))
+      .resolves.toMatchObject({
+        status: 'PENDING_APPROVAL',
+        approverId,
+      });
 
     const editedAt = new Date((assignedVp?.updatedAt.getTime() ?? Date.now()) + 1000);
     await prisma.requisition.update({

@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test:sprint3-route-access": "node --test tests/Sprint3RouteAccess.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

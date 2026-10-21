@@ -301,6 +301,22 @@ function Sidebar({
       path: "/budget-management",
     });
   }
+  // S3-04: HR Manager headcount exception shortcut.
+  if (
+    role === "HRManager" &&
+    !menuLoading &&
+    !menuError &&
+    menu.some((item) => item.key === "requisitions") &&
+    !menu.some((item) => item.key === "headcount-override")
+  ) {
+    const index = menu.findIndex((item) => item.key === "requisitions");
+    menu.splice(index + 1, 0, {
+      key: "headcount-override",
+      label: "Xác nhận vượt chỉ tiêu",
+      path: "/requisition-approvals",
+    });
+  }
+
   menu.push(
     {
       key: "profile",
@@ -319,6 +335,12 @@ function Sidebar({
   };
 
   const handleMenuClick = (item: SidebarItem) => {
+    if (item.key === "headcount-override") {
+      navigate("/requisition-approvals");
+      setOpen(false);
+      return;
+    }
+
     if (item.key === "budget-management") {
       navigate("/budget-management");
       setOpen(false);
