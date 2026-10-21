@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, BriefcaseBusiness, Building2, ChevronRight, Globe2, MapPin, RefreshCw, Search, SlidersHorizontal } from 'lucide-react';
 import JobPublicContent, { type PublishedPresentation } from './JobPublicContent';
+import JobApplicationForm from './JobApplicationForm';
 import './job-posting-publish.css';
 import './public-careers.css';
 
@@ -124,7 +125,10 @@ export default function PublicCareers() {
           </section>
           : detail ? <>
             <Link className="s310-careers-inlineback" to="/careers"><ArrowLeft size={16}/> Xem tất cả vị trí đang tuyển</Link>
-            <div className="s310-careers-detail"><JobPublicContent data={detail}/></div>
+            <div className="s310-careers-detail">
+              <JobPublicContent data={detail}/>
+              <JobApplicationForm/>
+            </div>
             <div className="s310-careers-bottom"><div><strong>Muốn tìm vị trí khác?</strong><span>Khám phá các cơ hội đang được công khai.</span></div><Link to="/careers" className="s310-careers-outline">Xem danh sách <ArrowRight size={16}/></Link></div>
           </> : null}
       </> : <>
