@@ -293,6 +293,7 @@ model Candidate {
 
 model Application {
   id                  String   @id @default(uuid())
+  trackingCode        String?  @unique
   candidateId         String
   jobId               String
   stage               String   @default("APPLIED")

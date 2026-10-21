@@ -1,7 +1,13 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../database/prisma';
-import { CandidateService } from './candidate.service';
+import {
+  CandidateService,
+  generateTrackingCode,
+  generateUniqueTrackingCode,
+  registerTrackingCode,
+} from './candidate.service';
+import { sendApplicationTrackingEmail } from '../../utils/email';
 import { CandidatePolicy } from '../../policies/candidate.policy';
 import { successResponse, errorResponse } from '../../utils/response';
 import { recordRequestAudit } from '../../middleware/audit-logger';
@@ -27,6 +33,22 @@ export const updateCandidateSchema = z.object({
   expectedSalary: z.number().positive().optional(),
   currentCompany: z.string().optional(),
 });
+
+export const trackStatusSchema = z.object({
+  trackingCode: z
+    .string({ required_error: 'Mã tra cứu là bắt buộc' })
+    .trim()
+    .min(5, 'Mã tra cứu không hợp lệ')
+    .max(100, 'Mã tra cứu quá dài')
+    .regex(/^ATS-[A-Za-z0-9_-]+$/, 'Mã tra cứu không đúng định dạng (ví dụ: ATS-XXXXXXX)'),
+  email: z
+    .string({ required_error: 'Email là bắt buộc' })
+    .trim()
+    .email('Email không đúng định dạng')
+    .max(254, 'Email quá dài')
+    .toLowerCase(),
+});
+
 
 export class CandidateController {
   static async list(req: Request, res: Response): Promise<void> {
@@ -88,6 +110,11 @@ export class CandidateController {
       }
     }
 
+    let trackingCode: string | undefined;
+    if (data.jobId) {
+      trackingCode = await generateUniqueTrackingCode();
+    }
+
     const candidate = await prisma.candidate.create({
       data: {
         fullName: data.fullName,
@@ -98,17 +125,50 @@ export class CandidateController {
         expectedSalary: data.expectedSalary,
         currentCompany: data.currentCompany,
         userId: targetUserId,
-        applications: data.jobId
+        applications: data.jobId && trackingCode
           ? {
               create: {
                 jobId: data.jobId,
                 stage: 'APPLIED',
                 status: 'ACTIVE',
+                trackingCode,
               },
             }
           : undefined,
       },
+      include: {
+        applications: {
+          include: {
+            job: {
+              select: { title: true },
+            },
+          },
+        },
+      },
     });
+
+    // Send email with trackingCode to candidate if an application was created
+    if (candidate.applications?.length && trackingCode) {
+      registerTrackingCode(trackingCode, candidate.applications[0].id);
+      const jobTitle = candidate.applications[0].job?.title;
+      try {
+        await sendApplicationTrackingEmail(
+          candidate.email,
+          candidate.fullName,
+          trackingCode,
+          jobTitle
+        );
+      } catch (emailError: any) {
+        const maskedEmail =
+          candidate.email.split('@')[0].slice(0, 2) +
+          '***@' +
+          (candidate.email.split('@')[1] || '');
+        console.error(
+          `[CandidateController.create] Failed to send tracking email to ${maskedEmail}:`,
+          emailError?.message || 'Unknown error'
+        );
+      }
+    }
 
     await recordRequestAudit(req, AuditAction.CANDIDATE_CREATED, 'candidate', candidate.id);
 
@@ -219,5 +279,29 @@ export class CandidateController {
     });
 
     successResponse(res, profile, 200);
+  }
+
+  /**
+   * POST /api/candidates/track-status
+   * Public tracking endpoint: Lookup candidate application status using trackingCode and email.
+   * No authentication required. No internal notes or PII leaked.
+   */
+  static async trackStatus(req: Request, res: Response): Promise<void> {
+    try {
+      const { trackingCode, email } = req.body;
+
+      const result = await CandidateService.trackApplicationStatus(trackingCode, email);
+
+      if (!result) {
+        // Generic message without revealing whether code or email exists
+        errorResponse(res, 'Không tìm thấy hồ sơ phù hợp.', 404, 'NOT_FOUND');
+        return;
+      }
+
+      successResponse(res, result, 200);
+    } catch (error: any) {
+      console.error('[CandidateController.trackStatus] Internal error:', error?.message || error);
+      errorResponse(res, 'Đã xảy ra lỗi hệ thống khi tra cứu hồ sơ.', 500, 'INTERNAL_SERVER_ERROR');
+    }
   }
 }

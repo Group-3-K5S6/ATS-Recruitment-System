@@ -45,7 +45,8 @@ export const env = {
     process.env.MAIL_FROM ||
     process.env.SMTP_USER ||
     '',
-
+  TRACKING_CODE_SECRET:
+    process.env.TRACKING_CODE_SECRET || '',
   FRONTEND_URL:
     process.env.FRONTEND_URL ||
     'http://localhost:5173',

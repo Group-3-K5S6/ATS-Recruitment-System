@@ -1,11 +1,32 @@
 import { Router } from 'express';
-import { CandidateController, createCandidateSchema, updateCandidateSchema } from './candidate.controller';
+import {
+  CandidateController,
+  createCandidateSchema,
+  updateCandidateSchema,
+  trackStatusSchema,
+} from './candidate.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { requirePermission } from '../../middleware/authorize';
 import { validateBody } from '../../middleware/validate';
+import { createRateLimiter } from '../../middleware/rate-limiter';
 import { PermissionCode } from '../../rbac/permissions';
 
 const router = Router();
+
+// In-memory rate limiter for status tracking (30 reqs/min per IP)
+const trackStatusRateLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  maxRequests: 30,
+  message: 'Quá nhiều yêu cầu tra cứu. Vui lòng thử lại sau ít phút.',
+});
+
+// Public endpoint: Tra cứu trạng thái hồ sơ ứng viên (No authentication required)
+router.post(
+  '/track-status',
+  trackStatusRateLimiter,
+  validateBody(trackStatusSchema),
+  CandidateController.trackStatus
+);
 
 router.use(authenticate);
 
