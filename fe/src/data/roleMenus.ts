@@ -12,7 +12,10 @@ export interface MenuItem {
 }
 
 export const roleMenus: Record<Role, MenuItem[]> = {
-  Candidate: [{ label: "Tổng quan" }],
+  Candidate: [
+    { label: "Tổng quan" },
+    { label: "Việc làm" },
+  ],
   Recruiter: [
     { label: "Tổng quan" },
     { label: "Yêu cầu tuyển dụng" },

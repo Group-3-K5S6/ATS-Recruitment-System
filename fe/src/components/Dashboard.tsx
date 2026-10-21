@@ -234,7 +234,7 @@ setRecruiterStats(
 
 useEffect(() => {
   if (
-  !["Recruiter", "HiringManager"].includes(role) ||
+  !["Recruiter", "HiringManager", "Candidate"].includes(role) ||
   selectedMenu !== "Tổng quan"
 ) {
   return;
@@ -399,6 +399,101 @@ useEffect(() => {
               <p>Chào mừng {userName}</p>
             </div>
           </header>
+
+          {/* =========================
+
+            VAI TRÒ 0 - CANDIDATE (SCRUM-30 / SCRUM-107)
+
+        ========================== */}
+
+          {role === "Candidate" && (
+            <>
+              <section className="dashboard-cards">
+                <div
+                  className="dashboard-card"
+                  style={{ cursor: "pointer" }}
+                  onClick={() => navigate("/jobs")}
+                >
+                  <span>{recruiterJobsLoading ? "..." : recruiterJobs.length}</span>
+                  <p>Vị trí đang tuyển dụng</p>
+                </div>
+
+                <div className="dashboard-card">
+                  <span>0</span>
+                  <p>Hồ sơ đã ứng tuyển</p>
+                </div>
+
+                <div className="dashboard-card">
+                  <span>0</span>
+                  <p>Lịch phỏng vấn sắp tới</p>
+                </div>
+              </section>
+
+              <section className="dashboard-panel">
+                <div className="panel-title">
+                  <h2>Cơ hội nghề nghiệp đang mở</h2>
+                  <a
+                    href="/jobs"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      navigate("/jobs");
+                    }}
+                  >
+                    Xem tất cả vị trí &rarr;
+                  </a>
+                </div>
+
+                <table className="dashboard-table">
+                  <thead>
+                    <tr>
+                      <th>Vị trí tuyển dụng</th>
+                      <th>Phòng ban</th>
+                      <th>Trạng thái</th>
+                      <th>Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recruiterJobsLoading ? (
+                      <tr>
+                        <td colSpan={4}>Đang tải danh sách việc làm...</td>
+                      </tr>
+                    ) : recruiterJobsError ? (
+                      <tr>
+                        <td colSpan={4} role="alert">
+                          {recruiterJobsError}
+                        </td>
+                      </tr>
+                    ) : recruiterJobs.length === 0 ? (
+                      <tr>
+                        <td colSpan={4}>
+                          Hiện chưa có vị trí nào đang tuyển. Vui lòng quay lại sau!
+                        </td>
+                      </tr>
+                    ) : (
+                      recruiterJobs.slice(0, 6).map((job) => (
+                        <tr key={job.id}>
+                          <td style={{ fontWeight: 600 }}>{job.title}</td>
+                          <td>{job.department?.name || "Chưa xác định"}</td>
+                          <td>
+                            <span className="status-blue">Đang tuyển</span>
+                          </td>
+                          <td>
+                            <button
+                              onClick={() => navigate(`/jobs/${job.id}`)}
+                              className="view-button"
+                              id={`btn-cand-view-${job.id}`}
+                            >
+                              Xem chi tiết & Ứng tuyển
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </section>
+            </>
+          )}
 
           {/* =========================
 

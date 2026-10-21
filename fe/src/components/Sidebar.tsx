@@ -323,6 +323,11 @@ function Sidebar({
       setOpen(false);
       return;
     }
+    if (item.key === "candidate-jobs" || item.label === "Việc làm") {
+      navigate("/jobs");
+      setOpen(false);
+      return;
+    }
     if (item.label === "Danh mục dùng chung tuyển dụng") {
       navigate("/recruitment-shared-categories");
       setOpen(false);
