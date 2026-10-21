@@ -2958,3 +2958,32 @@
   font-size: clamp(20px, 2vw, 30px);
   overflow-wrap: anywhere;
 }
+
+/* S4-01: Public careers shortcuts from login and internal sidebar. */
+.login-careers-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  color: #1d4ed8;
+  background: #f8fafc;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+}
+.login-careers-link:hover { background: #eff6ff; border-color: #93c5fd; }
+.login-careers-link:focus-visible,
+.sidebar-public-careers:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+.sidebar-public-careers {
+  margin-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 0 0 8px 8px;
+  color: #bfdbfe;
+}

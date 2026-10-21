@@ -496,6 +496,17 @@ function Sidebar({
                 {item.label}
               </button>
             ))}
+          {/* Trang cong khai khong can phan quyen tu /api/menu. */}
+          <button
+            type="button"
+            className="sidebar-menu-item sidebar-public-careers"
+            onClick={() => {
+              navigate("/careers");
+              setOpen(false);
+            }}
+          >
+            🌐 Trang tuyển dụng công khai
+          </button>
         </nav>
 
         <button
