@@ -976,6 +976,8 @@ export class RequisitionController {
 
     // Keep generic edits and optional assignment/history updates in one transaction.
     const updated = await prisma.$transaction(async (tx) => {
+      if (!(await RequisitionPolicy.canUpdate(user, id, tx))) return null;
+
       const saved = await tx.requisition.update({
         where: { id },
         data: {
@@ -1043,6 +1045,16 @@ export class RequisitionController {
       }
       return saved;
     });
+
+    if (!updated) {
+      errorResponse(
+        res,
+        'Bạn không có quyền sửa yêu cầu tuyển dụng ngoài phạm vi được phân công.',
+        403,
+        'FORBIDDEN_SCOPE'
+      );
+      return;
+    }
 
     await recordRequestAudit(
       req,

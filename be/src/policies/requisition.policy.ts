@@ -1,6 +1,9 @@
+import type { PrismaClient } from '@prisma/client';
 import { AuthenticatedUser } from '../rbac/types';
 import { RoleType } from '../rbac/roles';
 import { prisma } from '../database/prisma';
+
+type RequisitionPolicyDatabase = Pick<PrismaClient, 'requisition'>;
 
 export class RequisitionPolicy {
   static async canView(user: AuthenticatedUser, requisitionId: string): Promise<boolean> {
@@ -63,7 +66,41 @@ export class RequisitionPolicy {
     return false;
   }
 
-  static async canUpdate(user: AuthenticatedUser, requisitionId: string): Promise<boolean> {
+  static async canUpdate(
+    user: AuthenticatedUser,
+    requisitionId: string,
+    database: RequisitionPolicyDatabase = prisma
+  ): Promise<boolean> {
+    if (
+      user.roles.includes(RoleType.ADMIN) ||
+      user.roles.includes(RoleType.HR_MANAGER)
+    ) {
+      return true;
+    }
+
+    const req = await database.requisition.findUnique({
+      where: { id: requisitionId },
+      include: { supportingRecruiters: true },
+    });
+
+    if (!req) return false;
+
+    if (
+      user.roles.includes(RoleType.RECRUITER) &&
+      (req.leadRecruiterId === user.id ||
+        req.supportingRecruiters.some((s) => s.recruiterId === user.id))
+    ) {
+      return true;
+    }
+
+    if (user.roles.includes(RoleType.HIRING_MANAGER)) {
+      return req.hiringManagerId === user.id || (!!user.departmentId && req.departmentId === user.departmentId);
+    }
+
+    return false;
+  }
+
+  static async canManageExpenses(user: AuthenticatedUser, requisitionId: string): Promise<boolean> {
     if (
       user.roles.includes(RoleType.ADMIN) ||
       user.roles.includes(RoleType.HR_MANAGER) ||
