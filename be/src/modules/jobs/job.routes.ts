@@ -14,8 +14,8 @@ import { PermissionCode } from '../../rbac/permissions';
 const router = Router();
 
 // SCRUM-30 / SCRUM-107: Public job endpoints for candidates and guests
-router.get('/public/:id', JobController.getPublicById);
-router.post('/public/:id/apply', JobController.applyPublic);
+
+
 
 router.use(authenticate);
 
