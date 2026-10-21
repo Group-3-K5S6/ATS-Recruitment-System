@@ -41,3 +41,8 @@ dist/
 *.sqlite-shm
 *.bak
 *.s1-*-backup
+
+# Uploaded user files & CVs (SCRUM-132)
+uploads/
+**/uploads/
+

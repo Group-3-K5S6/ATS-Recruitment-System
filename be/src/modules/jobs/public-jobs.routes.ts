@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { prisma } from '../../database/prisma';
 import { successResponse, errorResponse } from '../../utils/response';
+import { PublicJobApplicationController } from './public-job-application.controller';
+import { uploadCvMiddleware } from './cv-upload.middleware';
+import { applicationRateLimiter } from '../../middleware/rate-limiter';
 
-// Minimal public read-only view for S3-10 publication acceptance.
-// Full search/application workflow belongs to Sprint 4.
 const router = Router();
 
 const publishedWhere = () => ({
@@ -15,6 +16,31 @@ const publishedWhere = () => ({
     { applicationDeadline: { gte: new Date() } },
   ],
 });
+
+// SCRUM-132: Tra cứu hồ sơ ứng tuyển bằng mã tra cứu duy nhất
+router.get('/applications/track/:code', (req, res, next) => {
+  void PublicJobApplicationController.trackApplication(req, res).catch(next);
+});
+
+// SCRUM-132: Nộp hồ sơ ứng tuyển kèm CV trực tiếp (hỗ trợ cả /apply có jobId trong body)
+router.post(
+  '/apply',
+  applicationRateLimiter,
+  uploadCvMiddleware,
+  (req, res, next) => {
+    void PublicJobApplicationController.submitApplication(req, res).catch(next);
+  }
+);
+
+// SCRUM-132: Nộp hồ sơ ứng tuyển kèm CV trực tiếp cho vị trí :id
+router.post(
+  '/:id/apply',
+  applicationRateLimiter,
+  uploadCvMiddleware,
+  (req, res, next) => {
+    void PublicJobApplicationController.submitApplication(req, res).catch(next);
+  }
+);
 
 router.get('/', async (_req, res, next) => {
   try {
@@ -77,3 +103,4 @@ router.get('/:id', async (req, res, next) => {
 });
 
 export default router;
+

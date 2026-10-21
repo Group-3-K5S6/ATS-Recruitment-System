@@ -298,6 +298,11 @@ model Application {
   stage               String   @default("APPLIED")
   status              String   @default("ACTIVE")
   assignedRecruiterId String?
+  // SCRUM-132: Public job application & tracking
+  trackingCode        String?  @unique
+  coverLetter         String?
+  source              String?
+  cvUrl               String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -306,6 +311,9 @@ model Application {
   assignedRecruiter User?       @relation("RecruiterApplications", fields: [assignedRecruiterId], references: [id])
   interviews        Interview[]
   offers            Offer[]
+
+  @@unique([candidateId, jobId])
+  @@index([trackingCode])
 }
 
 model Interview {

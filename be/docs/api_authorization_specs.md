@@ -317,3 +317,37 @@ Tài liệu đặc tả toàn diện về **Authentication, Role-Based Access Co
   - `HR_MANAGER`: Xem nhật ký.
 - **Denied**: Tất cả 5 role còn lại đều nhận `403 Forbidden`.
 - **Tính bất biến**: Không cung cấp endpoint sửa (PUT) hoặc xóa (DELETE) nhật ký kiểm toán.
+
+---
+
+### 4.10. Module Tuyển Dụng Công Khai & Ứng Tuyển Trực Tiếp (Public Careers & Application - SCRUM-132)
+
+#### `POST /api/public/jobs/:id/apply` và `POST /api/public/jobs/apply`
+- **Auth**: Public / Anonymous (Cho phép ứng viên nộp hồ sơ trực tiếp mà không cần tài khoản đăng nhập).
+- **Phòng chống Spam & Giới hạn tốc độ (Rate Limit)**:
+  - Tối đa 10 lượt nộp hồ sơ từ cùng một địa chỉ IP trong vòng 1 giờ (Sliding Window).
+  - Vượt quá giới hạn trả về `429 Too Many Requests` kèm header `Retry-After`.
+- **Bảo mật Upload CV**:
+  - Chấp nhận định dạng: `.pdf`, `.docx` (MIME và Magic Bytes header check: `%PDF` hoặc `PK\x03\x04`).
+  - Dung lượng tối đa: 10 MB (`413 Payload Too Large` nếu vượt quá).
+  - Sinh tên tệp an toàn ngẫu nhiên và lưu tại thư mục bảo vệ, ngăn chặn triệt để Path Traversal.
+- **Quy tắc Kiểm tra Trạng thái Tin Tuyển Dụng**:
+  - Chỉ cho phép nộp hồ sơ khi vị trí có `status = 'PUBLISHED'`, đã được duyệt (`approvedAt != null`), đã xuất bản (`publishedAt != null`) và chưa quá hạn (`applicationDeadline >= now`).
+  - Tin không hợp lệ trả về `404 Not Found`.
+- **Chống nộp trùng hồ sơ (Duplicate Prevention)**:
+  - Chuẩn hóa email (`trim().toLowerCase()`).
+  - Nếu cùng email đã có hồ sơ cho cùng vị trí tuyển dụng, hệ thống từ chối với mã `409 Conflict`.
+- **Mã tra cứu hồ sơ (Tracking Code)**:
+  - Tự động sinh mã duy nhất, ngẫu nhiên, khó đoán: `ATS-{YEAR}-{6 KÝ TỰ NGẪU NHIÊN}` (ví dụ: `ATS-2026-X8K9M2`).
+  - Ràng buộc duy nhất `UNIQUE` ở mức cơ sở dữ liệu (`Application.trackingCode`).
+- **Gửi Email Xác Nhận**:
+  - Gửi email thông báo nộp hồ sơ thành công kèm mã tra cứu hồ sơ đến email của ứng viên.
+  - Xử lý bất đồng bộ an toàn: lỗi SMTP không làm hủy bỏ hồ sơ đã lưu hợp lệ.
+
+#### `GET /api/public/jobs/applications/track/:code`
+- **Auth**: Public / Anonymous.
+- **Mục đích**: Ứng viên tra cứu tiến độ hồ sơ bằng mã tra cứu duy nhất.
+- **Bảo vệ dữ liệu cá nhân (Privacy-Preserving)**:
+  - Chỉ trả về thông tin tối thiểu an toàn: Tiêu đề vị trí, phòng ban, hình thức làm việc, giai đoạn tuyển dụng (`stage`), trạng thái (`status`), thời gian nộp và email đã được che giấu một phần (ví dụ `c***e@example.com`).
+  - Tuyệt đối không để lộ ID nội bộ, ghi chú tuyển dụng, đánh giá phỏng vấn hoặc đề xuất lương.
+

@@ -1,4 +1,6 @@
 import express, { Request, Response } from 'express';
+import path from 'path';
+import fs from 'fs';
 import cors from 'cors';
 import helmet from 'helmet';
 import { errorHandler } from './middleware/error-handler';
@@ -36,6 +38,27 @@ export function createApp() {
   app.use(cors());
   app.use(express.json());
 
+  // SCRUM-132: Secure static serving strictly for CV uploads (/uploads/cvs/:filename)
+  // Strictly validates filename pattern and prevents path traversal to any other directory
+  app.get('/uploads/cvs/:filename', (req: Request, res: Response) => {
+    const { filename } = req.params;
+    if (!filename || !/^cv_\d+_[a-f0-9]+\.(pdf|docx)$/i.test(filename)) {
+      errorResponse(res, 'Tên tệp không hợp lệ hoặc không được phép truy cập.', 400, 'INVALID_FILENAME');
+      return;
+    }
+
+    const cvsDir = path.resolve(process.cwd(), 'uploads', 'cvs');
+    const safePath = path.resolve(cvsDir, filename);
+
+    if (!safePath.startsWith(cvsDir) || !fs.existsSync(safePath)) {
+      errorResponse(res, 'Tệp CV không tồn tại.', 404, 'FILE_NOT_FOUND');
+      return;
+    }
+
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'");
+    res.sendFile(safePath);
+  });
 
   // Health check
   app.get('/health', (_req: Request, res: Response) => {
