@@ -29,6 +29,8 @@ import Sprint3RouteGuard from "./features/sprint3/Sprint3RouteGuard";
 import { REQUISITION_APPROVAL_ROLES } from "./features/sprint3/routeAccess";
 import RequisitionApproval from "./features/sprint3/RequisitionApproval";
 import RecruitmentAssignment from "./features/sprint3/RecruitmentAssignment";
+import EmployeeReferral from "./features/sprint4/EmployeeReferral";
+import InternalEmployeeRouteGuard from "./features/sprint4/InternalEmployeeRouteGuard";
 
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
@@ -1859,6 +1861,47 @@ function Sprint3BudgetWithSidebar() {
     </div>
   );
 }
+// S4-07 FE: Nhân sự nội bộ giới thiệu ứng viên.
+function Sprint4EmployeeReferralWithSidebar() {
+  const navigate = useNavigate();
+  const user = getSessionUser();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const handleLogout = async () => {
+    try {
+      await logoutFromBackend();
+      clearSession();
+      navigate("/login", { replace: true });
+    } catch (error) {
+      console.error("Logout failed:", error);
+
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Không thể đăng xuất. Vui lòng thử lại.",
+      );
+    }
+  };
+
+  return (
+    <div className="dashboard-layout">
+      <Sidebar
+        role={resolveRole(user.roles)}
+        userName={user.fullName}
+        onLogout={handleLogout}
+        selectedMenu="Giới thiệu ứng viên"
+        onMenuSelect={() => navigate("/dashboard")}
+      />
+
+      <main className="dashboard-content">
+        <EmployeeReferral />
+      </main>
+    </div>
+  );
+}
 function App() {
 
   return (
@@ -2042,6 +2085,14 @@ function App() {
             <Sprint3RouteGuard allowedRole="HR_MANAGER">
               <Sprint3JobPostingPublishWithSidebar />
             </Sprint3RouteGuard>
+          }
+        />
+                <Route
+          path="/employee-referrals"
+          element={
+            <InternalEmployeeRouteGuard>
+              <Sprint4EmployeeReferralWithSidebar />
+            </InternalEmployeeRouteGuard>
           }
         />
         <Route

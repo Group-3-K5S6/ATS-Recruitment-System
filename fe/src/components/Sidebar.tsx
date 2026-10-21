@@ -316,6 +316,32 @@ function Sidebar({
       path: "/requisition-approvals",
     });
   }
+  // S4-07: Nhân sự nội bộ có thể giới thiệu ứng viên.
+  const internalEmployeeRoles = [
+    "Recruiter",
+    "HiringManager",
+    "Interviewer",
+    "HRManager",
+    "Approver",
+    "Admin",
+  ];
+
+  if (
+    internalEmployeeRoles.includes(role) &&
+    !menuLoading &&
+    !menuError &&
+    !menu.some(
+      (item) =>
+        item.key === "employee-referrals" ||
+        item.label === "Giới thiệu ứng viên",
+    )
+  ) {
+    menu.push({
+      key: "employee-referrals",
+      label: "Giới thiệu ứng viên",
+      path: "/employee-referrals",
+    });
+  }
 
   menu.push(
     {
@@ -335,6 +361,15 @@ function Sidebar({
   };
 
   const handleMenuClick = (item: SidebarItem) => {
+        // S4-07: Open internal employee referral page.
+    if (
+      item.key === "employee-referrals" ||
+      item.label === "Giới thiệu ứng viên"
+    ) {
+      navigate("/employee-referrals");
+      setOpen(false);
+      return;
+    }
     if (item.key === "headcount-override") {
       navigate("/requisition-approvals");
       setOpen(false);
@@ -425,7 +460,6 @@ function Sidebar({
 
     setOpen(false);
   };
-
   return (
     <>
       <button
