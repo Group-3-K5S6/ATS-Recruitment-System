@@ -5,7 +5,7 @@ import { app } from '../src/app';
 import { prisma } from '../src/database/prisma';
 import { authHeader, loginAndGetToken } from './test-helper';
 
-const TEST_YEAR = 2098;
+const TEST_YEAR = 2026;
 
 describe('S3-04: budget headcount and final-approval override', () => {
   let hrManagerToken: string;
@@ -24,7 +24,7 @@ describe('S3-04: budget headcount and final-approval override', () => {
   beforeAll(async () => {
     const [hrManager, hiringManager, approver] = await Promise.all([
       loginAndGetToken('hr_manager@ats.local'),
-      loginAndGetToken('hiring_manager_eng@ats.local'),
+      loginAndGetToken('hiring_manager_mkt@ats.local'),
       loginAndGetToken('approver@ats.local'),
     ]);
 
@@ -58,7 +58,7 @@ describe('S3-04: budget headcount and final-approval override', () => {
         departmentId,
         hiringManagerId,
         approverId,
-        headcount: index === 3 ? 1 : index === 2 ? 1 : 2,
+        headcount: index === 0 ? 3 : 1,
         status: index === 3 ? 'APPROVED' : 'PENDING_APPROVAL',
         targetDate: new Date(Date.UTC(TEST_YEAR, 5, 1)),
         reason: 'NEW',
@@ -152,8 +152,38 @@ describe('S3-04: budget headcount and final-approval override', () => {
     expect(outOfScope.status).toBe(403);
   });
 
-  it('requires HR Manager confirmation and a reason to approve over headcount', async () => {
+  it('lets HR confirm the headcount exception without bypassing the final VP approval', async () => {
     const requisitionId = requisitionIds[0];
+    const initialChain = [
+      { step: 1, approverId: hrManagerId, status: 'PENDING' },
+      { step: 2, approverId, status: 'WAITING' },
+    ];
+    await prisma.requisition.update({
+      where: { id: requisitionId },
+      data: { approverId: hrManagerId, approvalChain: JSON.stringify(initialChain) },
+    });
+
+    const hrApproval = await request(app)
+      .post(`/api/requisitions/${requisitionId}/approve`)
+      .set(authHeader(hrManagerToken))
+      .send({ decision: 'APPROVE' });
+    expect(hrApproval.status).toBe(200);
+    expect(hrApproval.body.data).toMatchObject({
+      status: 'PENDING_APPROVAL',
+      approverId,
+    });
+
+    const approvalChain = hrApproval.body.data.approvalChain as string;
+    expect(JSON.parse(approvalChain)).toMatchObject([
+      { step: 1, approverId: hrManagerId, status: 'APPROVED' },
+      { step: 2, approverId, status: 'PENDING' },
+    ]);
+
+    const assignedVp = await prisma.requisition.findUnique({
+      where: { id: requisitionId },
+    });
+    expect(assignedVp).toMatchObject({ approverId, approvalChain });
+
     const regularApprover = await request(app)
       .post(`/api/requisitions/${requisitionId}/approve`)
       .set(authHeader(approverToken))
@@ -161,6 +191,12 @@ describe('S3-04: budget headcount and final-approval override', () => {
 
     expect(regularApprover.status).toBe(409);
     expect(regularApprover.body.error.code).toBe('HEADCOUNT_BUDGET_EXCEEDED');
+    await expect(prisma.requisition.findUnique({ where: { id: requisitionId } }))
+      .resolves.toMatchObject({
+        status: 'PENDING_APPROVAL',
+        approverId,
+        approvalChain,
+      });
 
     const missingReason = await request(app)
       .post(`/api/requisitions/${requisitionId}/approve`)
@@ -178,24 +214,102 @@ describe('S3-04: budget headcount and final-approval override', () => {
       });
 
     expect(override.status).toBe(200);
-    expect(override.body.data.status).toBe('APPROVED');
+    expect(override.body.data.status).toBe('PENDING_APPROVAL');
+    expect(override.body.data.approverId).toBe(approverId);
+    expect(override.body.data.approvalChain).toBe(approvalChain);
 
-    const history = await prisma.requisitionApprovalHistory.findFirst({
-      where: { requisitionId },
+    const confirmationHistory = await prisma.requisitionApprovalHistory.findFirst({
+      where: { requisitionId, decision: 'HEADCOUNT_OVERRIDE_CONFIRMED' },
+      orderBy: { createdAt: 'desc' },
     });
-    expect(history?.notes).toContain(overrideReason);
+    expect(confirmationHistory).toMatchObject({
+      actorId: hrManagerId,
+      fromStatus: 'PENDING_APPROVAL',
+      toStatus: 'PENDING_APPROVAL',
+      step: 2,
+      notes: overrideReason,
+    });
 
-    const audit = await prisma.auditLog.findFirst({
+    const confirmationAudit = await prisma.auditLog.findFirst({
       where: {
         resourceId: requisitionId,
-        action: 'REQUISITION_APPROVED',
+        action: 'REQUISITION_HEADCOUNT_OVERRIDE_CONFIRMED',
       },
+      orderBy: { createdAt: 'desc' },
     });
-    expect(JSON.parse(audit?.metadata || '{}').headcountOverride).toMatchObject({
+    expect(assignedVp).not.toBeNull();
+    expect(confirmationAudit).toMatchObject({ actorId: hrManagerId });
+    expect(JSON.parse(confirmationAudit?.metadata || '{}')).toMatchObject({
       reason: overrideReason,
       year: TEST_YEAR,
       allocatedHeadcount: 1,
-      requestedHeadcount: 2,
+      approvedHeadcount: 1,
+      requestedHeadcount: 3,
+      approverId,
+      approvalChain,
+      requisitionUpdatedAt: assignedVp?.updatedAt.toISOString(),
+    });
+
+    const hrCannotApproveForVp = await request(app)
+      .post(`/api/requisitions/${requisitionId}/approve`)
+      .set(authHeader(hrManagerToken))
+      .send({ decision: 'APPROVE' });
+    expect(hrCannotApproveForVp.status).toBe(403);
+    await expect(prisma.requisition.findUnique({ where: { id: requisitionId } }))
+      .resolves.toMatchObject({
+        status: 'PENDING_APPROVAL',
+        approverId,
+      });
+
+    const editedAt = new Date((assignedVp?.updatedAt.getTime() ?? Date.now()) + 1000);
+    await prisma.requisition.update({
+      where: { id: requisitionId },
+      data: {
+        description: 'Updated after the HR exception confirmation.',
+        updatedAt: editedAt,
+      },
+    });
+    const staleConfirmation = await request(app)
+      .post(`/api/requisitions/${requisitionId}/approve`)
+      .set(authHeader(approverToken))
+      .send({ decision: 'APPROVE' });
+    expect(staleConfirmation.status).toBe(409);
+    expect(staleConfirmation.body.error.code).toBe('HEADCOUNT_BUDGET_EXCEEDED');
+
+    const renewedConfirmation = await request(app)
+      .post(`/api/requisitions/${requisitionId}/approve`)
+      .set(authHeader(hrManagerToken))
+      .send({
+        decision: 'APPROVE',
+        headcountOverride: true,
+        headcountOverrideReason: overrideReason,
+      });
+    expect(renewedConfirmation.status).toBe(200);
+
+    const finalApproval = await request(app)
+      .post(`/api/requisitions/${requisitionId}/approve`)
+      .set(authHeader(approverToken))
+      .send({ decision: 'APPROVE' });
+    expect(finalApproval.status).toBe(200);
+    expect(finalApproval.body.data.status).toBe('APPROVED');
+
+    const history = await prisma.requisitionApprovalHistory.findFirst({
+      where: { requisitionId, decision: 'APPROVE', step: 2 },
+    });
+    expect(history).toMatchObject({ actorId: approverId, decision: 'APPROVE' });
+    expect(history?.notes).toContain(overrideReason);
+
+    const approvalAudit = await prisma.auditLog.findFirst({
+      where: { resourceId: requisitionId, action: 'REQUISITION_APPROVED' },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(JSON.parse(approvalAudit?.metadata || '{}').headcountOverride).toMatchObject({
+      reason: overrideReason,
+      confirmedBy: hrManagerId,
+      year: TEST_YEAR,
+      allocatedHeadcount: 1,
+      approvedHeadcount: 1,
+      requestedHeadcount: 3,
     });
   });
 
@@ -222,6 +336,7 @@ describe('S3-04: budget headcount and final-approval override', () => {
     await prisma.requisition.update({
       where: { id: requisitionId },
       data: {
+        approverId: hrManagerId,
         approvalChain: JSON.stringify([
           { step: 1, approverId: hrManagerId, status: 'PENDING' },
           { step: 2, approverId, status: 'WAITING' },

@@ -26,6 +26,7 @@ import JobPostingPublish from "./features/sprint3/JobPostingPublish";
 import PublicCareers from "./features/sprint3/PublicCareers"; // S310_PUBLIC_V1
 import ApprovalWorkflowConfig from "./features/sprint3/ApprovalWorkflowConfig";
 import Sprint3RouteGuard from "./features/sprint3/Sprint3RouteGuard";
+import { REQUISITION_APPROVAL_ROLES } from "./features/sprint3/routeAccess";
 import RequisitionApproval from "./features/sprint3/RequisitionApproval";
 import RecruitmentAssignment from "./features/sprint3/RecruitmentAssignment";
 
@@ -2018,7 +2019,7 @@ function App() {
         <Route
           path="/requisition-approvals"
           element={
-            <Sprint3RouteGuard allowedRole="APPROVER">
+            <Sprint3RouteGuard allowedRole={REQUISITION_APPROVAL_ROLES}>
               <Sprint3RequisitionApprovalWithSidebar />
             </Sprint3RouteGuard>
           }

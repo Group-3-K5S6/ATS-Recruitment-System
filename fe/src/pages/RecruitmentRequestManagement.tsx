@@ -190,6 +190,7 @@ function getApprovalDecisionLabel(decision: string) {
     APPROVE: "Đã duyệt",
     REJECT: "Từ chối",
     REQUEST_CHANGES: "Yêu cầu bổ sung",
+    HEADCOUNT_OVERRIDE_CONFIRMED: "Xác nhận ngoại lệ headcount",
   };
 
   return labels[decision] || decision;
@@ -1138,6 +1139,8 @@ export default function RecruitmentRequestManagement({
                                 <strong>
                                   {entry.decision === "REJECT"
                                     ? "Lý do từ chối:"
+                                    : entry.decision === "HEADCOUNT_OVERRIDE_CONFIRMED"
+                                      ? "Lý do xác nhận ngoại lệ:"
                                     : "Ý kiến:"}
                                 </strong>{" "}
                                 {entry.notes || "Không có ý kiến được ghi nhận."}

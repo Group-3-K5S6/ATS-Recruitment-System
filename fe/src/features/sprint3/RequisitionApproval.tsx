@@ -43,6 +43,23 @@ function isHrManager(): boolean {
   }
 }
 
+function isHrManagerWithoutApprovalRole(): boolean {
+  try {
+    const stored = sessionStorage.getItem("atsUser");
+    const account = stored
+      ? JSON.parse(stored) as { roles?: string[] }
+      : null;
+    const roles = Array.isArray(account?.roles)
+      ? account.roles
+      : [];
+
+    return roles.includes("HR_MANAGER")
+      && !roles.includes("APPROVER")
+      && !roles.includes("ADMIN");
+  } catch {
+    return false;
+  }
+}
 function statusLabel(status: string) {
   const labels: Record<string, string> = {
     DRAFT: "Nháp",
@@ -182,6 +199,11 @@ export default function RequisitionApproval() {
   }
 
   async function submitDecision(decision: Decision) {
+    if (isHrManagerWithoutApprovalRole() && (decision !== "APPROVE" || !headcountOverride)) {
+      setError("HR Manager chỉ được xác nhận ngoại lệ headcount tại trang này.");
+      return;
+    }
+
     if (!selected || submitting) {
       return;
     }
@@ -202,6 +224,7 @@ export default function RequisitionApproval() {
     setError("");
     setMessage("");
 
+    const confirmingHeadcountOverride = decision === "APPROVE" && headcountOverride;
     try {
       const endpoint = decision === "REQUEST_CHANGES" ? "request-changes" : "approve";
       await atsApi(
@@ -217,14 +240,20 @@ export default function RequisitionApproval() {
       );
 
       setMessage(decision === "APPROVE"
-        ? headcountOverride
-          ? "Đã duyệt yêu cầu tuyển dụng với xác nhận ghi đè chỉ tiêu headcount."
+        ? confirmingHeadcountOverride
+          ? "Đã ghi nhận xác nhận ngoại lệ headcount. Yêu cầu vẫn chờ người duyệt hiện tại xử lý."
           : "Đã duyệt yêu cầu tuyển dụng."
         : decision === "REJECT"
           ? "Đã từ chối yêu cầu tuyển dụng."
           : "Đã gửi yêu cầu bổ sung thông tin.");
 
       await loadItems();
+
+      if (confirmingHeadcountOverride) {
+        setHeadcountOverride(false);
+        setHeadcountOverrideReason("");
+        return;
+      }
 
       window.setTimeout(() => {
         setSelected(null);
@@ -589,7 +618,7 @@ export default function RequisitionApproval() {
                         setError("");
                       }}
                     />
-                    Xác nhận ghi đè chỉ tiêu headcount tại bước phê duyệt cuối
+                    Xác nhận ngoại lệ headcount tại bước phê duyệt cuối
                   </label>
                   {headcountOverride && (
                     <div>
@@ -607,7 +636,7 @@ export default function RequisitionApproval() {
                       />
                     </div>
                   )}
-                  <small>Chỉ Trưởng phòng Nhân sự được xác nhận; thao tác và lý do sẽ được lưu vào lịch sử phê duyệt và nhật ký kiểm toán.</small>
+                  <small>Xác nhận này lưu người xác nhận, lý do và nhật ký kiểm toán; người duyệt hiện tại vẫn phải phê duyệt.</small>
                 </section>
               )}
 
@@ -641,48 +670,52 @@ export default function RequisitionApproval() {
             {/* FOOTER */}
 
             <div className="s302-modal-footer">
-              <button
-                type="button"
-                className="
-                  s302-btn
-                  s302-btn--supplement
-                "
-                onClick={() => void submitDecision("REQUEST_CHANGES")}
-                disabled={submitting}
-              >
-                <MessageSquareMore size={17} />
-                Yêu cầu bổ sung
-              </button>
-
-              <button
-                type="button"
-                className="
-                  s302-btn
-                  s302-btn--reject
-                "
-                onClick={() => void submitDecision("REJECT")}
-                disabled={submitting}
-              >
-                <XCircle size={17} />
-                Từ chối
-              </button>
-
-              <button
-                type="button"
-                className="
-                  s302-btn
-                  s302-btn--approve
-                "
-                onClick={() => void submitDecision("APPROVE")}
-                disabled={submitting}
-              >
-                {submitting ? (
-                  <Loader2 className="s302-spin" size={17} />
-                ) : (
-                  <CheckCircle2 size={17} />
-                )}
-                Duyệt
-              </button>
+              {!isHrManagerWithoutApprovalRole() && (
+                <>
+                <button
+                  type="button"
+                  className="
+                    s302-btn
+                    s302-btn--supplement
+                  "
+                  onClick={() => void submitDecision("REQUEST_CHANGES")}
+                  disabled={submitting}
+                >
+                  <MessageSquareMore size={17} />
+                  Yêu cầu bổ sung
+                </button>
+                <button
+                  type="button"
+                  className="
+                    s302-btn
+                    s302-btn--reject
+                  "
+                  onClick={() => void submitDecision("REJECT")}
+                  disabled={submitting}
+                >
+                  <XCircle size={17} />
+                  Từ chối
+                </button>
+                </>
+              )}
+              {(!isHrManagerWithoutApprovalRole() || headcountOverride) && (
+                <button
+                  type="button"
+                  className="
+                    s302-btn
+                    s302-btn--approve
+                  "
+                  onClick={() => void submitDecision("APPROVE")}
+                  disabled={submitting}
+                >
+                  {submitting ? (
+                    <Loader2 className="s302-spin" size={17} />
+                  ) : (
+                    <CheckCircle2 size={17} />
+                  )}
+                  {headcountOverride ? "Xác nhận ngoại lệ" : "Duyệt"}
+                </button>
+              )}
             </div>
           </div>
         </div>

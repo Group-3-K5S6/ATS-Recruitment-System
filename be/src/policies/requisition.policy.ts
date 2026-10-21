@@ -134,18 +134,21 @@ export class RequisitionPolicy {
   }
 
   static async canApprove(user: AuthenticatedUser, requisitionId: string): Promise<boolean> {
-    if (user.roles.includes(RoleType.ADMIN) || user.roles.includes(RoleType.HR_MANAGER)) {
+    if (user.roles.includes(RoleType.ADMIN)) {
       return true;
     }
 
-    if (user.roles.includes(RoleType.APPROVER)) {
-      const req = await prisma.requisition.findUnique({
-        where: { id: requisitionId },
-      });
-      if (!req) return false;
-      return req.approverId === user.id;
+    if (
+      !user.roles.includes(RoleType.APPROVER) &&
+      !user.roles.includes(RoleType.HR_MANAGER)
+    ) {
+      return false;
     }
 
-    return false;
+    const req = await prisma.requisition.findUnique({
+      where: { id: requisitionId },
+      select: { approverId: true },
+    });
+    return req?.approverId === user.id;
   }
 }
