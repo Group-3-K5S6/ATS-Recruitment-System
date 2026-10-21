@@ -13,10 +13,6 @@ import { PermissionCode } from '../../rbac/permissions';
 
 const router = Router();
 
-// SCRUM-30 / SCRUM-107: Public job endpoints for candidates and guests
-
-
-
 router.use(authenticate);
 
 // Danh sách tin tuyển dụng

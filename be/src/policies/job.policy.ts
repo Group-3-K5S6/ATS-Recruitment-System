@@ -55,7 +55,7 @@ export class JobPolicy {
   }
 
   if (user.roles.includes(RoleType.CANDIDATE)) {
-    return job.status === 'PUBLISHED' || job.status === 'CLOSED';
+    return job.status === 'PUBLISHED';
   }
 
   return false;

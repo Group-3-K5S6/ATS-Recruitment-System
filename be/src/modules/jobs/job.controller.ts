@@ -226,64 +226,6 @@ export class JobController {
     successResponse(res, jobs, 200);
   }
 
-  private static async getCachedCompanyProfile() {
-    return (await prisma.companyProfile.findUnique({
-      where: { id: 'default' },
-    })) || {
-      id: 'default',
-      companyName: 'ATS Recruitment',
-      tagline: 'Kiến tạo tương lai cùng đội ngũ tinh hoa',
-      introduction: 'Chào mừng bạn đến với cổng thông tin việc làm chính thức của công ty.',
-      culture: 'Môi trường làm việc chuyên nghiệp, đổi mới sáng tạo và tôn trọng giá trị cá nhân.',
-      benefits: 'Chế độ đãi ngộ cạnh tranh, bảo hiểm chăm sóc sức khỏe, đào tạo nâng cao chuyên môn.',
-      website: 'https://ats.local',
-      contactEmail: 'careers@ats.local',
-      location: 'Hà Nội, Việt Nam',
-      isPublished: true,
-      logoData: null,
-      bannerData: null,
-      updatedAt: new Date(),
-    };
-  }
-
-  private static async buildJobDetailData(job: any) {
-    const companyProfile = await JobController.getCachedCompanyProfile();
-
-  let salaryMin: number | null = null;
-  let salaryMax: number | null = null;
-  let salaryDisplayText = 'Thoả thuận';
-
-  if (job.showSalary) {
-    salaryMin = job.requisition?.proposedSalaryMin ?? job.jobTitle?.minSalary ?? null;
-    salaryMax = job.requisition?.proposedSalaryMax ?? job.jobTitle?.maxSalary ?? null;
-
-    if (salaryMin !== null && salaryMax !== null) {
-      salaryDisplayText = `${salaryMin.toLocaleString('vi-VN')} - ${salaryMax.toLocaleString('vi-VN')} VNĐ`;
-    } else if (salaryMin !== null) {
-      salaryDisplayText = `Từ ${salaryMin.toLocaleString('vi-VN')} VNĐ`;
-    } else if (salaryMax !== null) {
-      salaryDisplayText = `Lên đến ${salaryMax.toLocaleString('vi-VN')} VNĐ`;
-    }
-  }
-
-  const isExpired = Boolean(
-    job.status === 'CLOSED' ||
-    (job.applicationDeadline && new Date(job.applicationDeadline).getTime() < Date.now())
-  );
-
-  return {
-    ...job,
-    isExpired,
-    salary: {
-      showSalary: job.showSalary,
-      min: salaryMin,
-      max: salaryMax,
-      displayText: salaryDisplayText,
-    },
-    companyProfile,
-  };
-}
-
   static async getById(req: Request, res: Response): Promise<void> {
     const { id } = req.params;
     const user = req.user!;
@@ -312,7 +254,6 @@ export class JobController {
             proposedSalaryMax: true,
             requirements: true,
             targetDate: true,
-            description: true,
           },
         },
       },
@@ -323,8 +264,7 @@ export class JobController {
       return;
     }
 
-    const detail = await JobController.buildJobDetailData(job);
-    successResponse(res, detail, 200);
+    successResponse(res, job, 200);
   }
 
   static async create(req: Request, res: Response): Promise<void> {
@@ -900,142 +840,4 @@ export class JobController {
 
     successResponse(res, previewData, 200);
   }
-
-  /**
-   * SCRUM-30 / SCRUM-107: Chi tiết tin tuyển dụng công khai cho ứng viên xem thông tin đầy đủ
-   */
-  static async getPublicById(req: Request, res: Response): Promise<void> {
-    const { id } = req.params;
-
-    const job = await prisma.job.findFirst({
-      where: {
-        id,
-        status: { in: ['PUBLISHED', 'CLOSED'] },
-      },
-      include: {
-        department: true,
-        jobTitle: true,
-        requisition: {
-          select: {
-            id: true,
-            title: true,
-            status: true,
-            proposedSalaryMin: true,
-            proposedSalaryMax: true,
-            requirements: true,
-            targetDate: true,
-            description: true,
-          },
-        },
-      },
-    });
-
-    if (!job) {
-      errorResponse(res, 'Không tìm thấy tin tuyển dụng hoặc tin chưa được công khai.', 404, 'NOT_FOUND');
-      return;
-    }
-
-    const detail = await JobController.buildJobDetailData(job);
-    successResponse(res, detail, 200);
-  }
-
-  /**
-   * SCRUM-30 / SCRUM-107: Ứng tuyển công khai
-   */
-  static async applyPublic(req: Request, res: Response): Promise<void> {
-    const { id: jobId } = req.params;
-    const { fullName, email, phone, cvUrl, address, expectedSalary, currentCompany } = req.body;
-
-    if (!fullName || typeof fullName !== 'string' || fullName.trim().length < 2) {
-      errorResponse(res, 'Họ và tên không hợp lệ (tối thiểu 2 ký tự).', 400, 'VALIDATION_ERROR');
-      return;
-    }
-
-    if (!email || typeof email !== 'string' || !email.includes('@')) {
-      errorResponse(res, 'Email không hợp lệ.', 400, 'VALIDATION_ERROR');
-      return;
-    }
-
-    const job = await prisma.job.findUnique({ where: { id: jobId } });
-    if (!job) {
-      errorResponse(res, 'Không tìm thấy tin tuyển dụng.', 404, 'NOT_FOUND');
-      return;
-    }
-
-    const isExpired =
-      job.status === 'CLOSED' ||
-      (job.applicationDeadline && new Date(job.applicationDeadline).getTime() < Date.now());
-    if (isExpired) {
-      errorResponse(res, 'Tin tuyển dụng đã hết hạn nhận hồ sơ.', 400, 'JOB_EXPIRED');
-      return;
-    }
-
-    let candidate = await prisma.candidate.findFirst({
-      where: { email: email.trim().toLowerCase() },
-    });
-
-    if (candidate) {
-      candidate = await prisma.candidate.update({
-        where: { id: candidate.id },
-        data: {
-          fullName: fullName.trim(),
-          phone: phone ? String(phone).trim() : candidate.phone,
-          cvUrl: cvUrl ? String(cvUrl).trim() : candidate.cvUrl,
-          address: address ? String(address).trim() : candidate.address,
-          expectedSalary: expectedSalary ? Number(expectedSalary) : candidate.expectedSalary,
-          currentCompany: currentCompany ? String(currentCompany).trim() : candidate.currentCompany,
-        },
-      });
-    } else {
-      candidate = await prisma.candidate.create({
-        data: {
-          fullName: fullName.trim(),
-          email: email.trim().toLowerCase(),
-          phone: phone ? String(phone).trim() : null,
-          cvUrl: cvUrl ? String(cvUrl).trim() : null,
-          address: address ? String(address).trim() : null,
-          expectedSalary: expectedSalary ? Number(expectedSalary) : null,
-          currentCompany: currentCompany ? String(currentCompany).trim() : null,
-        },
-      });
-    }
-
-    let application = await prisma.application.findFirst({
-      where: { candidateId: candidate.id, jobId },
-    });
-
-    if (!application) {
-      application = await prisma.application.create({
-        data: {
-          candidateId: candidate.id,
-          jobId,
-          stage: 'APPLIED',
-          status: 'ACTIVE',
-        },
-      });
-    }
-
-    try {
-      await recordRequestAudit(req, AuditAction.CANDIDATE_CREATED, 'application', application.id, {
-        jobId,
-        candidateId: candidate.id,
-        email: candidate.email,
-      });
-    } catch {
-      // ignore audit log error for unauthenticated user
-    }
-
-    successResponse(
-      res,
-      {
-        applicationId: application.id,
-        candidateId: candidate.id,
-        fullName: candidate.fullName,
-        email: candidate.email,
-      },
-      201,
-      'Nộp hồ sơ ứng tuyển thành công!'
-    );
-  }
 }
-
