@@ -105,6 +105,7 @@ export default function PublicCareers() {
         </Link>
         <nav aria-label="Điều hướng cổng tuyển dụng" className="s310-careers-topnav">
           <Link to="/careers" className="s310-topnav-active">Vị trí tuyển dụng</Link>
+          <Link to="/careers/tra-cuu" className="s310-topnav-lookup">Tra cứu hồ sơ</Link>
           <Link to={staffNav.path} className="s310-topnav-staff">{staffNav.label} <ArrowRight size={14} aria-hidden="true"/></Link>
         </nav>
       </div>
