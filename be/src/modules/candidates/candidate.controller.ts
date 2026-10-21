@@ -186,4 +186,38 @@ export class CandidateController {
 
     successResponse(res, { cvUrl: candidate.cvUrl }, 200);
   }
+
+  /**
+   * GET /api/candidates/:id/profile
+   * Unified candidate profile: personal info + full application history
+   * (job details, interview schedule, evaluations, offers) scoped by role.
+   */
+  static async getUnifiedProfile(req: Request, res: Response): Promise<void> {
+    const { id } = req.params;
+    const user = req.user!;
+
+    const profile = await CandidateService.getUnifiedProfile(id, user);
+
+    if (!profile) {
+      // Differentiate 403 vs 404 without leaking existence to unauthorised users
+      const exists = await prisma.candidate.findUnique({ where: { id }, select: { id: true } });
+      if (exists) {
+        errorResponse(
+          res,
+          'Access denied. You do not have permission to access this candidate profile.',
+          403,
+          'FORBIDDEN_SCOPE'
+        );
+        return;
+      }
+      errorResponse(res, 'Candidate not found.', 404, 'NOT_FOUND');
+      return;
+    }
+
+    await recordRequestAudit(req, AuditAction.CANDIDATE_VIEWED, 'candidate', profile.id, {
+      actionType: 'UNIFIED_PROFILE_VIEW',
+    });
+
+    successResponse(res, profile, 200);
+  }
 }

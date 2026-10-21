@@ -22,6 +22,12 @@ router.get(
 );
 
 router.get(
+  '/:id/profile',
+  requirePermission(PermissionCode.CANDIDATES_READ),
+  CandidateController.getUnifiedProfile
+);
+
+router.get(
   '/:id/cv',
   requirePermission(PermissionCode.CANDIDATES_READ),
   CandidateController.getCv
