@@ -719,6 +719,10 @@ function Login() {
 
           </form>
 
+          {/* S4-01: Lien ket den cong tuyen dung cong khai. */}
+          <Link to="/careers" className="login-careers-link">
+            Xem các vị trí đang tuyển <span aria-hidden="true">→</span>
+          </Link>
 
           <p className="support">
             Không đăng nhập được?

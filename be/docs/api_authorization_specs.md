@@ -217,6 +217,26 @@ Tài liệu đặc tả toàn diện về **Authentication, Role-Based Access Co
 - **Mục đích**: Gỡ tin khỏi hiển thị công khai, chuyển trạng thái sang `CLOSED`.
 - **Audit Action**: `JOB_POSTING_CLOSED`
 
+#### `GET /api/public/jobs` (SCRUM-116)
+- **Auth**: Public (Không yêu cầu đăng nhập / Anonymous).
+- **Mục đích**: Ứng viên và khách vãng lai xem danh sách việc làm đang tuyển dụng công khai.
+- **Quy tắc nghiệp vụ**:
+  - Chỉ trả về tin có `status === 'PUBLISHED'`, đã được duyệt (`approvedAt != null`) và đã xuất bản (`publishedAt != null`).
+  - Chỉ trả về tin còn hạn tuyển dụng (`applicationDeadline == null` hoặc `applicationDeadline >= now()`).
+- **Query Parameters**:
+  - `department` (chuỗi tên/mã phòng ban hoặc UUID) / `departmentId` (UUID): Lọc theo phòng ban.
+  - `location` (chuỗi): Lọc theo địa điểm làm việc.
+  - `workMode` / `employmentType` (`ONSITE` | `HYBRID` | `REMOTE`): Lọc theo hình thức làm việc.
+  - `keyword` / `search` / `q` (chuỗi): Tìm kiếm từ khóa xuất hiện trong tiêu đề hoặc mô tả công việc.
+  - `page` (số nguyên >= 1), `limit` (số nguyên 1..100), `offset` (số nguyên >= 0): Phân trang kết quả.
+  - `paginate=true`: Định dạng trả về object phân trang `{ items, total, page, limit, totalPages }`. Mặc định trả về danh sách mảng `Job[]`.
+- **Bảo vệ dữ liệu nội bộ**: Không trả về `approvedById`, `publishedById`, `approvalNotes`, `rejectionReason`, `hiringManagerId`, `recruiterId`.
+
+#### `GET /api/public/jobs/:id` (S3-10 & SCRUM-116)
+- **Auth**: Public (Không yêu cầu đăng nhập).
+- **Mục đích**: Xem chi tiết nội dung tin tuyển dụng công khai và thương hiệu công ty (`CompanyProfile`).
+- **Điều kiện hiển thị**: Tin tuyển dụng phải ở trạng thái `PUBLISHED` và còn hạn tuyển dụng.
+
 ---
 
 ### 4.5. Module Lịch Phỏng Vấn (Interviews)
