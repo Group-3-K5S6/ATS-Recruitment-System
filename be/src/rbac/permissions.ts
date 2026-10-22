@@ -30,6 +30,10 @@ export enum PermissionCode {
   CANDIDATES_UPDATE = 'candidates:update',
   CANDIDATES_DELETE = 'candidates:delete',
 
+  // Employee Referrals - S4-07
+  REFERRALS_CREATE = 'referrals:create',
+  REFERRALS_READ = 'referrals:read',
+
   // Interview Schedule
   INTERVIEWS_READ = 'interviews:read',
   INTERVIEWS_CREATE = 'interviews:create',
@@ -114,6 +118,10 @@ export const ALL_PERMISSIONS: PermissionDefinition[] = [
   { code: PermissionCode.CANDIDATES_CREATE, module: 'candidates', description: 'Tạo hồ sơ ứng tuyển mới' },
   { code: PermissionCode.CANDIDATES_UPDATE, module: 'candidates', description: 'Cập nhật trạng thái và thông tin ứng viên' },
   { code: PermissionCode.CANDIDATES_DELETE, module: 'candidates', description: 'Xóa hoặc lưu trữ ứng viên' },
+
+  // Employee Referrals - S4-07
+  { code: PermissionCode.REFERRALS_CREATE, module: 'referrals', description: 'Giới thiệu ứng viên nội bộ' },
+  { code: PermissionCode.REFERRALS_READ, module: 'referrals', description: 'Xem danh sách và trạng thái ứng viên giới thiệu của tôi' },
 
   // Interviews
   { code: PermissionCode.INTERVIEWS_READ, module: 'interviews', description: 'Xem lịch phỏng vấn' },

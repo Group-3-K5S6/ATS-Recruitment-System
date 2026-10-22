@@ -62,6 +62,7 @@ model User {
   assignmentHistoryNewLead    RequisitionAssignmentHistory[]     @relation("AssignmentHistoryNewLead")
    // S1-02 - Cac phien dang nhap cua nguoi dung
   authSessions AuthSession[]
+  referrals Referral[] @relation("UserReferrals")
 }
 
 
@@ -272,6 +273,7 @@ model Job {
   @@index([approvedById])
   @@index([publishedById])
   @@index([status])
+  referrals Referral[]
 }
 
 model Candidate {
@@ -289,6 +291,7 @@ model Candidate {
 
   user         User?         @relation(fields: [userId], references: [id])
   applications Application[]
+  referrals Referral[]
 }
 
 model Application {
@@ -316,6 +319,7 @@ model Application {
 
   // Ngăn cùng email (chuẩn hóa) nộp lại vào cùng vị trí, kể cả khi tạo 2 Candidate song song
   @@unique([jobId, applicantEmailNormalized])
+  referral Referral?
 }
 
 // S4-06: Token bi bam SHA-256, dung mot lan, het han sau 30 phut.
@@ -330,6 +334,28 @@ model ApplicationWithdrawalToken {
   application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   @@index([applicationId, expiresAt])
+}
+
+// S4-07: giới thiệu ứng viên nội bộ
+model Referral {
+  id            String      @id @default(uuid())
+  referrerId    String
+  candidateId   String
+  applicationId String      @unique
+  jobId         String
+  notes         String?
+  source        String      @default("INTERNAL_REFERRAL")
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  referrer      User        @relation("UserReferrals", fields: [referrerId], references: [id])
+  candidate     Candidate   @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  job           Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([referrerId])
+  @@index([candidateId])
+  @@index([jobId])
 }
 
 model Interview {

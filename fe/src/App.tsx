@@ -32,6 +32,8 @@ import { REQUISITION_APPROVAL_ROLES } from "./features/sprint3/routeAccess";
 import RequisitionApproval from "./features/sprint3/RequisitionApproval";
 import RecruitmentAssignment from "./features/sprint3/RecruitmentAssignment";
 import CandidateCvParser from "./features/sprint4/CandidateCvParser";
+import EmployeeReferral from "./features/sprint4/EmployeeReferral";
+import InternalEmployeeRouteGuard from "./features/sprint4/InternalEmployeeRouteGuard";
 
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
@@ -1901,6 +1903,30 @@ function Sprint4CandidateCvParserWithSidebar() {
   );
 }
 
+// S4-07: Nhân viên nội bộ giới thiệu ứng viên.
+function Sprint4EmployeeReferralWithSidebar() {
+  const navigate = useNavigate();
+  const user = getSessionUser();
+  if (!user) return <Navigate to="/login" replace />;
+  const handleLogout = async () => {
+    try {
+      await logoutFromBackend();
+      clearSession();
+      navigate("/login", { replace: true });
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Đăng xuất thất bại.");
+    }
+  };
+  return (
+    <div className="dashboard-layout">
+      <Sidebar role={resolveRole(user.roles)} userName={user.fullName}
+        onLogout={handleLogout} selectedMenu="Giới thiệu ứng viên"
+        onMenuSelect={() => navigate("/dashboard")} />
+      <main className="dashboard-content"><EmployeeReferral /></main>
+    </div>
+  );
+}
+
 function App() {
 
   return (
@@ -2104,6 +2130,10 @@ function App() {
               <Sprint4CandidateCvParserWithSidebar />
             </Sprint3RouteGuard>
           }
+        />
+        <Route
+          path="/employee-referrals"
+          element={<InternalEmployeeRouteGuard><Sprint4EmployeeReferralWithSidebar /></InternalEmployeeRouteGuard>}
         />
         <Route
           path="*"
