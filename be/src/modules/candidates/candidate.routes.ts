@@ -64,6 +64,13 @@ router.get(
   CandidateController.list
 );
 
+// S4-09: đặt route tĩnh trước /:id để không bị coi là candidateId.
+router.get(
+  '/profiles',
+  requirePermission(PermissionCode.CANDIDATES_READ),
+  CandidateController.listUnifiedProfiles
+);
+
 router.get(
   '/:id',
   requirePermission(PermissionCode.CANDIDATES_READ),
@@ -71,9 +78,22 @@ router.get(
 );
 
 router.get(
+  '/:id/profile',
+  requirePermission(PermissionCode.CANDIDATES_READ),
+  CandidateController.getUnifiedProfile
+);
+
+
+router.get(
   '/:id/cv',
   requirePermission(PermissionCode.CANDIDATES_READ),
   CandidateController.getCv
+);
+
+router.get(
+  '/:id/cv/preview',
+  requirePermission(PermissionCode.CANDIDATES_READ),
+  CandidateController.previewLocalTestCv
 );
 
 router.post(
