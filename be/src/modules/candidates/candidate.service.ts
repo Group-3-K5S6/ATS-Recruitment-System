@@ -2,6 +2,7 @@ import { prisma } from '../../database/prisma';
 import { AuthenticatedUser } from '../../rbac/types';
 import { RoleType } from '../../rbac/roles';
 import { CandidatePolicy } from '../../policies/candidate.policy';
+import { Prisma } from '@prisma/client';
 
 export class CandidateService {
   /**
@@ -131,6 +132,132 @@ export class CandidateService {
             },
           },
         },
+      });
+      return candidate ? CandidatePolicy.sanitize(currentUser, candidate) : null;
+    }
+
+    return null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Unified profile include helper — shared between role branches
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Full include for unified profile (applications + job + requisition +
+   * interviews + evaluations + offers). Callers may add a `where` clause on
+   * `applications` to scope by role.
+   */
+  private static unifiedProfileInclude(applicationWhere?: Prisma.ApplicationWhereInput) {
+    return {
+      applications: {
+        where: applicationWhere,
+        orderBy: { createdAt: 'desc' as const },
+        include: {
+          job: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
+              location: true,
+              applicationDeadline: true,
+              departmentId: true,
+              hiringManagerId: true,
+              recruiterId: true,
+              createdAt: true,
+              department: { select: { id: true, name: true, code: true } },
+              hiringManager: { select: { id: true, fullName: true, email: true } },
+            },
+          },
+          interviews: {
+            orderBy: { scheduledAt: 'asc' as const },
+            include: {
+              interviewer: { select: { id: true, fullName: true, email: true } },
+              evaluations: {
+                select: {
+                  id: true,
+                  score: true,
+                  technicalNotes: true,
+                  culturalNotes: true,
+                  recommendation: true,
+                  createdAt: true,
+                  // Do NOT expose interviewerId — redundant and already on Interview
+                },
+              },
+            },
+          },
+          offers: {
+            orderBy: { createdAt: 'desc' as const },
+            select: {
+              id: true,
+              status: true,
+              baseSalary: true,
+              createdAt: true,
+              updatedAt: true,
+              // internalNotes intentionally omitted — sanitised later per role
+            },
+          },
+        },
+      },
+    } satisfies Prisma.CandidateInclude;
+  }
+
+  /**
+   * S4-09: chỉ liệt kê các ứng viên và vị trí thuộc đúng phạm vi được giao.
+   * Không trả về dữ liệu liên hệ, CV hoặc lịch sử tuyển dụng ở bước liệt kê.
+   */
+  static async listUnifiedProfiles(currentUser: AuthenticatedUser) {
+    let applicationScope: Prisma.ApplicationWhereInput;
+
+    if (currentUser.roles.includes(RoleType.RECRUITER)) {
+      applicationScope = CandidatePolicy.recruiterApplicationWhere(currentUser.id);
+    } else if (currentUser.roles.includes(RoleType.HIRING_MANAGER)) {
+      applicationScope = { job: { hiringManagerId: currentUser.id } };
+    } else {
+      return null;
+    }
+
+    return prisma.candidate.findMany({
+      where: { applications: { some: applicationScope } },
+      orderBy: { fullName: 'asc' },
+      select: {
+        id: true,
+        fullName: true,
+        applications: {
+          where: applicationScope,
+          select: {
+            id: true,
+            jobId: true,
+            job: { select: { id: true, title: true, status: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+  }
+
+  /**
+   * S4-09: quyền MỞ được kiểm tra theo vị trí được giao. Khi đã có quyền,
+   * hiển thị đầy đủ các lần ứng tuyển trước đây của cùng ứng viên (AC2).
+   */
+  static async getUnifiedProfile(candidateId: string, currentUser: AuthenticatedUser) {
+    if (currentUser.roles.includes(RoleType.RECRUITER)) {
+      const applicationScope = CandidatePolicy.recruiterApplicationWhere(currentUser.id);
+      const candidate = await prisma.candidate.findFirst({
+        where: { id: candidateId, applications: { some: applicationScope } },
+        include: CandidateService.unifiedProfileInclude(),
+      });
+      return candidate ? CandidatePolicy.sanitize(currentUser, candidate) : null;
+    }
+
+    if (currentUser.roles.includes(RoleType.HIRING_MANAGER)) {
+      // Scope by the exact hiringManagerId, not by department membership.
+      const applicationScope: Prisma.ApplicationWhereInput = {
+        job: { hiringManagerId: currentUser.id },
+      };
+      const candidate = await prisma.candidate.findFirst({
+        where: { id: candidateId, applications: { some: applicationScope } },
+        include: CandidateService.unifiedProfileInclude(),
       });
       return candidate ? CandidatePolicy.sanitize(currentUser, candidate) : null;
     }

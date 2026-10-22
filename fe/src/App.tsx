@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
 import CompetencyFrameworkManagement from "./pages/CompetencyFrameworkManagement";
 import InterviewQuestionBank from "./pages/InterviewQuestionBank";
 import RecruitmentSharedCategories from "./pages/RecruitmentSharedCategories";
@@ -24,6 +24,8 @@ import CopyRequisition from "./features/sprint3/CopyRequisition";
 import JobPostingDraft from "./features/sprint3/JobPostingDraft";
 import JobPostingPublish from "./features/sprint3/JobPostingPublish";
 import PublicCareers from "./features/sprint3/PublicCareers"; // S310_PUBLIC_V1
+import CandidateProfilePage from "./pages/CandidateProfilePage";
+import CandidateDirectoryPage from "./pages/CandidateDirectoryPage";
 import ApplicationStatusLookup from "./features/sprint3/ApplicationStatusLookup";
 import WithdrawApplication from "./features/sprint4/WithdrawApplication";
 import ApprovalWorkflowConfig from "./features/sprint3/ApprovalWorkflowConfig";
@@ -1927,6 +1929,52 @@ function Sprint4EmployeeReferralWithSidebar() {
   );
 }
 
+function S409Workspace({ children, selectedMenu }: {
+  children: ReactNode;
+  selectedMenu: string;
+}) {
+  const user = getSessionUser();
+  const navigate = useNavigate();
+  if (!user) return <Navigate to="/login" replace />;
+  const handleLogout = async () => {
+    try {
+      await logoutFromBackend();
+      clearSession();
+      navigate("/login", { replace: true });
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Đăng xuất thất bại.");
+    }
+  };
+  return (
+    <div className="dashboard-layout">
+      <Sidebar role={resolveRole(user.roles)} userName={user.fullName}
+        onLogout={handleLogout}
+        selectedMenu={selectedMenu === "Ứng viên theo vị trí" && resolveRole(user.roles) === "Recruiter"
+          ? "Hồ sơ ứng viên hợp nhất" : selectedMenu}
+        onMenuSelect={() => navigate("/dashboard")} />
+      <div className="dashboard-content">{children}</div>
+    </div>
+  );
+}
+
+function S409CandidateProfileRoute() {
+  const user = getSessionUser();
+  const token = sessionStorage.getItem("accessToken");
+
+  if (!user || !token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const allowed =
+    user.roles.includes("RECRUITER") ||
+    user.roles.includes("HIRING_MANAGER");
+
+  if (!allowed) {
+    return <Navigate to="/403" replace />;
+  }
+
+  return <S409Workspace selectedMenu="Ứng viên theo vị trí"><CandidateProfilePage /></S409Workspace>;
+}
 function App() {
 
   return (
@@ -1940,6 +1988,18 @@ function App() {
         <Route path="/careers/tra-cuu" element={<ApplicationStatusLookup />} />
         <Route path="/careers" element={<PublicCareers />} />
         <Route path="/careers/:id" element={<PublicCareers />} />
+        <Route path="/candidates/:id" element={<S409CandidateProfileRoute />} />
+        <Route path="/my-jobs" element={
+          <Sprint3RouteGuard allowedRole="HIRING_MANAGER">
+            <Navigate to="/candidate-profiles" replace />
+          </Sprint3RouteGuard>
+        } />
+        <Route path="/candidate-profiles" element={
+          <Sprint3RouteGuard allowedRole={["RECRUITER", "HIRING_MANAGER"]}>
+            <S409Workspace selectedMenu="Ứng viên theo vị trí"><CandidateDirectoryPage view="candidates" /></S409Workspace>
+          </Sprint3RouteGuard>
+        } />
+
         {/* ROOT */}
 
 

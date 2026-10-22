@@ -1,0 +1,35 @@
+.s409-directory { width: 100%; max-width: 1200px; margin: 0 auto; color: #152a45; }
+.s409-directory-header { display: flex; gap: 16px; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; }
+.s409-directory-header h1 { font-size: clamp(1.5rem, 2vw, 2rem); margin: 4px 0 6px; }
+.s409-directory-header p { margin: 0; color: #66778b; }
+.s409-directory-eyebrow { color: #2059ca !important; letter-spacing: .12em; font-size: 12px; font-weight: 700; }
+.s409-directory-header a, .s409-directory-item a { display: inline-block; padding: 10px 15px; color: #fff; background: #225ce8; border-radius: 8px; font-weight: 600; text-decoration: none; }
+.s409-directory-list { display: grid; gap: 14px; }
+.s409-directory-item { display: flex; justify-content: space-between; align-items: center; gap: 18px; background: #fff; border: 1px solid #dbe4ef; border-radius: 12px; padding: 20px 24px; flex-wrap: wrap; }
+.s409-directory-item h2 { margin: 0 0 7px; font-size: 18px; }
+.s409-directory-item p { margin: 3px 0; color: #596a7e; }
+.s409-directory-message { border: 1px solid #dbe4ef; background: #fff; padding: 20px; border-radius: 10px; }
+.s409-directory-message button { margin-left: 12px; }
+.s409-directory-filter { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; background: #eef4ff; border-radius: 9px; padding: 12px 16px; margin-bottom: 20px; }
+.s409-directory-filter a { color: #2059ca; }
+@media (max-width: 640px) { .s409-directory-item { padding: 16px; } .s409-directory-item a { width: 100%; text-align: center; } }
+
+.s409-directory-filter label {
+  font-weight: 700;
+}
+
+.s409-directory-filter select {
+  flex: 1;
+  min-width: 220px;
+  padding: 11px 12px;
+  border: 1px solid #cad7ea;
+  border-radius: 8px;
+  background: #fff;
+  color: #152a45;
+  font: inherit;
+}
+
+.s409-directory-filter span {
+  font-weight: 600;
+  color: #2059ca;
+}

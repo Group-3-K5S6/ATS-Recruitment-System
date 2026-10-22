@@ -206,6 +206,9 @@ function Sidebar({
   const menu: SidebarItem[] = [];
 
   for (const item of serverMenu) {
+    // S4-09: Chi giu Ung vien theo vi tri cho Hiring Manager.
+    // Backend van quyet dinh pham vi duoc phep xem.
+    if (role === "HiringManager" && item.key === "jobs") continue;
     menu.push({
       key: item.key,
       label: getDisplayLabel(item.key, role, item.label),
@@ -246,6 +249,18 @@ function Sidebar({
       key: "job-posting-draft",
       label: "Soạn tin tuyển dụng",
       path: "/job-postings/draft",
+    });
+  }
+  // S4-09: Recluiter vẫn giữ công cụ CV S4-04, có lối vào hồ sơ hợp nhất riêng.
+  // Chỉ hiện khi Backend trả về mục candidates theo quyền đã cấp.
+  if (role === "Recruiter" && !menuLoading && !menuError &&
+      menu.some(item => item.key === "candidates") &&
+      !menu.some(item => item.key === "candidate-profiles")) {
+    const index = menu.findIndex(item => item.key === "candidates");
+    menu.splice(index + 1, 0, {
+      key: "candidate-profiles",
+      label: "Hồ sơ ứng viên hợp nhất",
+      path: "/candidate-profiles",
     });
   }
   // S3-06: FE shortcut for HR Manager recruitment assignment.
@@ -393,6 +408,18 @@ function Sidebar({
     }
     if (item.key === "approval-workflows") {
       navigate("/approval-workflows");
+      setOpen(false);
+      return;
+    }
+    // S4-09: hai đường vào khác nhau, không quay về Dashboard hoặc /candidates CV.
+    if (item.key === "jobs" && role === "HiringManager") {
+      navigate("/candidate-profiles");
+      setOpen(false);
+      return;
+    }
+    if (item.key === "candidate-profiles" ||
+        (item.key === "candidates" && role === "HiringManager")) {
+      navigate("/candidate-profiles");
       setOpen(false);
       return;
     }

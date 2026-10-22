@@ -8,6 +8,8 @@ import { recordRequestAudit } from '../../middleware/audit-logger';
 import { AuditAction } from '../../rbac/types';
 import { RoleType } from '../../rbac/roles';
 import { CvParserService } from './cv-parser.service';
+import { readFile, realpath } from 'node:fs/promises';
+import { basename, join, sep } from 'node:path';
 
 export const createCandidateSchema = z.object({
   fullName: z.string().min(2),
@@ -165,7 +167,8 @@ export class CandidateController {
     const { id } = req.params;
     const user = req.user!;
 
-    const candidate = await CandidateService.findCandidateForUser(id, user);
+    // S4-09: CV metadata must use the SAME scope as the unified profile.
+    const candidate = await CandidateService.getUnifiedProfile(id, user);
     if (!candidate) {
       errorResponse(
         res,
@@ -186,6 +189,47 @@ export class CandidateController {
     });
 
     successResponse(res, { cvUrl: candidate.cvUrl }, 200);
+  }
+
+  /** S409_PROTECTED_CV_PREVIEW: protected PDF stream for LOCAL TEST fixture only.
+   * This endpoint does not download remote URLs (SSRF), expose public files,
+   * or run in production. Production storage is outside this TEST fixture.
+   */
+  static async previewLocalTestCv(req: Request, res: Response): Promise<void> {
+    const profile = await CandidateService.getUnifiedProfile(req.params.id, req.user!);
+    if (!profile) {
+      errorResponse(res, 'Access denied.', 403, 'FORBIDDEN_SCOPE');
+      return;
+    }
+    const match = new RegExp('^s409-demo://([A-Za-z0-9_-]+\\.pdf)$').exec(profile.cvUrl ?? '');
+    const folder = process.env.S409_CV_TEST_DIR;
+    if (process.env.NODE_ENV === 'production' || !folder || !match) {
+      errorResponse(res, 'CV preview unavailable.', 404, 'CV_NOT_FOUND');
+      return;
+    }
+    try {
+      const name = match[1];
+      if (basename(name) !== name) throw new Error('INVALID_FILE_NAME');
+      const base = await realpath(folder);
+      const file = await realpath(join(base, name));
+      // Reject traversal and symbolic links outside the explicitly configured directory.
+      if (!file.startsWith(base + sep)) throw new Error('INVALID_CV_PATH');
+      const pdf = await readFile(file);
+      if (pdf.length < 8 || pdf.length > 10 * 1024 * 1024 || pdf.subarray(0, 5).toString() !== '%PDF-') {
+        throw new Error('INVALID_PDF');
+      }
+      await recordRequestAudit(req, AuditAction.CANDIDATE_VIEWED, 'candidate', profile.id, {
+        actionType: 'CV_PREVIEW_TEST',
+      });
+      res.status(200).set({
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': 'inline; filename="candidate-cv.pdf"',
+        'Cache-Control': 'private, no-store',
+        'X-Content-Type-Options': 'nosniff',
+      }).send(pdf);
+    } catch {
+      errorResponse(res, 'CV preview unavailable.', 404, 'CV_NOT_FOUND');
+    }
   }
 
   /**
@@ -240,5 +284,49 @@ export class CandidateController {
         200
       );
     }
+  }
+
+  /** S4-09: danh sách hồ sơ hợp nhất theo đúng vị trí được phân quyền. */
+  static async listUnifiedProfiles(req: Request, res: Response): Promise<void> {
+    const candidates = await CandidateService.listUnifiedProfiles(req.user!);
+    if (candidates === null) {
+      errorResponse(res, 'Access denied.', 403, 'FORBIDDEN_ROLE');
+      return;
+    }
+    successResponse(res, candidates, 200);
+  }
+
+  /**
+   * GET /api/candidates/:id/profile
+   * Unified candidate profile: personal info + full application history
+   * (job details, interview schedule, evaluations, offers) scoped by role.
+   */
+  static async getUnifiedProfile(req: Request, res: Response): Promise<void> {
+    const { id } = req.params;
+    const user = req.user!;
+
+    const profile = await CandidateService.getUnifiedProfile(id, user);
+
+    if (!profile) {
+      // Differentiate 403 vs 404 without leaking existence to unauthorised users
+      const exists = await prisma.candidate.findUnique({ where: { id }, select: { id: true } });
+      if (exists) {
+        errorResponse(
+          res,
+          'Access denied. You do not have permission to access this candidate profile.',
+          403,
+          'FORBIDDEN_SCOPE'
+        );
+        return;
+      }
+      errorResponse(res, 'Candidate not found.', 404, 'NOT_FOUND');
+      return;
+    }
+
+    await recordRequestAudit(req, AuditAction.CANDIDATE_VIEWED, 'candidate', profile.id, {
+      actionType: 'UNIFIED_PROFILE_VIEW',
+    });
+
+    successResponse(res, profile, 200);
   }
 }

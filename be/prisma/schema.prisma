@@ -286,6 +286,9 @@ model Candidate {
   address        String?
   expectedSalary Float?
   currentCompany String?
+  // S4-09: Nhan va ghi chu de hien thi ho so ung vien hop nhat
+  labels         String?
+  notes          String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
