@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, BriefcaseBusiness, Building2, ChevronRight, Glob
 import JobPublicContent, { type PublishedPresentation } from './JobPublicContent';
 import JobApplicationForm from './JobApplicationForm';
 import { filterPublicJobs, publicJobFilterOptions, type PublicJobListing } from '../sprint4/publicJobFilters';
+import { subscribeToPublicJobsChanges } from './publicJobsSync';
 import './job-posting-publish.css';
 import './public-careers.css';
 
@@ -59,6 +60,8 @@ export default function PublicCareers() {
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
   const [applicationJobId, setApplicationJobId] = useState<string | null>(null);
+
+  useEffect(() => subscribeToPublicJobsChanges(() => setRetry(value => value + 1)), []);
 
   useEffect(() => {
     const abort = new AbortController();
@@ -143,6 +146,12 @@ useEffect(() => {
             <div className="s310-feedback-icon"><BriefcaseBusiness size={24}/></div>
             <h1>Không thể xem tin tuyển dụng này</h1>
             <p>Tin có thể đã đóng, hết hạn hoặc chưa được xuất bản. Bạn có thể quay lại để chọn vị trí đang mở.</p>
+            <div className="s310-feedback-actions"><Link className="s310-careers-primary" to="/careers"><ArrowLeft size={16}/> Về danh sách vị trí</Link><button className="s310-careers-outline" type="button" onClick={() => setRetry(v => v + 1)}><RefreshCw size={16}/> Thử lại</button></div>
+          </section>
+          : detail && (detail.job.status !== 'PUBLISHED' || detail.job.isExpired === true) ? <section className="s310-careers-feedback" role="status">
+            <div className="s310-feedback-icon"><BriefcaseBusiness size={24}/></div>
+            <h1>{detail.job.status === 'CLOSED' ? 'Tin tuyển dụng đã được gỡ' : detail.job.isExpired ? 'Tin tuyển dụng đã hết hạn' : 'Tin tuyển dụng không còn công khai'}</h1>
+            <p>{detail.job.status === 'CLOSED' ? 'Tin này không còn được hiển thị trên cổng tuyển dụng.' : detail.job.isExpired ? 'Đã quá hạn nhận hồ sơ nên vị trí này không còn nhận ứng tuyển.' : 'Tin này không còn ở trạng thái được phép hiển thị công khai.'}</p>
             <div className="s310-feedback-actions"><Link className="s310-careers-primary" to="/careers"><ArrowLeft size={16}/> Về danh sách vị trí</Link><button className="s310-careers-outline" type="button" onClick={() => setRetry(v => v + 1)}><RefreshCw size={16}/> Thử lại</button></div>
           </section>
           : detail ? <>
