@@ -60,8 +60,9 @@ model User {
   requisitionAssignmentHistoryActor RequisitionAssignmentHistory[] @relation("AssignmentHistoryActor")
   assignmentHistoryPrevLead   RequisitionAssignmentHistory[]     @relation("AssignmentHistoryPrevLead")
   assignmentHistoryNewLead    RequisitionAssignmentHistory[]     @relation("AssignmentHistoryNewLead")
-   // S1-02 - Cac phien dang nhap cua nguoi dung
+  // S1-02 - Cac phien dang nhap cua nguoi dung
   authSessions AuthSession[]
+  referrals    Referral[]    @relation("UserReferrals")
 }
 
 
@@ -268,6 +269,7 @@ model Job {
   jobTitle           JobTitle?           @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
   applications       Application[]
   interviewQuestions InterviewQuestion[]
+  referrals          Referral[]
 
   @@index([approvedById])
   @@index([publishedById])
@@ -289,6 +291,7 @@ model Candidate {
 
   user         User?         @relation(fields: [userId], references: [id])
   applications Application[]
+  referrals    Referral[]
 }
 
 model Application {
@@ -306,6 +309,29 @@ model Application {
   assignedRecruiter User?       @relation("RecruiterApplications", fields: [assignedRecruiterId], references: [id])
   interviews        Interview[]
   offers            Offer[]
+  referral          Referral?
+}
+
+// S4-07 - Giới thiệu ứng viên nội bộ (Employee Referral)
+model Referral {
+  id            String      @id @default(uuid())
+  referrerId    String
+  candidateId   String
+  applicationId String      @unique
+  jobId         String
+  notes         String?
+  source        String      @default("INTERNAL_REFERRAL")
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  referrer      User        @relation("UserReferrals", fields: [referrerId], references: [id])
+  candidate     Candidate   @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  job           Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([referrerId])
+  @@index([candidateId])
+  @@index([jobId])
 }
 
 model Interview {
