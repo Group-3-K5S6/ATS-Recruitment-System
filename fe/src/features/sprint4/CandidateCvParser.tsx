@@ -334,7 +334,7 @@ export default function CandidateCvParser() {
     <section className="s404-page">
       <header className="s404-header">
         <div>
-          <span className="s404-eyebrow">QUẢN LÝ ỨNG VIÊN · SPRINT 4</span>
+          <span className="s404-eyebrow">QUẢN LÝ ỨNG VIÊN</span>
           <h1>Bóc tách thông tin từ CV ứng viên</h1>
           <p>
             Tải tệp CV định dạng PDF để tự động điền họ tên, email và số điện thoại.
