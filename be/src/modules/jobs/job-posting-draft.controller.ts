@@ -20,7 +20,8 @@ export const createJobPostingDraftSchema = z.object({
 export type CreateJobPostingDraftInput = z.infer<typeof createJobPostingDraftSchema>;
 
 function parseDeadline(value: string): Date | null {
-  const date = new Date(`${value}T00:00:00.000Z`);
+  // A date-only deadline remains open through the end of that day in Vietnam (UTC+7).
+  const date = new Date(`${value}T16:59:59.999Z`);
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value
     ? date
     : null;
@@ -28,7 +29,7 @@ function parseDeadline(value: string): Date | null {
 
 function todayLocal(): string {
   const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  return new Date(now.getTime() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
 export class JobPostingDraftController {

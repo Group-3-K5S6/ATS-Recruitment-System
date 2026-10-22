@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import type { Role } from "../data/roleMenus";
@@ -284,6 +284,16 @@ function Sidebar({
     menu.splice(index >= 0 ? index + 1 : menu.length, 0, {
       key: "job-posting-publish",
       label: "Duyệt & xuất bản tin",
+      path: "/job-postings/publish",
+    });
+  }
+  // S4-08: Recruiter can remove their assigned published postings only.
+  if (role === "Recruiter" && !menuLoading && !menuError &&
+      !menu.some(item => item.key === "job-posting-publish")) {
+    const index = menu.findIndex(item => item.key === "job-posting-draft");
+    menu.splice(index >= 0 ? index + 1 : menu.length, 0, {
+      key: "job-posting-publish",
+      label: "Gỡ tin tuyển dụng",
       path: "/job-postings/publish",
     });
   }

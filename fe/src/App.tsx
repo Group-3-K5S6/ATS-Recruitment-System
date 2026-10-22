@@ -2109,7 +2109,7 @@ function App() {
         <Route
           path="/job-postings/publish"
           element={
-            <Sprint3RouteGuard allowedRole="HR_MANAGER">
+            <Sprint3RouteGuard allowedRole={["HR_MANAGER", "ADMIN", "RECRUITER"]}>
               <Sprint3JobPostingPublishWithSidebar />
             </Sprint3RouteGuard>
           }

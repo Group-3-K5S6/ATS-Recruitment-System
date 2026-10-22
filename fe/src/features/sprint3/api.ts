@@ -17,8 +17,11 @@ export async function atsApi<T>(path: string, method = 'GET', body?: unknown): P
   }
   const result: Envelope<T> | null = await response.json().catch(() => null);
   if (!response.ok || result?.success !== true || result.data === undefined) {
-    if (response.status === 404) throw new Error(`Backend chưa cung cấp API ${method} ${path}, cần BE hoàn thiện trước khi nghiệm thu.`);
+    if (response.status === 401) throw new Error(result?.error?.message || 'Phiên đăng nhập hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.');
     if (response.status === 403) throw new Error('Tài khoản hiện tại không được cấp quyền thực hiện thao tác này.');
+    if (response.status === 404 && result?.error?.code !== 'NOT_FOUND') {
+      throw new Error(`Backend chưa cung cấp API ${method} ${path}, cần BE hoàn thiện trước khi nghiệm thu.`);
+    }
     throw new Error(result?.error?.message || `Máy chủ trả về lỗi HTTP ${response.status}.`);
   }
   return result.data;
