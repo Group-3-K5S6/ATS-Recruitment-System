@@ -123,12 +123,13 @@ function CandidateCv({ candidateId, hasCv }: { candidateId: string; hasCv: boole
     const load = async () => {
       try {
         const result = await getCandidateCv(candidateId, abort.signal);
-        if (result.cvUrl.startsWith('s409-demo://')) {
-          // LOCAL TEST only: never expose bearer token or an unauthenticated PDF link.
+        if (result.cvUrl.startsWith('s409-demo://') ||
+            /^\/uploads\/cvs\/cv_[0-9]+_[0-9a-f]{16}\.(pdf|docx)$/.test(result.cvUrl)) {
+          // S409_REAL_LOCAL_CV_STORAGE: authenticated fetch; no public link.
           const blob = await getCandidateCvPdf(candidateId, abort.signal);
           if (abort.signal.aborted) return;
           objectUrl = URL.createObjectURL(blob);
-          setState({ kind: 'ready', url: objectUrl, previewable: true });
+          setState({ kind: 'ready', url: objectUrl, previewable: blob.type === 'application/pdf' });
           return;
         }
         const url = safeCvUrl(result.cvUrl);
@@ -144,7 +145,7 @@ function CandidateCv({ candidateId, hasCv }: { candidateId: string; hasCv: boole
           return;
         }
         if (error instanceof CandidateApiError && error.kind === 'notFound') {
-          setState({ kind: 'unavailable', message: 'CV chưa được lưu trên máy chủ kiểm thử.' });
+          setState({ kind: 'unavailable', message: 'Không tìm thấy tệp CV trên máy chủ.' });
           return;
         }
         setState({ kind: 'unavailable', message: errorMessage(error) });

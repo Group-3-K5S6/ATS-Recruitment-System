@@ -149,7 +149,10 @@ export async function getCandidateCvPdf(id: string, signal: AbortSignal): Promis
   if (response.status === 401) throw new CandidateApiError('unauthorized');
   if (response.status === 403) throw new CandidateApiError('forbidden');
   if (response.status === 404) throw new CandidateApiError('notFound');
-  if (!response.ok || !(response.headers.get('Content-Type') || '').includes('application/pdf')) {
+  // S409_REAL_LOCAL_CV_STORAGE: S4-03 accepts PDF and DOCX.
+  const type = (response.headers.get('Content-Type') || '').toLowerCase();
+  if (!response.ok || !(type.includes('application/pdf') ||
+    type.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document'))) {
     throw new CandidateApiError('server');
   }
   return response.blob();

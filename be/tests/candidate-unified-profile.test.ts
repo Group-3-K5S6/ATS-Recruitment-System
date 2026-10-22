@@ -371,6 +371,37 @@ describe('Candidate Unified Profile — GET /api/candidates/:id/profile', () => 
     }
   });
 
+  it('S409_REAL_LOCAL_CV_STORAGE: S4-03 PDF, scoped recruiter and manager only', async () => {
+    const { mkdirSync, writeFileSync, unlinkSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const { randomBytes } = await import('node:crypto');
+    const dir = join(process.cwd(), 'uploads', 'cvs');
+    mkdirSync(dir, { recursive: true });
+    const filename = 'cv_' + Date.now() + '_' + randomBytes(8).toString('hex') + '.pdf';
+    const full = join(dir, filename);
+    const originalCv = await prisma.candidate.findUniqueOrThrow({ where: { id: candAId }, select: { cvUrl: true } });
+    writeFileSync(full, Buffer.from('%PDF-1.4\n1 0 obj\n<</Type/Catalog>>\nendobj\n%%EOF\n'));
+    try {
+      await prisma.candidate.update({ where: { id: candAId }, data: { cvUrl: '/uploads/cvs/' + filename } });
+      const url = '/api/candidates/' + candAId + '/cv/preview';
+      expect((await request(app).get(url)).status).toBe(401);
+      for (const token of [recruiter1Token, hmEngToken]) {
+        const response = await request(app).get(url).set(authHeader(token));
+        expect(response.status).toBe(200);
+        expect(response.headers['content-type']).toContain('application/pdf');
+        expect(response.headers['cache-control']).toContain('no-store');
+      }
+      for (const token of [recruiter2Token, adminToken, hrManagerToken]) {
+        expect((await request(app).get(url).set(authHeader(token))).status).toBe(403);
+      }
+      await prisma.candidate.update({ where: { id: candAId }, data: { cvUrl: 'https://secure-ats.internal/missing.pdf' } });
+      expect((await request(app).get(url).set(authHeader(hmEngToken))).status).toBe(404);
+    } finally {
+      await prisma.candidate.update({ where: { id: candAId }, data: { cvUrl: originalCv.cvUrl } });
+      unlinkSync(full);
+    }
+  });
+
   it('requires authentication', async () => {
     const res = await request(app).get(`/api/candidates/${candAId}/profile`);
     expect(res.status).toBe(401);

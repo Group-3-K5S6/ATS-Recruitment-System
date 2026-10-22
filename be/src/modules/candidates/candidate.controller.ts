@@ -191,42 +191,47 @@ export class CandidateController {
     successResponse(res, { cvUrl: candidate.cvUrl }, 200);
   }
 
-  /** S409_PROTECTED_CV_PREVIEW: protected PDF stream for LOCAL TEST fixture only.
-   * This endpoint does not download remote URLs (SSRF), expose public files,
-   * or run in production. Production storage is outside this TEST fixture.
-   */
+  /** S409_REAL_LOCAL_CV_STORAGE: read existing S4-03 upload after S4-09 access check. */
   static async previewLocalTestCv(req: Request, res: Response): Promise<void> {
     const profile = await CandidateService.getUnifiedProfile(req.params.id, req.user!);
     if (!profile) {
       errorResponse(res, 'Access denied.', 403, 'FORBIDDEN_SCOPE');
       return;
     }
-    const match = new RegExp('^s409-demo://([A-Za-z0-9_-]+\\.pdf)$').exec(profile.cvUrl ?? '');
-    const folder = process.env.S409_CV_TEST_DIR;
-    if (process.env.NODE_ENV === 'production' || !folder || !match) {
+    const cvUrl = profile.cvUrl ?? '';
+    // Only local files named by the existing S4-03 upload path are accepted.
+    const local = /^\/uploads\/cvs\/(cv_[0-9]+_[0-9a-f]{16}\.(pdf|docx))$/.exec(cvUrl);
+    const demo = /^s409-demo:\/\/([A-Za-z0-9_-]+\.pdf)$/.exec(cvUrl);
+    const name = local?.[1] ?? demo?.[1];
+    if (!name || (!local && (process.env.NODE_ENV === 'production' || !process.env.S409_CV_TEST_DIR))) {
       errorResponse(res, 'CV preview unavailable.', 404, 'CV_NOT_FOUND');
       return;
     }
     try {
-      const name = match[1];
-      if (basename(name) !== name) throw new Error('INVALID_FILE_NAME');
+      if (basename(name) !== name) throw new Error('INVALID_CV_NAME');
+      const folder = local
+        ? join(process.cwd(), 'uploads', 'cvs')
+        : process.env.S409_CV_TEST_DIR!;
       const base = await realpath(folder);
       const file = await realpath(join(base, name));
-      // Reject traversal and symbolic links outside the explicitly configured directory.
       if (!file.startsWith(base + sep)) throw new Error('INVALID_CV_PATH');
-      const pdf = await readFile(file);
-      if (pdf.length < 8 || pdf.length > 10 * 1024 * 1024 || pdf.subarray(0, 5).toString() !== '%PDF-') {
-        throw new Error('INVALID_PDF');
+      const cv = await readFile(file);
+      if (cv.length < 8 || cv.length > 10 * 1024 * 1024) throw new Error('INVALID_CV_SIZE');
+      const pdf = !local || local[2] === 'pdf';
+      if (pdf && cv.subarray(0,5).toString() !== '%PDF-') throw new Error('INVALID_PDF');
+      if (!pdf && (cv.subarray(0,4).toString('hex') !== '504b0304' ||
+          (!cv.includes(Buffer.from('word/')) && !cv.includes(Buffer.from('[Content_Types].xml'))))) {
+        throw new Error('INVALID_DOCX');
       }
       await recordRequestAudit(req, AuditAction.CANDIDATE_VIEWED, 'candidate', profile.id, {
-        actionType: 'CV_PREVIEW_TEST',
+        actionType: local ? 'CV_PREVIEW_LOCAL' : 'CV_PREVIEW_TEST',
       });
       res.status(200).set({
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': 'inline; filename="candidate-cv.pdf"',
+        'Content-Type': pdf ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'Content-Disposition': pdf ? 'inline; filename="candidate-cv.pdf"' : 'attachment; filename="candidate-cv.docx"',
         'Cache-Control': 'private, no-store',
         'X-Content-Type-Options': 'nosniff',
-      }).send(pdf);
+      }).send(cv);
     } catch {
       errorResponse(res, 'CV preview unavailable.', 404, 'CV_NOT_FOUND');
     }
