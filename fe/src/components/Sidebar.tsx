@@ -373,15 +373,25 @@ function Sidebar({
       setOpen(false);
       return;
     }
+    // S4-04: Recruiter bóc tách CV ứng viên
+    if (
+      item.key === "candidates" ||
+      item.label === "Ứng viên" ||
+      item.label === "Bóc tách CV ứng viên"
+    ) {
+      navigate("/candidates");
+      setOpen(false);
+      return;
+    }
     // S3-10: Open job publishing page.
-  if (
-    item.key === "job-posting-publish" ||
-    item.label === "Duyệt & xuất bản tin"
-  ) {
-    navigate("/job-postings/publish");
-    setOpen(false);
-    return;
-  }
+    if (
+      item.key === "job-posting-publish" ||
+      item.label === "Duyệt & xuất bản tin"
+    ) {
+      navigate("/job-postings/publish");
+      setOpen(false);
+      return;
+    }
   
 
     // S3-02: Approver goes to the requisition approval page.

@@ -29,6 +29,7 @@ import Sprint3RouteGuard from "./features/sprint3/Sprint3RouteGuard";
 import { REQUISITION_APPROVAL_ROLES } from "./features/sprint3/routeAccess";
 import RequisitionApproval from "./features/sprint3/RequisitionApproval";
 import RecruitmentAssignment from "./features/sprint3/RecruitmentAssignment";
+import CandidateCvParser from "./features/sprint4/CandidateCvParser";
 
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
@@ -1859,6 +1860,45 @@ function Sprint3BudgetWithSidebar() {
     </div>
   );
 }
+
+/* S4-04 FE: Recruiter bóc tách thông tin ứng viên từ CV PDF */
+function Sprint4CandidateCvParserWithSidebar() {
+  const navigate = useNavigate();
+  const user = getSessionUser();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const handleLogout = async () => {
+    try {
+      await logoutFromBackend();
+      clearSession();
+      navigate("/login", { replace: true });
+    } catch (error) {
+      window.alert(
+        error instanceof Error ? error.message : "Đăng xuất thất bại."
+      );
+    }
+  };
+
+  return (
+    <div className="dashboard-layout">
+      <Sidebar
+        role={resolveRole(user.roles)}
+        userName={user.fullName}
+        onLogout={handleLogout}
+        selectedMenu="Ứng viên"
+        onMenuSelect={() => navigate("/dashboard")}
+      />
+
+      <main className="dashboard-content">
+        <CandidateCvParser />
+      </main>
+    </div>
+  );
+}
+
 function App() {
 
   return (
@@ -2041,6 +2081,23 @@ function App() {
           element={
             <Sprint3RouteGuard allowedRole="HR_MANAGER">
               <Sprint3JobPostingPublishWithSidebar />
+            </Sprint3RouteGuard>
+          }
+        />
+        {/* S4-04: Recruiter bóc tách thông tin ứng viên từ CV PDF */}
+        <Route
+          path="/candidates"
+          element={
+            <Sprint3RouteGuard allowedRole="RECRUITER">
+              <Sprint4CandidateCvParserWithSidebar />
+            </Sprint3RouteGuard>
+          }
+        />
+        <Route
+          path="/candidates/cv-parser"
+          element={
+            <Sprint3RouteGuard allowedRole="RECRUITER">
+              <Sprint4CandidateCvParserWithSidebar />
             </Sprint3RouteGuard>
           }
         />
