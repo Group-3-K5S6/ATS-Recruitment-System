@@ -78,6 +78,8 @@ export enum AuditAction {
   JOB_POSTING_REJECTED = 'JOB_POSTING_REJECTED',
   JOB_POSTING_PUBLISHED = 'JOB_POSTING_PUBLISHED',
   JOB_POSTING_CLOSED = 'JOB_POSTING_CLOSED',
+  REFERRAL_CREATED = 'REFERRAL_CREATED',
+  REFERRAL_VIEWED = 'REFERRAL_VIEWED',
 }
 
 export type ResourceType =
@@ -95,4 +97,5 @@ export type ResourceType =
   | 'offer'
   | 'report'
   | 'organization'
-  | 'audit_log';
+  | 'audit_log'
+  | 'referral';

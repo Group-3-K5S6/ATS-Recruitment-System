@@ -330,11 +330,24 @@ function Sidebar({
     }
   );
 
+  // S4-07: Mục giới thiệu dành cho nhân viên nội bộ.
+  const referralRoles = ["Recruiter", "HiringManager", "Interviewer", "HRManager", "Approver", "Admin"];
+  if (referralRoles.includes(role) && !menuLoading && !menuError &&
+      !menu.some(item => item.key === "employee-referrals")) {
+    menu.push({ key: "employee-referrals", label: "Giới thiệu ứng viên", path: "/employee-referrals" });
+  }
+
   const handleLogout = async () => {
     await onLogout();
   };
 
   const handleMenuClick = (item: SidebarItem) => {
+    if (item.key === "employee-referrals") {
+      navigate("/employee-referrals");
+      setOpen(false);
+      return;
+    }
+
     // S4-02: Candidate xem danh sách việc làm công khai.
     if (item.key === "candidate-jobs") {
       navigate("/careers");
