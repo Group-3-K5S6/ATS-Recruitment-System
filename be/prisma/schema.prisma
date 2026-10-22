@@ -1,0 +1,651 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./ats.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id              String  @id @default(uuid())
+  email           String  @unique
+  passwordHash    String
+  fullName        String
+  phone           String?
+  jobTitle        String?
+  // S2-03 - Ảnh đại diện nhân viên
+  avatarImage     Bytes?
+  avatarThumbnail Bytes?
+  departmentId    String?
+  isActive        Boolean @default(true)
+
+  // S1-01 - khóa tạm sau 5 lần đăng nhập sai liên tiếp
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+
+  // S1-04 - dùng để vô hiệu hóa các phiên đăng nhập cũ
+  tokenVersion Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  department         Department?  @relation(fields: [departmentId], references: [id])
+  managedDepartments Department[] @relation("DepartmentManager")
+  roles              UserRole[]
+  auditLogs          AuditLog[]
+
+  candidateProfile     Candidate?
+  managedRequisitions    Requisition[]                @relation("HiringManagerRequisitions")
+  approvedRequisitions   Requisition[]                @relation("ApproverRequisitions")
+  // S2-91 - Lịch sử phê duyệt do user này thực hiện
+  requisitionApprovalHistory RequisitionApprovalHistory[] @relation("ApprovalHistoryActor")
+  managedJobs              Job[]                        @relation("HiringManagerJobs")
+  assignedJobs         Job[]         @relation("RecruiterJobs")
+  // SCRUM-105: Duyệt và xuất bản tin tuyển dụng
+  approvedJobs         Job[]         @relation("JobApprover")
+  publishedJobs        Job[]         @relation("JobPublisher")
+  assignedApplications Application[] @relation("RecruiterApplications")
+  interviews           Interview[]   @relation("InterviewerInterviews")
+  evaluations          Evaluation[]  @relation("InterviewerEvaluations")
+  createdOffers        Offer[]       @relation("RecruiterOffers")
+  approvedOffers       Offer[]       @relation("ApproverOffers")
+  createdRecruitmentExpenses RecruitmentExpense[] @relation("RecruitmentExpenseCreator")
+
+  // S1-03 / S1-04
+  passwordHistories PasswordHistory[]
+  // SCRUM-97 / SCRUM-41: Phân công recruiter
+  leadRequisitions            Requisition[]                      @relation("LeadRecruiterRequisitions")
+  supportingRequisitions      RequisitionSupportingRecruiter[]   @relation("SupportingRecruiterAssignments")
+  requisitionAssignmentHistoryActor RequisitionAssignmentHistory[] @relation("AssignmentHistoryActor")
+  assignmentHistoryPrevLead   RequisitionAssignmentHistory[]     @relation("AssignmentHistoryPrevLead")
+  assignmentHistoryNewLead    RequisitionAssignmentHistory[]     @relation("AssignmentHistoryNewLead")
+   // S1-02 - Cac phien dang nhap cua nguoi dung
+  authSessions AuthSession[]
+  referrals Referral[] @relation("UserReferrals")
+}
+
+
+
+model Role {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  description String
+  users       UserRole[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  code        String           @unique
+  module      String
+  description String
+  roles       RolePermission[]
+}
+
+model UserRole {
+  userId String
+  roleId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model Department {
+  id   String @id @default(uuid())
+  name String
+  code String @unique
+
+  parentId String?
+  parent   Department?  @relation("DepartmentHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children Department[] @relation("DepartmentHierarchy")
+
+  managerId String?
+  manager   User?   @relation("DepartmentManager", fields: [managerId], references: [id], onDelete: Restrict)
+
+  isActive Boolean @default(true)
+
+  users             User[]
+  requisitions      Requisition[]
+  jobs              Job[]
+  headcountBudgets  DepartmentHeadcountBudget[]
+  salaryBudgets     DepartmentSalaryBudget[]
+  approvalWorkflows ApprovalWorkflow[]
+}
+
+model DepartmentHeadcountBudget {
+  id           String   @id @default(uuid())
+  departmentId String
+  year         Int
+  headcount    Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  @@unique([departmentId, year])
+  @@index([year])
+}
+
+model JobTitle {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  level     String
+  minSalary Float
+  maxSalary Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  jobs                 Job[]
+  requisitions         Requisition[]
+  competencyFrameworks JobTitleCompetencyFramework[]
+}
+
+model Requisition {
+  id              String   @id @default(uuid())
+  title           String
+  departmentId    String
+  hiringManagerId String
+  approverId      String?
+  jobTitleId         String?
+  reason             String?
+  proposedSalaryMin  Float?
+  proposedSalaryMax  Float?
+  targetDate         DateTime?
+  description        String?
+  requirements       String?
+  salaryExplanation  String?
+  status          String   @default("DRAFT")
+  headcount       Int      @default(1)
+  budget          Float?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  // SCRUM-89: Luồng phê duyệt nhiều cấp & lịch sử
+  approvalHistory RequisitionApprovalHistory[]
+
+  // SCRUM-97 / SCRUM-41: Phân chia recruiter chính và hỗ trợ
+  leadRecruiterId      String?
+  leadRecruiter        User?                            @relation("LeadRecruiterRequisitions", fields: [leadRecruiterId], references: [id])
+  supportingRecruiters RequisitionSupportingRecruiter[]
+  assignmentHistory    RequisitionAssignmentHistory[]
+
+  // S3-01: Luồng phê duyệt
+  approvalWorkflowId      String?
+  approvalWorkflowVersion Int?
+  approvalChain           String?
+
+  department    Department @relation(fields: [departmentId], references: [id])
+  hiringManager User       @relation("HiringManagerRequisitions", fields: [hiringManagerId], references: [id])
+  approver      User?      @relation("ApproverRequisitions", fields: [approverId], references: [id])
+  jobTitle JobTitle? @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
+  jobs          Job[]
+  expenses       RecruitmentExpense[]
+}
+
+model RecruitmentExpense {
+  id            String   @id @default(uuid())
+  requisitionId String
+  category      String
+  amount        Float
+  occurredAt    DateTime
+  vendor        String?
+  description   String?
+  createdById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  requisition Requisition @relation(fields: [requisitionId], references: [id], onDelete: Restrict)
+  createdBy   User?       @relation("RecruitmentExpenseCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([requisitionId, occurredAt])
+  @@index([category, occurredAt])
+}
+
+// S2-91 - Lịch sử phê duyệt yêu cầu tuyển dụng (bất biến - không sửa/xóa)
+model RequisitionApprovalHistory {
+  id             String   @id @default(uuid())
+  requisitionId  String
+  actorId        String
+  // Trạng thái của requisition tại thời điểm thao tác: PENDING_APPROVAL, APPROVED, REJECTED
+  fromStatus     String
+  toStatus       String
+  // Quyết định: APPROVE hoặc REJECT
+  decision       String
+  step           Int?
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  requisition    Requisition @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  actor          User        @relation("ApprovalHistoryActor", fields: [actorId], references: [id])
+
+  @@index([requisitionId])
+  @@index([actorId])
+}
+
+model Job {
+  id              String   @id @default(uuid())
+  title           String
+  requisitionId   String?
+  departmentId    String
+  hiringManagerId String
+  recruiterId     String?
+  jobTitleId      String?
+  status          String   @default("DRAFT")
+  description     String
+  location        String   @default("Hanoi")
+  workMode            String?  @default("ONSITE")
+  applicationDeadline DateTime?
+  showSalary          Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  requisition        Requisition?        @relation(fields: [requisitionId], references: [id])
+  department         Department          @relation(fields: [departmentId], references: [id])
+  hiringManager      User                @relation("HiringManagerJobs", fields: [hiringManagerId], references: [id])
+  recruiter          User?               @relation("RecruiterJobs", fields: [recruiterId], references: [id])
+  // SCRUM-105: Duyệt và xuất bản tin tuyển dụng
+  approvedAt          DateTime?
+  approvedById        String?
+  approvalNotes       String?
+  publishedAt         DateTime?
+  publishedById       String?
+  rejectionReason     String?
+
+  approvedBy         User?               @relation("JobApprover", fields: [approvedById], references: [id])
+  publishedBy        User?               @relation("JobPublisher", fields: [publishedById], references: [id])
+  jobTitle           JobTitle?           @relation(fields: [jobTitleId], references: [id], onDelete: Restrict)
+  applications       Application[]
+  interviewQuestions InterviewQuestion[]
+
+  @@index([approvedById])
+  @@index([publishedById])
+  @@index([status])
+  referrals Referral[]
+}
+
+model Candidate {
+  id             String   @id @default(uuid())
+  userId         String?  @unique
+  fullName       String
+  email          String
+  phone          String?
+  cvUrl          String?
+  address        String?
+  expectedSalary Float?
+  currentCompany String?
+  // S4-09: Nhan va ghi chu de hien thi ho so ung vien hop nhat
+  labels         String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user         User?         @relation(fields: [userId], references: [id])
+  applications Application[]
+  referrals Referral[]
+}
+
+model Application {
+  id                  String   @id @default(uuid())
+  candidateId         String
+  jobId               String
+  stage               String   @default("APPLIED")
+  status              String   @default("ACTIVE")
+  assignedRecruiterId String?
+  // S4-03: thông tin nhận hồ sơ công khai; không thay đổi hồ sơ lịch sử
+  trackingCode        String?  @unique
+  applicantEmailNormalized String?
+  coverLetter         String?
+  source              String?
+  cvUrl               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  candidate         Candidate   @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  job               Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  assignedRecruiter User?       @relation("RecruiterApplications", fields: [assignedRecruiterId], references: [id])
+  interviews        Interview[]
+  offers            Offer[]
+  withdrawalTokens  ApplicationWithdrawalToken[]
+
+  // Ngăn cùng email (chuẩn hóa) nộp lại vào cùng vị trí, kể cả khi tạo 2 Candidate song song
+  @@unique([jobId, applicantEmailNormalized])
+  referral Referral?
+}
+
+// S4-06: Token bi bam SHA-256, dung mot lan, het han sau 30 phut.
+model ApplicationWithdrawalToken {
+  id            String    @id @default(uuid())
+  applicationId String
+  tokenHash     String    @unique
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, expiresAt])
+}
+
+// S4-07: giới thiệu ứng viên nội bộ
+model Referral {
+  id            String      @id @default(uuid())
+  referrerId    String
+  candidateId   String
+  applicationId String      @unique
+  jobId         String
+  notes         String?
+  source        String      @default("INTERNAL_REFERRAL")
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  referrer      User        @relation("UserReferrals", fields: [referrerId], references: [id])
+  candidate     Candidate   @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  job           Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([referrerId])
+  @@index([candidateId])
+  @@index([jobId])
+}
+
+model Interview {
+  id              String   @id @default(uuid())
+  applicationId   String
+  interviewerId   String
+  scheduledAt     DateTime
+  durationMinutes Int      @default(60)
+  status          String   @default("SCHEDULED")
+  meetingLink     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  application Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  interviewer User         @relation("InterviewerInterviews", fields: [interviewerId], references: [id])
+  evaluations Evaluation[]
+}
+
+model Evaluation {
+  id             String   @id @default(uuid())
+  interviewId    String   @unique
+  interviewerId  String
+  score          Int
+  technicalNotes String
+  culturalNotes  String?
+  recommendation String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  interview   Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  interviewer User      @relation("InterviewerEvaluations", fields: [interviewerId], references: [id])
+}
+
+model Offer {
+  id            String   @id @default(uuid())
+  applicationId String
+  recruiterId   String
+  approverId    String?
+  baseSalary    Float
+  status        String   @default("DRAFT")
+  internalNotes String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  recruiter   User        @relation("RecruiterOffers", fields: [recruiterId], references: [id])
+  approver    User?       @relation("ApproverOffers", fields: [approverId], references: [id])
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  actorId      String?
+  action       String
+  resourceType String
+  resourceId   String?
+  ipAddress    String?
+  userAgent    String?
+  metadata     String?
+  createdAt    DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id])
+}
+
+// S1-02
+model RevokedToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+// S1-03 / S1-04
+model PasswordHistory {
+  id           String   @id @default(uuid())
+  userId       String
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// S1-03
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  email     String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([email])
+}
+
+model LoginAttempt {
+  id             String    @id @default(uuid())
+  email          String
+  deviceId       String
+  failedAttempts Int       @default(0)
+  lockedUntil    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([email, deviceId])
+  @@index([email])
+}
+
+// S2-06 - Khung năng lực
+model CompetencyFramework {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  criteria         CompetencyCriterion[]
+  jobTitleMappings JobTitleCompetencyFramework[]
+}
+
+// S2-06 - Tiêu chí trong khung năng lực
+model CompetencyCriterion {
+  id          String   @id @default(uuid())
+  frameworkId String
+  name        String
+  description String?
+  weight      Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  framework          CompetencyFramework @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+  interviewQuestions InterviewQuestion[]
+
+  @@index([frameworkId])
+}
+
+// Liên kết chức danh với khung năng lực
+model JobTitleCompetencyFramework {
+  jobTitleId  String
+  frameworkId String
+  createdAt   DateTime @default(now())
+
+  jobTitle  JobTitle            @relation(fields: [jobTitleId], references: [id], onDelete: Cascade)
+  framework CompetencyFramework @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+
+  @@id([jobTitleId, frameworkId])
+  @@index([frameworkId])
+}
+
+// S2-07 - Ngân hàng câu hỏi phỏng vấn
+model InterviewQuestion {
+  id                    String   @id @default(uuid())
+  question              String
+  difficulty            String
+  suggestedAnswer       String
+  competencyCriterionId String
+  jobId                 String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  criterion CompetencyCriterion @relation(fields: [competencyCriterionId], references: [id], onDelete: Restrict)
+  job       Job?                @relation(fields: [jobId], references: [id], onDelete: Restrict)
+
+  @@index([competencyCriterionId])
+  @@index([jobId])
+}
+
+model CompanyProfile {
+  id           String   @id @default("default")
+  companyName  String   @default("")
+  tagline      String   @default("")
+  introduction String   @default("")
+  culture      String   @default("")
+  benefits     String   @default("")
+  website      String   @default("")
+  contactEmail String   @default("")
+  location     String   @default("")
+  isPublished  Boolean  @default(false)
+  logoData     String?
+  bannerData   String?
+  updatedAt    DateTime @updatedAt
+}
+
+// S1-02 - Quan ly phien dang nhap
+model AuthSession {
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt      DateTime  @default(now())
+  lastActivityAt DateTime  @default(now())
+  expiresAt      DateTime
+  revokedAt      DateTime?
+
+  @@index([userId])
+}
+// S2-08 - Danh mục dùng chung của tuyển dụng
+model RecruitmentCategory {
+  id        String   @id @default(uuid())
+  category  String
+  name      String
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([category, name])
+  @@index([category, position])
+}
+
+// S3-01 - Cấu hình luồng phê duyệt
+model ApprovalWorkflow {
+  id           String   @id @default(uuid())
+  departmentId String
+  version      Int      @default(1)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  department Department              @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  ranges     ApprovalWorkflowRange[]
+
+  @@unique([departmentId, version])
+  @@index([departmentId, isActive])
+}
+
+model ApprovalWorkflowRange {
+  id          String  @id @default(uuid())
+  workflowId  String
+  minSalary   Float
+  maxSalary   Float?
+  orderIndex  Int     @default(0)
+  approverIds String  // JSON array string: ["id1", "id2"]
+
+  workflow ApprovalWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+}
+
+
+// SCRUM-97 / SCRUM-41 - Nhà tuyển dụng hỗ trợ cho yêu cầu tuyển dụng
+model RequisitionSupportingRecruiter {
+  id            String   @id @default(uuid())
+  requisitionId String
+  recruiterId   String
+  assignedAt    DateTime @default(now())
+
+  requisition Requisition @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  recruiter   User        @relation("SupportingRecruiterAssignments", fields: [recruiterId], references: [id], onDelete: Cascade)
+
+  @@unique([requisitionId, recruiterId])
+  @@index([requisitionId])
+  @@index([recruiterId])
+}
+
+// SCRUM-97 / SCRUM-41 - Lịch sử phân công & chuyển giao người phụ trách (bất biến)
+model RequisitionAssignmentHistory {
+  id                     String   @id @default(uuid())
+  requisitionId          String
+  actorId                String
+  previousLeadRecruiterId String?
+  newLeadRecruiterId     String?
+  supportingRecruiterIds String?  // JSON chuỗi mảng ID nhà tuyển dụng hỗ trợ
+  action                 String   @default("HANDOVER") // "ASSIGN" | "HANDOVER" | "UPDATE_SUPPORTING" | "REASSIGN"
+  notes                  String?
+  createdAt              DateTime @default(now())
+
+  requisition            Requisition @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  actor                  User        @relation("AssignmentHistoryActor", fields: [actorId], references: [id])
+  previousLeadRecruiter  User?       @relation("AssignmentHistoryPrevLead", fields: [previousLeadRecruiterId], references: [id])
+  newLeadRecruiter       User?       @relation("AssignmentHistoryNewLead", fields: [newLeadRecruiterId], references: [id])
+
+  @@index([requisitionId])
+  @@index([actorId])
+}
+
+// S3-04: planned annual salary budget, independent from recruitment expenses.
+model DepartmentSalaryBudget {
+  id           String   @id @default(uuid())
+  departmentId String
+  year         Int
+  amountVnd    BigInt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  @@unique([departmentId, year])
+  @@index([year])
+}

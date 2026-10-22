@@ -1,0 +1,178 @@
+/* Sprint 2 - Yêu cầu tuyển dụng: chỉ áp dụng cho trang tạo yêu cầu. */
+.ats-req-page {
+  min-height: 100vh;
+  padding: 30px 26px 58px;
+  background: #f3f6fb;
+  color: #182b49;
+  font-family: "Segoe UI", Arial, sans-serif;
+}
+
+.ats-req-page * { box-sizing: border-box; }
+.ats-req-shell { max-width: 1220px; margin: 0 auto; }
+
+.ats-req-breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 22px;
+  color: #7a8ba4;
+  font-size: 13px;
+}
+.ats-req-breadcrumb strong { font-weight: 650; color: #2758c5; }
+
+.ats-req-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 26px 31px;
+  margin-bottom: 22px;
+  background: linear-gradient(115deg, #ffffff 50%, #edf4ff 100%);
+  border: 1px solid #e1e9f4;
+  border-radius: 16px;
+}
+.ats-req-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: #2861d8;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 1.3px;
+}
+.ats-req-header h1 {
+  font-family: inherit;
+  margin: 0 0 9px;
+  color: #12284d;
+  font-size: clamp(24px, 2.25vw, 31px);
+  font-weight: 750;
+  line-height: 1.22;
+  letter-spacing: -.65px;
+}
+.ats-req-header p { margin: 0; color: #63758f; font-size: 14px; line-height: 1.65; }
+.ats-req-header-icon {
+  width: 67px;
+  height: 67px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  color: #2861df;
+  border: 1px solid #dce8ff;
+  border-radius: 19px;
+  background: #e6efff;
+}
+
+.ats-req-content { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 20px; align-items: start; }
+.ats-req-form-column { display: grid; gap: 20px; min-width: 0; }
+.ats-req-card, .ats-req-guide-card, .ats-req-footer {
+  border: 1px solid #e0e7f0;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgba(20, 52, 95, .035);
+}
+.ats-req-card { padding: 25px 27px 27px; }
+.ats-req-section-heading { display: flex; align-items: flex-start; gap: 13px; margin-bottom: 25px; padding-bottom: 20px; border-bottom: 1px solid #edf1f6; }
+.ats-req-section-icon { width: 42px; height: 42px; flex-shrink: 0; display: grid; place-items: center; color: #2861e8; background: #edf3ff; border-radius: 11px; }
+.ats-req-section-heading h2 { margin: 2px 0 5px; font-family: inherit; color: #1b2e4b; font-size: 17px; line-height: 1.3; font-weight: 750; }
+.ats-req-section-heading p { margin: 0; color: #8190a5; font-size: 13px; line-height: 1.6; }
+
+.ats-req-fields { display: grid; grid-template-columns: minmax(0, 1fr); column-gap: 20px; row-gap: 22px; }
+.ats-req-fields--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ats-req-field { display: grid; gap: 9px; min-width: 0; color: #33465f; font-size: 13px; font-weight: 650; }
+.ats-req-field > span:first-child { display: block; }
+.ats-req-field em { color: #df4758; font-style: normal; }
+.ats-req-field--full { grid-column: 1 / -1; }
+.ats-req-field > input,
+.ats-req-field > select,
+.ats-req-field > textarea,
+.ats-req-input-with-icon input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 45px;
+  padding: 11px 13px;
+  border: 1px solid #d6dfeb;
+  border-radius: 9px;
+  background: #fff;
+  color: #1d304d;
+  font: 400 14px/1.5 "Segoe UI", Arial, sans-serif;
+  outline: none;
+  transition: border-color .18s, box-shadow .18s, background-color .18s;
+}
+.ats-req-field > textarea { resize: vertical; min-height: 110px; }
+.ats-req-field input::placeholder,
+.ats-req-field textarea::placeholder { color: #a1aec0; }
+.ats-req-field input:hover,
+.ats-req-field select:hover,
+.ats-req-field textarea:hover { border-color: #a7b9d6; }
+.ats-req-field input:focus,
+.ats-req-field select:focus,
+.ats-req-field textarea:focus { border-color: #3c73e6; box-shadow: 0 0 0 3px rgba(56, 111, 225, .12); }
+.ats-req-field select { cursor: pointer; }
+.ats-req-input-with-icon { position: relative; display: block; }
+.ats-req-input-with-icon > svg { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); z-index: 1; color: #7e93b2; pointer-events: none; }
+.ats-req-input-with-icon input { padding-left: 42px; }
+
+.ats-req-guide-card { padding: 25px 23px; }
+.ats-req-guide-icon { display: grid; place-items: center; height: 43px; width: 43px; background: #e9f1ff; color: #2861e8; border-radius: 12px; }
+.ats-req-guide-card h2 { margin: 17px 0 14px; font-family: inherit; font-weight: 750; font-size: 17px; color: #18325c; }
+.ats-req-guide-card ul { margin: 0 0 19px; padding-left: 20px; display: grid; gap: 13px; }
+.ats-req-guide-card li { font-size: 13px; color: #62748e; line-height: 1.65; }
+.ats-req-guide-card li::marker { color: #3975e9; }
+.ats-req-guide-note { display: flex; align-items: flex-start; gap: 10px; padding: 14px; border: 1px solid #dce9ff; border-radius: 10px; background: #f1f6ff; color: #44658f; font-size: 12px; line-height: 1.65; }
+.ats-req-guide-note svg { flex-shrink: 0; margin-top: 1px; color: #2b63ce; }
+.ats-req-guide-note strong { color: #244d96; }
+
+.ats-req-footer { margin-top: 20px; padding: 21px 25px; display: flex; align-items: center; justify-content: space-between; gap: 22px; flex-wrap: wrap; }
+.ats-req-footer-copy { display: grid; gap: 4px; }
+.ats-req-footer-copy strong { color: #263b59; font-size: 14px; }
+.ats-req-footer-copy span { color: #8493a7; font-size: 12px; }
+.ats-req-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+.ats-req-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 43px; padding: 10px 15px; border-radius: 9px; border: 1px solid #d6e0ee; background: white; color: #3d5878; font: 650 13px/1.3 "Segoe UI", Arial, sans-serif; cursor: pointer; transition: transform .14s, box-shadow .14s, background-color .14s; }
+.ats-req-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(34, 66, 118, .09); }
+.ats-req-btn:focus-visible { outline: 3px solid #a2c1ff; outline-offset: 2px; }
+.ats-req-btn:disabled { opacity: .65; cursor: wait; }
+.ats-req-btn--draft { background: #eef4ff; color: #285bcc; border-color: #cfddfa; }
+.ats-req-btn--draft:hover:not(:disabled) { background: #e2edff; }
+.ats-req-btn--submit { background: #2862e6; border-color: #2862e6; color: #fff; box-shadow: 0 4px 10px rgba(40, 98, 230, .19); }
+.ats-req-btn--submit:hover:not(:disabled) { background: #1e54d1; }
+.ats-req-alert { display: flex; align-items: flex-start; gap: 11px; border-radius: 10px; border: 1px solid; padding: 13px 17px; margin-bottom: 19px; font-size: 14px; line-height: 1.55; }
+.ats-req-alert svg { flex-shrink: 0; margin-top: 1px; }
+.ats-req-alert--error { background: #fff1f2; border-color: #fecdd3; color: #a12c3f; }
+.ats-req-alert--success { background: #ecfdf3; border-color: #bbefd2; color: #16734a; }
+.ats-req-alert--warning { background: #fff7ed; border-color: #fed7aa; color: #9a3412; }
+.ats-req-alert--info { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+.ats-req-loading { padding: 50px 25px; border-radius: 14px; border: 1px solid #e0e7f0; background: #fff; text-align: center; font-size: 14px; color: #667e9c; }
+
+@media (max-width: 980px) {
+  .ats-req-content { grid-template-columns: minmax(0, 1fr); }
+  .ats-req-aside { order: 2; }
+  .ats-req-footer { align-items: flex-start; }
+}
+@media (max-width: 650px) {
+  .ats-req-page { padding: 18px 12px 32px; }
+  .ats-req-breadcrumb { margin-bottom: 13px; }
+  .ats-req-header { padding: 20px; }
+  .ats-req-header-icon { display: none; }
+  .ats-req-card, .ats-req-guide-card { padding: 20px 16px; }
+  .ats-req-fields--two { grid-template-columns: minmax(0, 1fr); }
+  .ats-req-footer { padding: 17px; }
+  .ats-req-actions, .ats-req-actions .ats-req-btn { width: 100%; }
+}
+
+
+/* S2-10: Mở lại bản nháp đang lưu trên máy chủ, không tạo bản ghi trùng. */
+.ats-req-draft-area { margin-bottom: 20px; border: 1px solid #d9e5f6; border-radius: 13px; padding: 18px 22px; background: #fff; }
+.ats-req-draft-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 15px; flex-wrap: wrap; }
+.ats-req-draft-toolbar strong { display: block; color: #17345f; font-size: 15px; }
+.ats-req-draft-toolbar p { margin: 5px 0 0; color: #687e9c; font-size: 12px; overflow-wrap: anywhere; }
+.ats-req-draft-buttons { display: flex; flex-wrap: wrap; gap: 9px; }
+.ats-req-draft-list { display: grid; gap: 10px; margin-top: 15px; padding-top: 14px; border-top: 1px solid #edf1f8; }
+.ats-req-draft-list > p { color: #61718a; font-size: 13px; }
+.ats-req-draft-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; border: 1px solid #e1e9f4; border-radius: 9px; padding: 11px 13px; }
+.ats-req-draft-row > div { display: grid; gap: 4px; min-width: 0; }
+.ats-req-draft-row strong { font-size: 13px; color: #1e395e; }
+.ats-req-draft-row span { font-size: 11px; color: #7386a0; overflow-wrap: anywhere; }
+@media (max-width: 560px) { .ats-req-draft-row { flex-direction: column; align-items: stretch; } }

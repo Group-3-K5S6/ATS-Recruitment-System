@@ -1,0 +1,1070 @@
+/* =========================================================
+   S3-02 - DUYỆT / TỪ CHỐI YÊU CẦU TUYỂN DỤNG
+========================================================= */
+
+.s302-page {
+  box-sizing: border-box;
+  min-height: 100%;
+  width: 100%;
+  padding: 32px;
+
+  background: #f5f7fb;
+  color: #172033;
+
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+}
+
+/* =========================================================
+   HEADER
+========================================================= */
+
+.s302-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 24px;
+
+  margin-bottom: 24px;
+}
+
+.s302-header-copy {
+  min-width: 0;
+}
+
+.s302-eyebrow {
+  margin: 0 0 7px;
+
+  color: #2563eb;
+
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 800;
+
+  letter-spacing: 0.12em;
+}
+
+.s302-header h1 {
+  margin: 0 0 8px;
+
+  color: #172033;
+
+  font-size: 30px;
+  line-height: 1.2;
+  font-weight: 750;
+}
+
+.s302-subtitle {
+  margin: 0;
+
+  max-width: 720px;
+
+  color: #64748b;
+
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+/* =========================================================
+   SUMMARY
+========================================================= */
+
+.s302-summary {
+  min-width: 205px;
+
+  box-sizing: border-box;
+
+  display: flex;
+  align-items: center;
+
+  gap: 13px;
+
+  padding: 15px 18px;
+
+  background: #ffffff;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.04);
+}
+
+.s302-summary-icon {
+  width: 42px;
+  height: 42px;
+
+  flex-shrink: 0;
+
+  display: grid;
+  place-items: center;
+
+  color: #2563eb;
+
+  background: #eff6ff;
+
+  border-radius: 10px;
+}
+
+.s302-summary strong {
+  display: block;
+
+  margin-bottom: 2px;
+
+  color: #172033;
+
+  font-size: 22px;
+  line-height: 1;
+}
+
+.s302-summary span {
+  display: block;
+
+  color: #64748b;
+
+  font-size: 12px;
+}
+
+/* =========================================================
+   CARD
+========================================================= */
+
+.s302-card {
+  width: 100%;
+
+  box-sizing: border-box;
+
+  overflow: hidden;
+
+  background: #ffffff;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.035);
+}
+
+.s302-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+
+  padding: 22px 24px 17px;
+
+  border-bottom: 1px solid #eef2f7;
+}
+
+.s302-card-header h2 {
+  margin: 0 0 5px;
+
+  color: #172033;
+
+  font-size: 18px;
+}
+
+.s302-card-header p {
+  margin: 0;
+
+  color: #64748b;
+
+  font-size: 13px;
+}
+
+/* =========================================================
+   TOOLBAR
+========================================================= */
+
+.s302-toolbar {
+  padding: 18px 24px;
+
+  border-bottom: 1px solid #eef2f7;
+}
+
+.s302-search {
+  width: min(590px, 100%);
+  min-height: 44px;
+
+  box-sizing: border-box;
+
+  display: flex;
+  align-items: center;
+
+  gap: 10px;
+
+  padding: 0 14px;
+
+  color: #64748b;
+
+  background: #ffffff;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.s302-search:focus-within {
+  border-color: #2563eb;
+
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.11);
+}
+
+.s302-search input {
+  width: 100%;
+  height: 42px;
+
+  min-width: 0;
+
+  border: none;
+  outline: none;
+
+  color: #172033;
+
+  background: transparent;
+
+  font: inherit;
+  font-size: 14px;
+}
+
+.s302-search input::placeholder {
+  color: #94a3b8;
+}
+
+/* =========================================================
+   TABLE
+========================================================= */
+
+.s302-table-wrapper {
+  width: 100%;
+
+  overflow-x: auto;
+}
+
+.s302-table {
+  width: 100%;
+
+  min-width: 900px;
+
+  border-collapse: collapse;
+}
+
+.s302-table th {
+  padding: 13px 18px;
+
+  text-align: left;
+
+  color: #64748b;
+
+  background: #f8fafc;
+
+  border-bottom: 1px solid #e2e8f0;
+
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: 750;
+
+  letter-spacing: 0.045em;
+
+  text-transform: uppercase;
+
+  white-space: nowrap;
+}
+
+.s302-table td {
+  padding: 16px 18px;
+
+  color: #334155;
+
+  border-bottom: 1px solid #eef2f7;
+
+  font-size: 13px;
+
+  vertical-align: middle;
+}
+
+.s302-table tbody tr {
+  transition: background 0.15s ease;
+}
+
+.s302-table tbody tr:hover {
+  background: #fafcff;
+}
+
+.s302-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* =========================================================
+   TITLE CELL
+========================================================= */
+
+.s302-title-cell {
+  min-width: 250px;
+
+  display: flex;
+  align-items: flex-start;
+
+  gap: 11px;
+}
+
+.s302-file-icon {
+  width: 34px;
+  height: 34px;
+
+  flex-shrink: 0;
+
+  display: grid;
+  place-items: center;
+
+  color: #2563eb;
+
+  background: #eff6ff;
+
+  border-radius: 8px;
+}
+
+.s302-title-cell strong {
+  display: block;
+
+  color: #172033;
+
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.s302-title-cell span {
+  display: block;
+
+  max-width: 230px;
+
+  margin-top: 4px;
+
+  overflow: hidden;
+
+  color: #94a3b8;
+
+  font-size: 11px;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* =========================================================
+   SALARY
+========================================================= */
+
+.s302-salary {
+  min-width: 155px;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 2px;
+}
+
+.s302-salary-separator {
+  display: none;
+}
+
+/* =========================================================
+   STATUS
+========================================================= */
+
+.s302-status {
+  width: fit-content;
+
+  display: inline-flex;
+  align-items: center;
+
+  gap: 5px;
+
+  padding: 6px 10px;
+
+  color: #9a6700;
+
+  background: #fff7d6;
+
+  border: 1px solid #fde68a;
+  border-radius: 999px;
+
+  font-size: 11px;
+  font-weight: 700;
+
+  white-space: nowrap;
+}
+
+/* =========================================================
+   BUTTON VIEW
+========================================================= */
+
+.s302-view-button {
+  min-height: 36px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 6px;
+
+  padding: 0 11px;
+
+  color: #1d4ed8;
+
+  background: #ffffff;
+
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+
+  cursor: pointer;
+
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+
+  white-space: nowrap;
+
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.s302-view-button:hover:not(:disabled) {
+  background: #eff6ff;
+
+  border-color: #93c5fd;
+}
+
+.s302-view-button:disabled {
+  cursor: not-allowed;
+
+  opacity: 0.55;
+}
+
+/* =========================================================
+   EMPTY / LOADING
+========================================================= */
+
+.s302-state {
+  min-height: 280px;
+
+  display: flex;
+  flex-direction: column;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 8px;
+
+  padding: 30px;
+
+  text-align: center;
+
+  color: #64748b;
+}
+
+.s302-state strong {
+  margin-top: 5px;
+
+  color: #334155;
+
+  font-size: 15px;
+}
+
+.s302-state span {
+  font-size: 13px;
+}
+
+.s302-empty-icon {
+  width: 62px;
+  height: 62px;
+
+  display: grid;
+  place-items: center;
+
+  color: #16a34a;
+
+  background: #ecfdf3;
+
+  border-radius: 50%;
+}
+
+/* =========================================================
+   MODAL OVERLAY
+========================================================= */
+
+.s302-overlay {
+  position: fixed;
+
+  inset: 0;
+
+  z-index: 3000;
+
+  box-sizing: border-box;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 24px;
+
+  background: rgba(15, 23, 42, 0.58);
+
+  backdrop-filter: blur(2px);
+}
+
+/* =========================================================
+   MODAL
+========================================================= */
+
+.s302-modal {
+  width: min(940px, 100%);
+  max-height: 92vh;
+
+  display: flex;
+  flex-direction: column;
+
+  overflow: hidden;
+
+  background: #ffffff;
+
+  border-radius: 18px;
+
+  box-shadow: 0 28px 90px rgba(15, 23, 42, 0.3);
+}
+
+/* =========================================================
+   MODAL HEADER
+========================================================= */
+
+.s302-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 24px;
+
+  padding: 24px 28px 21px;
+
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.s302-modal-header h2 {
+  margin: 3px 0 6px;
+
+  color: #172033;
+
+  font-size: 22px;
+  line-height: 1.35;
+}
+
+.s302-request-id {
+  color: #64748b;
+
+  font-size: 12px;
+}
+
+.s302-close {
+  width: 36px;
+  height: 36px;
+
+  flex-shrink: 0;
+
+  display: grid;
+  place-items: center;
+
+  padding: 0;
+
+  color: #64748b;
+
+  background: transparent;
+
+  border: none;
+  border-radius: 8px;
+
+  cursor: pointer;
+
+  font-size: 28px;
+  line-height: 1;
+}
+
+.s302-close:hover {
+  color: #172033;
+
+  background: #f1f5f9;
+}
+
+/* =========================================================
+   MODAL BODY
+========================================================= */
+
+.s302-modal-body {
+  padding: 24px 28px;
+
+  overflow-y: auto;
+}
+
+/* =========================================================
+   DETAIL GRID
+========================================================= */
+
+.s302-detail-grid {
+  display: grid;
+
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+
+  gap: 13px;
+}
+
+.s302-detail-grid > div {
+  min-width: 0;
+
+  padding: 14px 15px;
+
+  background: #f8fafc;
+
+  border: 1px solid #eef2f7;
+  border-radius: 10px;
+}
+
+.s302-detail-grid span {
+  display: block;
+
+  margin-bottom: 5px;
+
+  color: #64748b;
+
+  font-size: 11px;
+}
+
+.s302-detail-grid strong {
+  display: block;
+
+  overflow-wrap: anywhere;
+
+  color: #172033;
+
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.s302-detail-status {
+  color: #9a6700 !important;
+}
+
+/* =========================================================
+   PEOPLE
+========================================================= */
+
+.s302-people {
+  display: grid;
+
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  gap: 13px;
+
+  margin-top: 13px;
+}
+
+.s302-people > div {
+  padding: 14px 15px;
+
+  background: #f8fafc;
+
+  border: 1px solid #eef2f7;
+  border-radius: 10px;
+}
+
+.s302-people span {
+  display: block;
+
+  margin-bottom: 5px;
+
+  color: #64748b;
+
+  font-size: 11px;
+}
+
+.s302-people strong {
+  color: #172033;
+
+  font-size: 13px;
+}
+
+/* =========================================================
+   DESCRIPTION
+========================================================= */
+
+.s302-description {
+  margin-top: 22px;
+}
+
+.s302-description h3 {
+  margin: 0 0 9px;
+
+  color: #172033;
+
+  font-size: 15px;
+}
+
+.s302-description p {
+  margin: 0;
+
+  padding: 13px 15px;
+
+  color: #475569;
+
+  background: #fbfcfe;
+
+  border: 1px solid #eef2f7;
+  border-radius: 9px;
+
+  font-size: 13px;
+  line-height: 1.65;
+
+  white-space: pre-wrap;
+}
+
+/* =========================================================
+   COMMENT
+========================================================= */
+
+.s302-comment {
+  margin-top: 24px;
+
+  padding-top: 21px;
+
+  border-top: 1px solid #e2e8f0;
+}
+
+.s302-comment label {
+  display: flex;
+  align-items: center;
+
+  gap: 7px;
+
+  margin-bottom: 9px;
+
+  color: #334155;
+
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.s302-comment textarea {
+  width: 100%;
+
+  min-height: 105px;
+
+  box-sizing: border-box;
+
+  resize: vertical;
+
+  padding: 12px 14px;
+
+  color: #172033;
+
+  background: #ffffff;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+
+  outline: none;
+
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.s302-comment textarea:focus {
+  border-color: #2563eb;
+
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.11);
+}
+
+.s302-comment textarea::placeholder {
+  color: #94a3b8;
+}
+
+.s302-comment small {
+  display: block;
+
+  margin-top: 7px;
+
+  color: #64748b;
+
+  font-size: 11px;
+}
+
+.s302-budget-override {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+  background: #fff7ed;
+  color: #7c2d12;
+  font-size: 14px;
+}
+
+.s302-budget-override > label {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-weight: 650;
+}
+
+.s302-budget-override input[type="checkbox"] {
+  margin-top: 3px;
+}
+
+.s302-budget-override > div {
+  display: grid;
+  gap: 7px;
+}
+
+.s302-budget-override > div label {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.s302-budget-override textarea {
+  width: 100%;
+  min-height: 78px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #fdba74;
+  border-radius: 8px;
+  font: inherit;
+}
+
+.s302-budget-override small {
+  color: #9a3412;
+  line-height: 1.5;
+}
+
+/* =========================================================
+   ALERT
+========================================================= */
+
+.s302-alert {
+  box-sizing: border-box;
+
+  margin: 15px 0 0;
+
+  padding: 11px 13px;
+
+  border-radius: 9px;
+
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.s302-page > .s302-alert {
+  margin: 0 0 18px;
+}
+
+.s302-alert--error {
+  color: #b42318;
+
+  background: #fff1f0;
+
+  border: 1px solid #fecdca;
+}
+
+.s302-alert--success {
+  color: #067647;
+
+  background: #ecfdf3;
+
+  border: 1px solid #abefc6;
+}
+
+/* =========================================================
+   MODAL FOOTER
+========================================================= */
+
+.s302-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+
+  gap: 10px;
+
+  padding: 17px 28px;
+
+  background: #ffffff;
+
+  border-top: 1px solid #e2e8f0;
+}
+
+.s302-btn {
+  min-height: 42px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 7px;
+
+  padding: 0 16px;
+
+  border-radius: 9px;
+
+  cursor: pointer;
+
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 750;
+
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    transform 0.1s ease;
+}
+
+.s302-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.s302-btn:disabled {
+  cursor: not-allowed;
+
+  opacity: 0.55;
+}
+
+/* YÊU CẦU BỔ SUNG */
+
+.s302-btn--supplement {
+  color: #946200;
+
+  background: #fffbea;
+
+  border: 1px solid #facc15;
+}
+
+.s302-btn--supplement:hover:not(:disabled) {
+  background: #fff7cc;
+}
+
+/* TỪ CHỐI */
+
+.s302-btn--reject {
+  color: #b42318;
+
+  background: #fff5f4;
+
+  border: 1px solid #fda29b;
+}
+
+.s302-btn--reject:hover:not(:disabled) {
+  background: #fee4e2;
+}
+
+/* DUYỆT */
+
+.s302-btn--approve {
+  color: #ffffff;
+
+  background: #2563eb;
+
+  border: 1px solid #2563eb;
+
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.18);
+}
+
+.s302-btn--approve:hover:not(:disabled) {
+  background: #1d4ed8;
+
+  border-color: #1d4ed8;
+}
+
+/* =========================================================
+   LOADING ANIMATION
+========================================================= */
+
+.s302-spin {
+  animation: s302-spin 0.8s linear infinite;
+}
+
+@keyframes s302-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media (max-width: 1000px) {
+  .s302-page {
+    padding: 24px;
+  }
+
+  .s302-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .s302-page {
+    padding: 78px 16px 20px;
+  }
+
+  .s302-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .s302-summary {
+    width: 100%;
+  }
+
+  .s302-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .s302-people {
+    grid-template-columns: 1fr;
+  }
+
+  .s302-overlay {
+    align-items: flex-end;
+
+    padding: 0;
+  }
+
+  .s302-modal {
+    width: 100%;
+
+    max-height: 94vh;
+
+    border-radius: 18px 18px 0 0;
+  }
+
+  .s302-modal-header {
+    padding: 20px 18px;
+  }
+
+  .s302-modal-body {
+    padding: 20px 18px;
+  }
+
+  .s302-modal-footer {
+    padding: 14px 18px;
+
+    flex-direction: column;
+  }
+
+  .s302-btn {
+    width: 100%;
+  }
+}

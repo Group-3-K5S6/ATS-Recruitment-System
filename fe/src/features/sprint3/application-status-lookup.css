@@ -1,0 +1,21 @@
+.s310-careers-topnav .s310-topnav-lookup{color:#55657c}
+.s310-careers-topnav .s310-lookup-nav-active{color:#312e81}
+.s310-lookup-main{display:grid;align-content:start}
+.s310-lookup-card{width:100%;max-width:520px;margin:24px auto 0;padding:34px;background:#fff;border:1px solid #e2e8f0;border-radius:18px;box-shadow:0 15px 45px rgba(21,42,75,.055)}
+.s310-lookup-icon{width:48px;height:48px;margin-bottom:20px;display:grid;place-items:center;border-radius:13px;background:#eef2ff;color:#5147df}
+.s310-lookup-card h1{margin:8px 0;color:#162b51;font-size:26px;letter-spacing:-.035em;line-height:1.25}
+.s310-lookup-description{margin:0;color:#64748b;font-size:13px;line-height:1.7}
+.s310-lookup-form{display:grid;gap:18px;margin-top:25px}
+.s310-lookup-field{display:grid;gap:8px;color:#263958;font-size:13px;font-weight:700}
+.s310-lookup-field input{width:100%;min-width:0;min-height:48px;padding:12px 13px;border:1px solid #d7e0ec;border-radius:9px;background:#fff;color:#233654;font:inherit;font-size:14px;font-weight:400}
+.s310-lookup-field input::placeholder{color:#9aa8ba}
+.s310-lookup-field input:focus{outline:3px solid rgba(99,102,241,.16);border-color:#7772e8}
+.s310-lookup-field input[aria-invalid=true]{border-color:#dc6b6b}
+.s310-lookup-field-error{color:#b42318;font-size:12px;font-weight:500;line-height:1.5}
+.s310-lookup-message{margin:0;padding:12px 14px;border:1px solid #f1c98c;border-radius:9px;background:#fffbeb;color:#854d0e;font-size:13px;line-height:1.6}
+.s310-lookup-submit{width:100%;min-height:48px;display:inline-flex;align-items:center;justify-content:center;gap:9px;padding:12px 18px;border:0;border-radius:9px;background:#4f46e5;color:#fff;font:inherit;font-size:14px;font-weight:750;cursor:pointer}
+.s310-lookup-submit:hover:not(:disabled){background:#4338ca}
+.s310-lookup-submit:disabled{cursor:not-allowed;opacity:.65}
+.s310-lookup-submit:focus-visible{outline:3px solid #818cf8;outline-offset:2px}
+.s310-lookup-back{display:inline-flex;align-items:center;gap:7px;margin-top:23px;color:#475bc3;font-size:13px;font-weight:700}
+@media(max-width:650px){.s310-careers-header-inner{flex-wrap:wrap;gap:12px}.s310-careers-topnav{width:100%;justify-content:flex-start;flex-wrap:wrap;gap:10px 18px}.s310-careers-topnav>a{font-size:12px}.s310-careers-main.s310-lookup-main{padding-top:18px}.s310-lookup-card{margin-top:10px;padding:25px 20px;border-radius:15px}.s310-lookup-card h1{font-size:23px}}

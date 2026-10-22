@@ -118,7 +118,7 @@ Với hồ sơ ứng viên, quyền truy cập là ràng buộc bảo vệ dữ 
 - Xác thực, phân quyền theo vai trò, quản trị người dùng nội bộ.
 - Danh mục phòng ban, chức danh, khung năng lực.
 - Yêu cầu tuyển dụng và luồng phê duyệt nhiều cấp.
-- Ngân sách headcount theo phòng ban.
+- Ngân sách headcount và lương theo phòng ban/năm; vượt chỉ tiêu headcount cần Trưởng phòng Nhân sự xác nhận kèm lý do.
 - Soạn và xuất bản tin tuyển dụng.
 - Cổng ứng tuyển công khai, nộp CV, tra cứu trạng thái.
 - Giới thiệu ứng viên nội bộ (Referral).

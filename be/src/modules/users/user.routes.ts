@@ -1,0 +1,129 @@
+import { Router } from 'express';
+import { uploadAvatar } from "./avatar-upload";
+
+import {
+  UserController,
+  createUserSchema,
+  updateUserSchema,
+  assignRolesSchema,
+  importPayloadSchema,
+  updateProfileSchema,
+  disableUserSchema,
+} from "./user.controller";
+
+import { authenticate } from '../../middleware/authenticate';
+import { requirePermission } from '../../middleware/authorize';
+import { validateBody } from '../../middleware/validate';
+import { PermissionCode } from '../../rbac/permissions';
+
+const router = Router();
+
+router.use(authenticate);
+
+// S2-03 - Ảnh đại diện cá nhân
+router.get(
+  "/me/avatar",
+  UserController.getOwnAvatar,
+);
+
+router.post(
+  "/me/avatar",
+  uploadAvatar,
+  UserController.uploadOwnAvatar,
+);
+
+// S2-02 - Xem hồ sơ cá nhân
+router.get(
+  "/me",
+  UserController.getProfile,
+);
+
+// S2-02 - Cập nhật hồ sơ cá nhân
+router.put(
+  "/me",
+  validateBody(updateProfileSchema),
+  UserController.updateProfile,
+);
+
+/*
+ * DANH SÁCH TÀI KHOẢN
+ */
+router.get(
+  '/',
+  requirePermission(PermissionCode.USERS_READ),
+  UserController.list
+);
+
+/*
+ * S2-01 - XEM TRƯỚC VÀ KIỂM TRA DỮ LIỆU NHÂN SỰ
+ */
+router.post(
+  '/import/preview',
+  requirePermission(PermissionCode.USERS_CREATE),
+  validateBody(importPayloadSchema),
+  UserController.previewImport
+);
+
+/*
+ * S2-01 - NHẬP NHÂN SỰ HÀNG LOẠT
+ */
+router.post(
+  '/import',
+  requirePermission(PermissionCode.USERS_CREATE),
+  validateBody(importPayloadSchema),
+  UserController.importUsers
+);
+
+/*
+ * TẠO TÀI KHOẢN
+ */
+router.post(
+  '/',
+  requirePermission(PermissionCode.USERS_CREATE),
+  validateBody(createUserSchema),
+  UserController.create
+);
+
+/*
+ * S1-08 - SỬA TÀI KHOẢN
+ *
+ * Tạm dùng USERS_CREATE vì project hiện tại
+ * chưa khai báo USERS_UPDATE riêng.
+ */
+router.put(
+  '/:id',
+  requirePermission(PermissionCode.USERS_UPDATE),
+  validateBody(updateUserSchema),
+  UserController.update
+);
+
+/*
+ * S1-09 - GÁN / THU HỒI VAI TRÒ
+ */
+router.put(
+  '/:id/roles',
+  requirePermission(PermissionCode.ROLES_UPDATE),
+  validateBody(assignRolesSchema),
+  UserController.assignRoles
+);
+
+/*
+ * S1-10 - KHÓA
+ */
+router.patch(
+  "/:id/disable",
+  requirePermission(PermissionCode.USERS_DISABLE),
+  validateBody(disableUserSchema),
+  UserController.disable
+);
+
+/*
+ * S1-10 - MỞ KHÓA
+ */
+router.patch(
+  '/:id/enable',
+  requirePermission(PermissionCode.USERS_DISABLE),
+  UserController.enable
+);
+
+export default router;

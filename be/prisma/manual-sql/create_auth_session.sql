@@ -1,0 +1,20 @@
+-- S1-02: Chi tao bang quan ly phien
+-- Khong thay doi cac bang hien co
+
+CREATE TABLE "AuthSession" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "userId" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastActivityAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "expiresAt" DATETIME NOT NULL,
+    "revokedAt" DATETIME,
+
+    CONSTRAINT "AuthSession_userId_fkey"
+    FOREIGN KEY ("userId")
+    REFERENCES "User" ("id")
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+);
+
+CREATE INDEX "AuthSession_userId_idx"
+ON "AuthSession"("userId");

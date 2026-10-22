@@ -1,0 +1,46 @@
+.s310-application{padding:32px 38px 38px;border-top:1px solid #e7ebf3;background:#fff}
+.s310-application-heading{margin-bottom:24px}
+.s310-application-heading h2{margin:8px 0;color:#162b51;font-size:24px;letter-spacing:-.03em}
+.s310-application-heading p{margin:0;color:#64748b;font-size:13px;line-height:1.6}
+.s310-application-form{max-width:760px}
+.s310-application-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:19px 16px}
+.s310-application-field{display:grid;align-content:start;gap:8px;min-width:0;color:#263958;font-size:13px;font-weight:700}
+.s310-application-field-wide{grid-column:1/-1}
+.s310-application-required{color:#dc2626}
+.s310-application-field input,.s310-application-field textarea{width:100%;min-width:0;min-height:48px;border:1px solid #d7e0ec;border-radius:9px;padding:12px 13px;background:#fff;color:#233654;font:inherit;font-weight:400;font-size:14px}
+.s310-application-field textarea{min-height:120px;resize:vertical;line-height:1.6}
+.s310-application-field input::placeholder,.s310-application-field textarea::placeholder{color:#9aa8ba}
+.s310-application-field input:focus,.s310-application-field textarea:focus{outline:3px solid rgba(99,102,241,.16);border-color:#7772e8}
+.s310-application-field input[aria-invalid=true],.s310-application-upload.has-error{border-color:#dc6b6b}
+.s310-application-field-error{color:#b42318;font-size:12px;font-weight:500;line-height:1.5}
+.s310-application-upload{display:flex;align-items:center;justify-content:space-between;gap:14px;min-height:68px;padding:10px 12px;border:1px dashed #b9c6d8;border-radius:10px;background:#fafcff}
+.s310-application-file-input{position:absolute;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0!important;min-height:0!important}
+.s310-application-choose,.s310-application-secondary,.s310-application-remove{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:44px;padding:10px 13px;border:1px solid #d5deec;border-radius:8px;background:#fff;color:#344a70;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.s310-application-choose{color:#4338ca;border-color:#c7c8f5}
+.s310-application-choose:hover,.s310-application-secondary:hover,.s310-application-remove:hover{background:#f1f3ff}
+.s310-application-file{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-width:0}
+.s310-application-file-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#263958;font-size:13px;font-weight:650}
+.s310-application-file-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.s310-application-remove{width:44px;padding:0;color:#64748b}
+.s310-application-hint{color:#718096;font-size:11px;font-weight:500}
+.s310-application-submit{display:grid;justify-items:start;gap:11px;margin-top:24px}
+.s310-application-submit-button{min-height:48px;padding:12px 24px;border:0;border-radius:9px;background:#4f46e5;color:#fff;font:inherit;font-size:14px;font-weight:750;cursor:pointer}
+.s310-application-submit-button:hover{background:#4338ca}
+.s310-application-submit-button:focus-visible,.s310-application-choose:focus-visible,.s310-application-secondary:focus-visible,.s310-application-remove:focus-visible{outline:3px solid #818cf8;outline-offset:2px}
+.s310-application-api-note,.s310-application-status{margin:0;color:#64748b;font-size:12px;line-height:1.6}
+.s310-application-status{width:100%;padding:12px 14px;border:1px solid #f1c98c;border-radius:9px;background:#fffbeb;color:#854d0e}
+.s310-application button:disabled{cursor:not-allowed;opacity:.65}
+@media(max-width:650px){.s310-application{padding:26px 20px 28px}.s310-application-heading h2{font-size:22px}.s310-application-fields{grid-template-columns:1fr;gap:16px}.s310-application-field-wide{grid-column:auto}.s310-application-upload{align-items:flex-start;flex-direction:column}.s310-application-file{align-items:flex-start}.s310-application-file-actions{gap:6px}.s310-application-secondary{padding:9px 10px}}
+
+.s403-application-receipt{padding:24px;border:1px solid #a7e0c3;border-radius:12px;background:#f0fdf4;color:#14532d;line-height:1.65}
+.s403-application-receipt h2{margin:0 0 12px;font-size:22px}
+.s403-application-code{display:block;margin:8px 0 14px;font-size:24px;letter-spacing:1.5px;overflow-wrap:anywhere}
+
+/* S4-03: biểu mẫu chỉ mở trong hộp thoại sau khi nhấn Ứng tuyển ngay. */
+.s403-application-backdrop{position:fixed;inset:0;z-index:2000;display:grid;place-items:center;padding:20px;background:rgba(15,23,42,.68)}
+.s403-application-modal{position:relative;width:min(900px,100%);max-height:calc(100dvh - 40px);overflow-y:auto;border-radius:16px;background:#fff;box-shadow:0 24px 80px rgba(0,0,0,.25)}
+.s403-application-modal .s310-application{border-top:0;padding-top:58px}
+.s403-application-close{position:absolute;top:14px;right:16px;z-index:1;display:grid;place-items:center;width:38px;height:38px;border:1px solid #d5deec;border-radius:9px;background:#fff;color:#344a70;cursor:pointer}
+.s403-application-close:hover{background:#f1f3ff}
+.s403-application-close:focus-visible{outline:3px solid #818cf8;outline-offset:2px}
+@media(max-width:650px){.s403-application-backdrop{padding:0}.s403-application-modal{width:100%;max-height:100dvh;border-radius:0}.s403-application-modal .s310-application{padding-top:58px}}

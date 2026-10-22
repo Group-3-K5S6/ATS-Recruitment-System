@@ -1,0 +1,146 @@
+/* SCRUM-44 S3-09: giao diện FE, scope riêng để không ảnh hưởng các Sprint khác. */
+.ats-jp { --jp-ink:#102c50; --jp-sub:#607997; --jp-line:#d9e5f4; --jp-blue:#245eea; --jp-bg:#f3f7fd; max-width:1240px; width:100%; margin:0 auto; padding:28px 26px 64px; box-sizing:border-box; color:var(--jp-ink); font-family:Inter,'Segoe UI',Arial,sans-serif; font-size:14px; }
+.ats-jp * { box-sizing:border-box; }
+.ats-jp-breadcrumb { display:flex; align-items:center; gap:12px; margin:0 0 18px; color:#7a8ea9; font-size:12px; }
+.ats-jp-breadcrumb strong { color:var(--jp-blue); font-weight:700; }
+.ats-jp-hero { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; margin-bottom:20px; padding:28px 30px; background:linear-gradient(110deg,#fff 0%,#f1f6ff 100%); border:1px solid var(--jp-line); border-radius:18px; }
+.ats-jp-overline { margin:0 0 10px; color:#3367c4; font-size:11px; letter-spacing:.1em; font-weight:800; }
+.ats-jp-hero h1 { font-size:clamp(24px,2.3vw,32px); line-height:1.2; margin:0 0 10px; letter-spacing:-.035em; color:#0c2a4c; font-weight:800; }
+.ats-jp-hero p:not(.ats-jp-overline) { max-width:680px; line-height:1.65; color:var(--jp-sub); margin:0; }
+.ats-jp-hero-tag { background:#edf5ff; border:1px solid #cfe1fd; color:#22539d; white-space:nowrap; font-size:12px; font-weight:700; padding:10px 13px; border-radius:100px; display:inline-flex; align-items:center; gap:7px; }
+.ats-jp-layout { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(300px,.85fr); gap:20px; align-items:start; }
+.ats-jp-editor,.ats-jp-sidebar { display:flex; flex-direction:column; gap:20px; min-width:0; }
+.ats-jp-card { border:1px solid var(--jp-line); background:#fff; border-radius:18px; box-shadow:0 7px 20px rgba(16,44,80,.035); min-width:0; overflow:hidden; }
+.ats-jp-card-head { display:flex; align-items:flex-start; gap:14px; border-bottom:1px solid #e6edf6; padding:20px 22px; }
+.ats-jp-card-head--compact { padding:19px 20px; }
+.ats-jp-card-head h2 { margin:1px 0 5px; font-size:17px; line-height:1.3; letter-spacing:-.02em; color:var(--jp-ink); }
+.ats-jp-card-head p { margin:0; color:var(--jp-sub); line-height:1.5; font-size:12px; }
+.ats-jp-step { flex:0 0 34px; height:34px; display:grid; place-items:center; border-radius:10px; font-weight:800; background:#eaf2ff; color:#245eea; font-size:12px; }
+.ats-jp-step--finish { background:#e9f8f2; color:#16815b; }
+.ats-jp-head-icon { color:#7396d6; margin-left:auto; flex-shrink:0; }
+.ats-jp-card-body { display:flex; flex-direction:column; gap:20px; padding:24px 22px; }
+.ats-jp-sidebar .ats-jp-card-body { padding:20px; gap:16px; }
+.ats-jp-field { display:flex; flex-direction:column; gap:9px; min-width:0; }
+.ats-jp-field>span:first-child { font-size:13px; color:#233f60; font-weight:700; }
+.ats-jp-field b { color:#d9485d; }
+.ats-jp-field input:not([type=checkbox]),.ats-jp-field select,.ats-jp-field textarea { width:100%; min-width:0; padding:12px 13px; min-height:46px; color:#183858; font:inherit; font-size:14px; line-height:1.5; border-radius:10px; border:1px solid #cad9ee; background:#fff; outline:none; transition:border-color .15s,box-shadow .15s; }
+.ats-jp-field textarea { resize:vertical; min-height:215px; }
+.ats-jp-field :is(input,select,textarea):focus-visible { border-color:#3979ef; box-shadow:0 0 0 3px rgba(44,112,232,.14); }
+.ats-jp-field :is(input,select,textarea):disabled { background:#f7f9fc; color:#758aa5; cursor:not-allowed; }
+.ats-jp-field :is(input,textarea)::placeholder { color:#9aabc1; }
+.ats-jp-field small { color:#758ca8; font-size:12px; line-height:1.5; }
+.ats-jp-two-cols { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.ats-jp-date-wrap { position:relative; display:flex; align-items:center; }
+.ats-jp-date-wrap svg { position:absolute; pointer-events:none; left:13px; color:#7392bd; }
+.ats-jp-date-wrap input { padding-left:42px !important; }
+.ats-jp-inline-note { margin:20px 22px 0; padding:12px 13px; display:flex; align-items:center; gap:10px; line-height:1.45; color:#466d9f; font-size:12px; background:#f0f6ff; border:1px solid #dbe9ff; border-radius:10px; }
+.ats-jp-salary-toggle { display:flex; align-items:center; gap:12px; cursor:pointer; padding:17px; border-radius:12px; background:#f6f9ff; border:1px solid #dde9fa; }
+.ats-jp-salary-toggle--disabled { opacity:.6; cursor:not-allowed; }
+.ats-jp-toggle-text { display:flex; flex-direction:column; gap:5px; flex:1; }
+.ats-jp-toggle-text strong { color:#233f60; font-size:13px; }
+.ats-jp-toggle-text small { color:#7b90aa; font-size:12px; line-height:1.5; }
+.ats-jp-salary-toggle input { position:absolute; opacity:0; width:1px; height:1px; }
+.ats-jp-switch { width:42px; height:24px; background:#b4c3d7; border-radius:50px; position:relative; flex-shrink:0; transition:background .15s; }
+.ats-jp-switch:before { content:''; position:absolute; left:3px; top:3px; width:18px; height:18px; border-radius:50%; background:white; box-shadow:0 1px 4px #536c8240; transition:transform .15s; }
+.ats-jp-salary-toggle input:checked + .ats-jp-switch { background:#2563eb; }
+.ats-jp-salary-toggle input:checked + .ats-jp-switch:before { transform:translateX(18px); }
+.ats-jp-salary-toggle input:focus-visible + .ats-jp-switch { outline:3px solid #8bb3fa; outline-offset:3px; }
+.ats-jp-muted { font-size:12px; margin:0; color:#687e98; }
+.ats-jp-empty { margin:0; background:#f5f8fc; color:#6a829d; padding:13px; border-radius:9px; line-height:1.5; font-size:12px; }
+.ats-jp-source-preview { border:1px solid #d9e6f4; padding:16px; border-radius:12px; background:#f8fbff; }
+.ats-jp-source-state { display:inline-flex; align-items:center; gap:6px; color:#11845b; background:#e5f7ed; border-radius:20px; padding:5px 9px; font-size:11px; font-weight:800; }
+.ats-jp-source-preview h3 { margin:12px 0 6px; line-height:1.4; font-size:15px; overflow-wrap:anywhere; }
+.ats-jp-source-id { margin:0; font-size:11px; color:#8294a9; overflow-wrap:anywhere; }
+.ats-jp-source-detail { margin-top:14px; padding-top:12px; border-top:1px solid #e2ebf6; }
+.ats-jp-source-detail strong { font-size:12px; }
+.ats-jp-source-detail p { white-space:pre-wrap; overflow-wrap:anywhere; margin:7px 0 0; color:#5d7591; font-size:12px; line-height:1.65; max-height:154px; overflow-y:auto; }
+.ats-jp-source-empty { display:flex; flex-direction:column; align-items:center; text-align:center; gap:12px; padding:22px 16px; border:1px dashed #d5e2f2; background:#f8fbff; border-radius:12px; color:#8196ac; font-size:12px; line-height:1.5; }
+.ats-jp-progress-title { display:flex; justify-content:space-between; align-items:center; font-size:12px; color:#334d6b; }
+.ats-jp-progress-title span { color:#2a63cd; font-weight:800; }
+.ats-jp-progress { height:8px; border-radius:20px; overflow:hidden; background:#e9f0fb; margin-top:-7px; }
+.ats-jp-progress>span { display:block; height:100%; background:linear-gradient(90deg,#3288ff,#2760e5); border-radius:20px; transition:width .2s; }
+.ats-jp-checklist { display:flex; flex-direction:column; list-style:none; padding:0; margin:0; gap:11px; }
+.ats-jp-checklist li { display:flex; gap:10px; align-items:flex-start; color:#8799ad; font-size:12px; line-height:1.45; }
+.ats-jp-checklist li svg { flex-shrink:0; color:#acbac9; }
+.ats-jp-checklist li.is-complete { color:#185f50; }
+.ats-jp-checklist li.is-complete svg { color:#18a577; }
+.ats-jp-save { width:100%; min-height:46px; padding:12px 16px; display:inline-flex; align-items:center; justify-content:center; gap:9px; color:white; border:1px solid #1c55df; border-radius:10px; background:#245eea; font:inherit; font-weight:800; font-size:13px; cursor:pointer; box-shadow:0 5px 13px rgba(36,94,234,.18); transition:transform .15s,background .15s; }
+.ats-jp-save:hover:not(:disabled) { background:#1e50cc; transform:translateY(-1px); }
+.ats-jp-save:focus-visible { outline:3px solid #96b7ff; outline-offset:2px; }
+.ats-jp-save:disabled { cursor:not-allowed; opacity:.55; box-shadow:none; }
+.ats-jp-save-note { display:flex; align-items:flex-start; gap:8px; margin:0; font-size:11px; line-height:1.55; color:#7186a1; }
+.ats-jp-save-note svg { flex-shrink:0; color:#248c6a; }
+.ats-jp-feedback { display:flex; align-items:flex-start; gap:10px; padding:14px 16px; margin:0 0 20px; border-radius:12px; font-size:13px; line-height:1.55; }
+.ats-jp-feedback svg { flex-shrink:0; }
+.ats-jp-feedback--error { color:#9b2638; background:#fff2f3; border:1px solid #fac8cf; }
+.ats-jp-feedback--success { color:#126743; background:#ecfbf3; border:1px solid #bcebd4; }
+@media (max-width:1100px) { .ats-jp {padding:20px 18px 46px;} .ats-jp-layout {grid-template-columns:minmax(0,1.2fr) minmax(270px,.8fr);} }
+@media (max-width:820px) { .ats-jp-layout {grid-template-columns:minmax(0,1fr);} .ats-jp-sidebar {order:-1;} .ats-jp-hero {padding:22px;} .ats-jp-source-preview {padding:15px;} }
+@media (max-width:560px) { .ats-jp {padding:15px 10px 32px;} .ats-jp-hero {flex-direction:column; padding:20px;} .ats-jp-hero-tag {white-space:normal;} .ats-jp-card-head {padding:17px;} .ats-jp-card-body {padding:17px;} .ats-jp-two-cols {grid-template-columns:1fr;} }
+
+
+/* SCRUM-44: 01 → 02 → 03 tu trai sang phai tren man hinh rong. */
+.ats-jp { max-width: 1480px; }
+.ats-jp-horizontal { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.ats-jp-flow-grid {
+  display: grid;
+  grid-template-columns: minmax(0, .96fr) minmax(0, 1.34fr) minmax(0, 1.02fr);
+  align-items: stretch;
+  gap: 16px;
+  min-width: 0;
+}
+.ats-jp-flow-grid > .ats-jp-card { min-width: 0; height: 100%; }
+.ats-jp-flow-grid .ats-jp-card-head { padding: 18px 16px; gap: 10px; }
+.ats-jp-flow-grid .ats-jp-card-head h2 { font-size: 16px; }
+.ats-jp-flow-grid .ats-jp-card-body { padding: 18px 16px; gap: 16px; }
+.ats-jp-flow-grid .ats-jp-two-cols { grid-template-columns: minmax(0, 1fr); }
+.ats-jp-flow-grid .ats-jp-inline-note { margin: 14px 16px 0; }
+.ats-jp-flow-grid .ats-jp-field textarea { min-height: 240px; }
+.ats-jp-flow-grid .ats-jp-source-detail p { max-height: 125px; }
+.ats-jp-horizontal > .ats-jp-complete .ats-jp-card-body {
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.35fr) minmax(200px, .9fr);
+  grid-template-areas: 'progress-label checklist save' 'progress-bar checklist note';
+  align-items: center;
+  gap: 12px 22px;
+  padding: 20px 22px;
+}
+.ats-jp-horizontal > .ats-jp-complete .ats-jp-progress-title { grid-area: progress-label; }
+.ats-jp-horizontal > .ats-jp-complete .ats-jp-progress { grid-area: progress-bar; margin: 0; }
+.ats-jp-horizontal > .ats-jp-complete .ats-jp-checklist { grid-area: checklist; }
+.ats-jp-horizontal > .ats-jp-complete .ats-jp-save { grid-area: save; }
+.ats-jp-horizontal > .ats-jp-complete .ats-jp-save-note { grid-area: note; }
+@media (max-width: 1180px) {
+  .ats-jp-flow-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ats-jp-flow-grid > .ats-jp-source { grid-column: 1 / -1; }
+  .ats-jp-horizontal > .ats-jp-complete .ats-jp-card-body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    grid-template-areas: 'progress-label checklist' 'progress-bar checklist' 'save note';
+  }
+}
+@media (max-width: 760px) {
+  .ats-jp-flow-grid { grid-template-columns: minmax(0, 1fr); }
+  .ats-jp-flow-grid > .ats-jp-source { grid-column: auto; }
+  .ats-jp-horizontal > .ats-jp-complete .ats-jp-card-body {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+}
+
+/* S3-09/10: Recruiter-only handoff to HR Manager. */
+.ats-jp-my-drafts{margin:0 0 22px;padding:20px 22px;background:#fff;border:1px solid #dce6f3;border-radius:14px;box-shadow:0 4px 20px rgba(22,47,80,.04)}
+.ats-jp-my-drafts-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.ats-jp-my-drafts-heading h2{font-size:17px;margin:0 0 4px;color:#213957}
+.ats-jp-my-drafts-heading p{font-size:12px;margin:0;color:#6b7e96;line-height:1.5}
+.ats-jp-refresh{display:inline-flex;align-items:center;gap:6px;padding:9px 12px;background:#f8fbff;color:#344f71;border:1px solid #dce6f3;border-radius:9px;cursor:pointer;font:inherit;font-size:12px;font-weight:700}
+.ats-jp-draft-list{display:grid;gap:9px}
+.ats-jp-draft-item{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 14px;background:#f8fbff;border:1px solid #e3ecf7;border-radius:11px}
+.ats-jp-draft-item>div{min-width:0;display:flex;flex-direction:column;gap:5px}
+.ats-jp-draft-item strong{font-size:13px;overflow-wrap:anywhere;color:#203650}
+.ats-jp-draft-item small{font-size:11px;color:#687e9a}
+.ats-jp-draft-item button{display:inline-flex;align-items:center;justify-content:center;gap:7px;flex-shrink:0;padding:10px 13px;background:#4c42df;border:1px solid #4c42df;border-radius:9px;font:inherit;font-size:12px;font-weight:750;color:white;cursor:pointer}
+.ats-jp-draft-item button:disabled,.ats-jp-refresh:disabled{opacity:.55;cursor:not-allowed}
+.ats-jp-draft-item button:focus-visible,.ats-jp-refresh:focus-visible{outline:3px solid #a8bcff;outline-offset:2px}
+@media(max-width:680px){.ats-jp-my-drafts{padding:16px}.ats-jp-my-drafts-heading,.ats-jp-draft-item{align-items:stretch;flex-direction:column}.ats-jp-draft-item button{width:100%}}

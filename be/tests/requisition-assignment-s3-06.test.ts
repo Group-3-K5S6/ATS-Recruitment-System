@@ -1,0 +1,402 @@
+/**
+ * S3-06 / PR #81 — targeted API acceptance tests (AC1 / AC2 / AC3).
+ * REVIEW-ONLY: RUN SOLELY with disposable _ats_regression_*.db inside this worktree.
+ * The test creates unique fixtures, then cleans up its own records.
+ * These tests deliberately fail if authorization or audit behavior regresses.
+ */
+import { randomUUID } from 'crypto';
+import { existsSync, realpathSync } from 'fs';
+import { basename, dirname, resolve } from 'path';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import request from 'supertest';
+import { app } from '../src/app';
+import { prisma } from '../src/database/prisma';
+import { RequisitionPolicy } from '../src/policies/requisition.policy';
+import { authHeader, loginAndGetToken } from './test-helper';
+import { hashPassword } from '../src/utils/password';
+
+const scope = randomUUID().slice(0, 12);
+const requisitionAId = `s306-a-${scope}`;
+const requisitionBId = `s306-b-${scope}`;
+const requisitionCId = `s306-c-${scope}`;
+const requisitionDId = `s306-d-${scope}`;
+const requisitionEId = `s306-e-${scope}`;
+const jobAId = `s306-job-a-${scope}`;
+const jobBId = `s306-job-b-${scope}`;
+const candidateAId = `s306-cand-a-${scope}`;
+const candidateBId = `s306-cand-b-${scope}`;
+const applicationAId = `s306-app-a-${scope}`;
+const applicationBId = `s306-app-b-${scope}`;
+const expenseIds: string[] = [];
+const extraRecruiterPassword = randomUUID();
+
+const assertDisposableDatabase = () => {
+  // Fail closed: never run destructive acceptance tests against MAIN or an arbitrary database.
+  const candidate = /^file:\.\/(_ats_regression_[0-9a-f]{32}\.db)$/i.exec(process.env.DATABASE_URL ?? '');
+  const cwd = process.cwd();
+  const dir = resolve(cwd, 'prisma');
+  const file = candidate ? resolve(dir, candidate[1]) : '';
+  const canonicalDir = existsSync(dir) ? realpathSync(dir) : '';
+  const canonicalFile = file && existsSync(file) ? realpathSync(file) : '';
+  if (
+    process.env.NODE_ENV !== 'test' ||
+    basename(cwd).toLowerCase() !== 'be' ||
+    !canonicalFile || !canonicalDir ||
+    dirname(canonicalFile).toLowerCase() !== canonicalDir.toLowerCase()
+  ) {
+    throw new Error('S3-06 REVIEW TEST: requires NODE_ENV=test and disposable _ats_regression_*.db in this worktree.');
+  }
+};
+
+describe('S3-06 / PR81 — Recruiter assignment, scope and history', () => {
+  let hrToken = '';
+  let adminToken = '';
+  let hiringManagerToken = '';
+  let recruiter1Token = '';
+  let recruiter2Token = '';
+  let recruiter3Token = '';
+  let hrId = '';
+  let recruiter1Id = '';
+  let recruiter2Id = '';
+  let recruiter3Id = '';
+
+  beforeAll(async () => {
+    assertDisposableDatabase();
+
+    const [hr, admin, hiringManagerLogin, r1, r2, engDept, hiringManager] = await Promise.all([
+      loginAndGetToken('hr_manager@ats.local'),
+      loginAndGetToken('admin@ats.local'),
+      loginAndGetToken('hiring_manager_eng@ats.local'),
+      loginAndGetToken('recruiter1@ats.local'),
+      loginAndGetToken('recruiter2@ats.local'),
+      prisma.department.findUniqueOrThrow({ where: { code: 'ENG' } }),
+      prisma.user.findUniqueOrThrow({ where: { email: 'hiring_manager_eng@ats.local' } }),
+    ]);
+    hrToken = hr.token;
+    adminToken = admin.token;
+    hiringManagerToken = hiringManagerLogin.token;
+    hrId = hr.user.id;
+    recruiter1Token = r1.token;
+    recruiter1Id = r1.user.id;
+    recruiter2Token = r2.token;
+    recruiter2Id = r2.user.id;
+
+    const recruiterRole = await prisma.role.findUniqueOrThrow({ where: { name: 'RECRUITER' } });
+    const recruiter3 = await prisma.user.create({
+      data: {
+        email: `s306-third-${scope}@ats.local`,
+        fullName: 'S3-06 Third Recruiter',
+        passwordHash: await hashPassword(extraRecruiterPassword),
+        departmentId: engDept.id,
+        roles: { create: { role: { connect: { id: recruiterRole.id } } } },
+      },
+    });
+    recruiter3Id = recruiter3.id;
+    recruiter3Token = (await loginAndGetToken(recruiter3.email, extraRecruiterPassword)).token;
+
+    // Isolated requisitions and applications; no edits to seeded requisitions/users.
+    await prisma.requisition.createMany({
+      data: [
+        { id: requisitionAId, title: `S3-06 assigned ${scope}`, departmentId: engDept.id,
+          hiringManagerId: hiringManager.id, status: 'DRAFT' },
+        { id: requisitionBId, title: `S3-06 unassigned ${scope}`, departmentId: engDept.id,
+          hiringManagerId: hiringManager.id, status: 'DRAFT' },
+        { id: requisitionCId, title: `S3-06 recruiter as hiring manager ${scope}`, departmentId: engDept.id,
+          hiringManagerId: recruiter1Id, status: 'DRAFT' },
+        { id: requisitionDId, title: `S3-06 role access ${scope}`, departmentId: engDept.id,
+          hiringManagerId: hiringManager.id, status: 'DRAFT' },
+        { id: requisitionEId, title: `S3-06 approved ${scope}`, departmentId: engDept.id,
+          hiringManagerId: hiringManager.id, leadRecruiterId: recruiter1Id, status: 'APPROVED' },
+      ],
+    });
+    // Intentionally leave stale job/application assignments: these must NOT grant AC2 access.
+    await prisma.job.createMany({
+      data: [
+        { id: jobAId, requisitionId: requisitionAId, title: 'S3-06 Job A',
+          departmentId: engDept.id, hiringManagerId: hiringManager.id,
+          recruiterId: recruiter1Id, description: 'Review fixture A', status: 'DRAFT' },
+        { id: jobBId, requisitionId: requisitionBId, title: 'S3-06 Job B',
+          departmentId: engDept.id, hiringManagerId: hiringManager.id,
+          recruiterId: recruiter1Id, description: 'Review fixture B', status: 'DRAFT' },
+      ],
+    });
+    await prisma.candidate.createMany({
+      data: [
+        { id: candidateAId, fullName: 'S3-06 Candidate A',
+          email: `s306-a-${scope}@ats.local`, cvUrl: 'https://example.test/s306-a.pdf' },
+        { id: candidateBId, fullName: 'S3-06 Candidate B',
+          email: `s306-b-${scope}@ats.local`, cvUrl: 'https://example.test/s306-b.pdf' },
+      ],
+    });
+    await prisma.application.createMany({
+      data: [
+        { id: applicationAId, candidateId: candidateAId, jobId: jobAId,
+          assignedRecruiterId: recruiter1Id, status: 'ACTIVE' },
+        { id: applicationBId, candidateId: candidateBId, jobId: jobBId,
+          assignedRecruiterId: recruiter1Id, status: 'ACTIVE' },
+      ],
+    });
+  });
+
+  afterAll(async () => {
+    assertDisposableDatabase();
+    // Restrict all deletes to this test's randomly generated IDs.
+    await prisma.application.deleteMany({ where: { id: { in: [applicationAId, applicationBId] } } });
+    await prisma.job.deleteMany({ where: { id: { in: [jobAId, jobBId] } } });
+    await prisma.recruitmentExpense.deleteMany({ where: { id: { in: expenseIds } } });
+    await prisma.auditLog.deleteMany({
+      where: { resourceId: { in: [...expenseIds, requisitionAId, requisitionBId, requisitionCId, requisitionDId, requisitionEId] } },
+    });
+    await prisma.requisitionAssignmentHistory.deleteMany({ where: { requisitionId: { in: [requisitionAId, requisitionBId, requisitionCId, requisitionDId, requisitionEId] } } });
+    await prisma.requisitionSupportingRecruiter.deleteMany({ where: { requisitionId: { in: [requisitionAId, requisitionBId, requisitionCId, requisitionDId, requisitionEId] } } });
+    await prisma.requisition.deleteMany({ where: { id: { in: [requisitionAId, requisitionBId, requisitionCId, requisitionDId, requisitionEId] } } });
+    await prisma.candidate.deleteMany({ where: { id: { in: [candidateAId, candidateBId] } } });
+    if (recruiter3Id) await prisma.user.deleteMany({ where: { id: recruiter3Id } });
+  });
+
+  it('AC2: stale Job/Application recruiter IDs do NOT grant candidate access', async () => {
+    const res = await request(app).get(`/api/candidates/${candidateAId}`).set(authHeader(recruiter1Token));
+    expect(res.status).toBe(403);
+    const apps = await request(app).get(`/api/requisitions/${requisitionAId}/applications`).set(authHeader(recruiter1Token));
+    expect(apps.status).toBe(403);
+  });
+
+  it('AC1: a recruiter cannot assign themselves to requisitions', async () => {
+    const res = await request(app).post(`/api/requisitions/${requisitionAId}/assign`)
+      .set(authHeader(recruiter1Token))
+      .send({ leadRecruiterId: recruiter1Id, supportingRecruiterIds: [] });
+    expect(res.status).toBe(403);
+  });
+
+  it('AC1: lead cannot simultaneously be a supporting recruiter', async () => {
+    const res = await request(app).post(`/api/requisitions/${requisitionAId}/assign`)
+      .set(authHeader(hrToken))
+      .send({ leadRecruiterId: recruiter1Id, supportingRecruiterIds: [recruiter1Id] });
+    expect(res.status).toBe(400);
+  });
+
+  it('AC1: HR manager cannot be assigned as recruiter lead', async () => {
+    const res = await request(app).post(`/api/requisitions/${requisitionAId}/assign`)
+      .set(authHeader(hrToken))
+      .send({ leadRecruiterId: hrId, supportingRecruiterIds: [] });
+    expect(res.status).toBe(400);
+  });
+
+  it('AC1+AC3: HR manager assigns one lead and one supporting recruiter with history', async () => {
+    const res = await request(app).post(`/api/requisitions/${requisitionAId}/assign`)
+      .set(authHeader(hrToken))
+      .send({ leadRecruiterId: recruiter1Id, supportingRecruiterIds: [recruiter2Id, recruiter3Id], notes: 'Initial S3-06 assignment' });
+    expect(res.status).toBe(200);
+
+    const req = await prisma.requisition.findUniqueOrThrow({
+      where: { id: requisitionAId }, include: { supportingRecruiters: true },
+    });
+    expect(req.leadRecruiterId).toBe(recruiter1Id);
+    expect(req.supportingRecruiters.map((x) => x.recruiterId).sort()).toEqual([recruiter2Id, recruiter3Id].sort());
+    const history = await prisma.requisitionAssignmentHistory.findMany({ where: { requisitionId: requisitionAId } });
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({
+      action: 'ASSIGN', actorId: hrId, previousLeadRecruiterId: null,
+      newLeadRecruiterId: recruiter1Id,
+    });
+    expect(JSON.parse(history[0].supportingRecruiterIds || '[]').sort()).toEqual([recruiter2Id, recruiter3Id].sort());
+  });
+
+  it('AC2: recruiter can edit assigned requisitions but not unassigned requisitions', async () => {
+    const assigned = await request(app).put(`/api/requisitions/${requisitionAId}`)
+      .set(authHeader(recruiter1Token))
+      .send({ isDraft: true, title: `S3-06 updated ${scope}` });
+    expect(assigned.status).toBe(200);
+
+    const supporting = await request(app).put(`/api/requisitions/${requisitionAId}`)
+      .set(authHeader(recruiter2Token))
+      .send({ isDraft: true, title: `S3-06 supporting update ${scope}` });
+    expect(supporting.status).toBe(200);
+
+    const unassigned = await request(app).put(`/api/requisitions/${requisitionBId}`)
+      .set(authHeader(recruiter1Token))
+      .send({ isDraft: true, title: `S3-06 unauthorized update ${scope}` });
+    expect(unassigned.status).toBe(403);
+    const unchanged = await prisma.requisition.findUniqueOrThrow({ where: { id: requisitionBId } });
+    expect(unchanged.title).toBe(`S3-06 unassigned ${scope}`);
+  });
+
+  it('AC2: recruiter cannot update an unassigned requisition through its hiring-manager reference', async () => {
+    const res = await request(app).put(`/api/requisitions/${requisitionCId}`)
+      .set(authHeader(recruiter1Token))
+      .send({ isDraft: true, title: `S3-06 unauthorized manager update ${scope}` });
+    expect(res.status).toBe(403);
+    const unchanged = await prisma.requisition.findUniqueOrThrow({ where: { id: requisitionCId } });
+    expect(unchanged.title).toBe(`S3-06 recruiter as hiring manager ${scope}`);
+  });
+
+  it('keeps Recruiter expense management scope independent from requisition-edit assignment', async () => {
+    const res = await request(app).post(`/api/recruitment-budget/requisitions/${requisitionBId}/expenses`)
+      .set(authHeader(recruiter1Token))
+      .send({ category: 'other', amount: 125, date: '2026-10-20' });
+    expect(res.status).toBe(201);
+    expenseIds.push(res.body.data.id);
+  });
+
+  it('AC2: Admin, HR Manager, and Hiring Manager retain requisition update access', async () => {
+    for (const token of [adminToken, hrToken, hiringManagerToken]) {
+      const res = await request(app).put(`/api/requisitions/${requisitionDId}`)
+        .set(authHeader(token))
+        .send({ isDraft: true, title: `S3-06 authorized update ${scope}` });
+      expect(res.status).toBe(200);
+    }
+  });
+
+  it('AC2: assigned recruiter cannot update an approved requisition', async () => {
+    const res = await request(app).put(`/api/requisitions/${requisitionEId}`)
+      .set(authHeader(recruiter1Token))
+      .send({ isDraft: true, title: `S3-06 approved update ${scope}` });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('INVALID_STATUS');
+    const unchanged = await prisma.requisition.findUniqueOrThrow({ where: { id: requisitionEId } });
+    expect(unchanged.title).toBe(`S3-06 approved ${scope}`);
+    expect(unchanged.status).toBe('APPROVED');
+  });
+
+  it('AC2: lead AND supporting recruiter can see candidates on assigned requisition', async () => {
+    for (const token of [recruiter1Token, recruiter2Token, recruiter3Token]) {
+      const res = await request(app).get(`/api/requisitions/${requisitionAId}/applications`)
+        .set(authHeader(token));
+      expect(res.status).toBe(200);
+      expect(res.body.data.map((x: { id: string }) => x.id)).toContain(applicationAId);
+      const candidate = await request(app).get(`/api/candidates/${candidateAId}`).set(authHeader(token));
+      expect(candidate.status).toBe(200);
+    }
+  });
+
+  it('AC2: assigned recruiter cannot browse unrelated candidates, CVs, edits, deletes, or requisition applications', async () => {
+    const list = await request(app).get('/api/candidates').set(authHeader(recruiter1Token));
+    expect(list.status).toBe(200);
+    const ids = list.body.data.map((x: { id: string }) => x.id);
+    expect(ids).toContain(candidateAId);
+    expect(ids).not.toContain(candidateBId);
+
+    const read = await request(app).get(`/api/candidates/${candidateBId}`).set(authHeader(recruiter1Token));
+    expect(read.status).toBe(403);
+    const cv = await request(app).get(`/api/candidates/${candidateBId}/cv`).set(authHeader(recruiter1Token));
+    expect(cv.status).toBe(403);
+    const edit = await request(app).put(`/api/candidates/${candidateBId}`)
+      .set(authHeader(recruiter1Token)).send({ fullName: 'Should never save' });
+    expect(edit.status).toBe(403);
+    const remove = await request(app).delete(`/api/candidates/${candidateBId}`)
+      .set(authHeader(recruiter1Token));
+    expect(remove.status).toBe(403);
+    const unrelatedApps = await request(app).get(`/api/requisitions/${requisitionBId}/applications`)
+      .set(authHeader(recruiter1Token));
+    expect(unrelatedApps.status).toBe(403);
+  });
+
+  it('AC3: identical repeated assignment does not generate duplicate history', async () => {
+    const before = await prisma.requisitionAssignmentHistory.count({ where: { requisitionId: requisitionAId } });
+    const res = await request(app).put(`/api/requisitions/${requisitionAId}/assign`)
+      .set(authHeader(hrToken))
+      .send({ leadRecruiterId: recruiter1Id, supportingRecruiterIds: [recruiter2Id, recruiter3Id] });
+    expect(res.status).toBe(200);
+    const after = await prisma.requisitionAssignmentHistory.count({ where: { requisitionId: requisitionAId } });
+    expect(after).toBe(before);
+  });
+
+  it('AC3: handover transfers access and synchronizes Job lead, writing HANDOVER', async () => {
+    const res = await request(app).put(`/api/requisitions/${requisitionAId}/assign`)
+      .set(authHeader(hrToken))
+      .send({ leadRecruiterId: recruiter2Id, supportingRecruiterIds: [], notes: 'Handover to recruiter 2' });
+    expect(res.status).toBe(200);
+    const req = await prisma.requisition.findUniqueOrThrow({ where: { id: requisitionAId } });
+    expect(req.leadRecruiterId).toBe(recruiter2Id);
+    const job = await prisma.job.findUniqueOrThrow({ where: { id: jobAId } });
+    expect(job.recruiterId).toBe(recruiter2Id);
+    const history = await prisma.requisitionAssignmentHistory.findMany({
+      where: { requisitionId: requisitionAId }, orderBy: { createdAt: 'asc' },
+    });
+    expect(history).toHaveLength(2);
+    expect(history.some((x) => x.action === 'HANDOVER' && x.previousLeadRecruiterId === recruiter1Id && x.newLeadRecruiterId === recruiter2Id)).toBe(true);
+  });
+
+  it('AC2: after handover, former lead loses access even if Application points to them', async () => {
+    const denied = await request(app).get(`/api/candidates/${candidateAId}`).set(authHeader(recruiter1Token));
+    expect(denied.status).toBe(403);
+    const deniedCv = await request(app).get(`/api/candidates/${candidateAId}/cv`).set(authHeader(recruiter1Token));
+    expect(deniedCv.status).toBe(403);
+    const formerSupportDenied = await request(app).get(`/api/candidates/${candidateAId}`).set(authHeader(recruiter3Token));
+    expect(formerSupportDenied.status).toBe(403);
+    const allowed = await request(app).get(`/api/candidates/${candidateAId}`).set(authHeader(recruiter2Token));
+    expect(allowed.status).toBe(200);
+  });
+
+  it('AC1+AC3: generic PUT updates ONLY supporting recruiter and writes UPDATE_SUPPORTING', async () => {
+    const res = await request(app).put(`/api/requisitions/${requisitionAId}`)
+      .set(authHeader(hrToken)).send({ isDraft: true, supportingRecruiterIds: [recruiter1Id] });
+    expect(res.status).toBe(200);
+    const req = await prisma.requisition.findUniqueOrThrow({
+      where: { id: requisitionAId }, include: { supportingRecruiters: true },
+    });
+    expect(req.leadRecruiterId).toBe(recruiter2Id);
+    expect(req.supportingRecruiters.map((x) => x.recruiterId)).toEqual([recruiter1Id]);
+    const history = await prisma.requisitionAssignmentHistory.findMany({ where: { requisitionId: requisitionAId } });
+    expect(history).toHaveLength(3);
+    expect(history.some((x) => x.action === 'UPDATE_SUPPORTING' && x.actorId === hrId)).toBe(true);
+  });
+
+  it('AC2: newly added supporting recruiter regains access', async () => {
+    const allowed = await request(app).get(`/api/candidates/${candidateAId}`).set(authHeader(recruiter1Token));
+    expect(allowed.status).toBe(200);
+  });
+
+  it('AC3: assignment-history API exposes audit actor and assignment actions', async () => {
+    const res = await request(app).get(`/api/requisitions/${requisitionAId}/assignment-history`)
+      .set(authHeader(hrToken));
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(3);
+    const actions = res.body.data.map((x: { action: string }) => x.action);
+    expect(actions).toContain('ASSIGN');
+    expect(actions).toContain('HANDOVER');
+    expect(actions).toContain('UPDATE_SUPPORTING');
+    expect(res.body.data.every((x: { actorId: string }) => x.actorId === hrId)).toBe(true);
+  });
+
+  it('AC2: a handover during an edit request revokes the former lead access', async () => {
+    let signalAuthorization!: () => void;
+    let releaseAuthorization!: () => void;
+    const authorizationChecked = new Promise<void>((resolve) => { signalAuthorization = resolve; });
+    const authorizationReleased = new Promise<void>((resolve) => { releaseAuthorization = resolve; });
+    const canUpdate = RequisitionPolicy.canUpdate.bind(RequisitionPolicy);
+    let paused = false;
+    const policySpy = vi.spyOn(RequisitionPolicy, 'canUpdate').mockImplementation(async (...args) => {
+      const allowed = await canUpdate(...args);
+      if (!paused && args[0].id === recruiter1Id && args[1] === requisitionAId) {
+        paused = true;
+        signalAuthorization();
+        await authorizationReleased;
+      }
+      return allowed;
+    });
+
+    try {
+      const original = await prisma.requisition.findUniqueOrThrow({ where: { id: requisitionAId } });
+      const update = request(app).put(`/api/requisitions/${requisitionAId}`)
+        .set(authHeader(recruiter1Token))
+        .send({ isDraft: true, title: `S3-06 stale authorization ${scope}` })
+        .then((res) => res);
+      await authorizationChecked;
+
+      const handover = await request(app).put(`/api/requisitions/${requisitionAId}/assign`)
+        .set(authHeader(hrToken))
+        .send({ leadRecruiterId: recruiter2Id, supportingRecruiterIds: [] });
+      expect(handover.status).toBe(200);
+
+      releaseAuthorization();
+      const res = await update;
+      expect(res.status).toBe(403);
+      const unchanged = await prisma.requisition.findUniqueOrThrow({ where: { id: requisitionAId } });
+      expect(unchanged.title).toBe(original.title);
+    } finally {
+      releaseAuthorization();
+      policySpy.mockRestore();
+    }
+  });
+});
