@@ -25,6 +25,7 @@ import JobPostingDraft from "./features/sprint3/JobPostingDraft";
 import JobPostingPublish from "./features/sprint3/JobPostingPublish";
 import PublicCareers from "./features/sprint3/PublicCareers"; // S310_PUBLIC_V1
 import ApplicationStatusLookup from "./features/sprint3/ApplicationStatusLookup";
+import WithdrawApplication from "./features/sprint4/WithdrawApplication";
 import ApprovalWorkflowConfig from "./features/sprint3/ApprovalWorkflowConfig";
 import Sprint3RouteGuard from "./features/sprint3/Sprint3RouteGuard";
 import { REQUISITION_APPROVAL_ROLES } from "./features/sprint3/routeAccess";
@@ -1909,6 +1910,7 @@ function App() {
 
       <Routes>
         {/* Public published jobs: no login required */}
+        <Route path="/withdraw-application" element={<WithdrawApplication />} />
         <Route path="/careers/tra-cuu" element={<ApplicationStatusLookup />} />
         <Route path="/careers" element={<PublicCareers />} />
         <Route path="/careers/:id" element={<PublicCareers />} />

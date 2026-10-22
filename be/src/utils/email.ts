@@ -258,3 +258,44 @@ Trân trọng,
     return { success: false, error: errorMsg };
   }
 }
+
+/** S4-06: Liên kết xác nhận rút hồ sơ có hiệu lực 30 phút và dùng một lần. */
+export async function sendApplicationWithdrawalConfirmationEmail(
+  toEmail: string,
+  candidateName: string,
+  jobTitle: string,
+  token: string
+): Promise<void> {
+  if (!env.SMTP_USER || !env.SMTP_PASS) throw new Error('SMTP chưa được cấu hình.');
+  const link = `${env.FRONTEND_URL}/withdraw-application?token=${encodeURIComponent(token)}`;
+  const safe = (value: string) => value.replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[ch]!));
+  await transporter.sendMail({
+    from: `"ATS Recruitment System" <${env.MAIL_FROM}>`,
+    to: toEmail,
+    subject: 'ATS - Xác nhận rút hồ sơ ứng tuyển',
+    text: `Xin chào ${candidateName},\n\nBạn yêu cầu rút hồ sơ ứng tuyển vị trí ${jobTitle}.\nMở liên kết dưới đây để kiểm tra và xác nhận:\n${link}\n\nLiên kết có hiệu lực 30 phút và chỉ dùng được một lần. Nếu không phải bạn yêu cầu, hãy bỏ qua email.`,
+    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto"><h2>Xác nhận rút hồ sơ ứng tuyển</h2><p>Xin chào ${safe(candidateName)},</p><p>Bạn yêu cầu rút hồ sơ ứng tuyển vị trí <strong>${safe(jobTitle)}</strong>.</p><p><a href="${link}" style="display:inline-block;padding:12px 20px;color:white;background:#b42318;border-radius:8px;text-decoration:none">Kiểm tra và xác nhận rút hồ sơ</a></p><p>Liên kết có hiệu lực 30 phút, dùng một lần. Không bấm nếu bạn không yêu cầu.</p></div>`,
+  });
+}
+
+/** S4-06: Thông báo Recruiter phụ trách khi ứng viên đã rút. */
+export async function sendApplicationWithdrawalNoticeEmail(
+  toEmail: string,
+  recruiterName: string,
+  candidateName: string,
+  jobTitle: string
+): Promise<void> {
+  if (!env.SMTP_USER || !env.SMTP_PASS) throw new Error('SMTP chưa được cấu hình.');
+  const safe = (value: string) => value.replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[ch]!));
+  await transporter.sendMail({
+    from: `"ATS Recruitment System" <${env.MAIL_FROM}>`,
+    to: toEmail,
+    subject: 'ATS - Thông báo ứng viên rút hồ sơ',
+    text: `Xin chào ${recruiterName},\nỨng viên ${candidateName} đã xác nhận rút hồ sơ ứng tuyển vị trí ${jobTitle}. Hồ sơ không còn ở trạng thái hoạt động.`,
+    html: `<div style="font-family:Arial,sans-serif"><h2>Ứng viên đã rút hồ sơ</h2><p>Xin chào ${safe(recruiterName)},</p><p>Ứng viên <strong>${safe(candidateName)}</strong> đã xác nhận rút hồ sơ cho vị trí <strong>${safe(jobTitle)}</strong>.</p><p>Hồ sơ đã chuyển trạng thái Ứng viên rút.</p></div>`,
+  });
+}
