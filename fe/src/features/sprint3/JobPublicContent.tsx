@@ -61,14 +61,8 @@ function workModeText(value?: string | null) {
 
 function isExpired(value?: string | null) {
   if (!value) return false;
-
   const deadline = new Date(value);
-
-  if (Number.isNaN(deadline.getTime())) {
-    return false;
-  }
-
-  return deadline.getTime() < Date.now();
+  return !Number.isNaN(deadline.getTime()) && deadline.getTime() < Date.now();
 }
 
 // Cùng một nội dung được dùng cho preview của HR và trang chi tiết công khai.
@@ -79,7 +73,7 @@ export default function JobPublicContent({
   onApply,
 }: JobPublicContentProps) {
   const { job, companyProfile } = data;
-  const expired = job.status === "CLOSED" || job.isExpired === true || isExpired(job.applicationDeadline);
+  const expired = job.status !== "PUBLISHED" || job.isExpired === true || isExpired(job.applicationDeadline);
 
   return (
     <article className="s310-public-preview s310-job-detail-layout">
