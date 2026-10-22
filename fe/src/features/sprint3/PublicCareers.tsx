@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, BriefcaseBusiness, Building2, ChevronRight, Globe2, MapPin, RefreshCw, Search, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BriefcaseBusiness, Building2, ChevronRight, Globe2, MapPin, RefreshCw, Search, SlidersHorizontal, X } from 'lucide-react';
 import JobPublicContent, { type PublishedPresentation } from './JobPublicContent';
+import JobApplicationForm from './JobApplicationForm';
 import { filterPublicJobs, publicJobFilterOptions, type PublicJobListing } from '../sprint4/publicJobFilters';
 import './job-posting-publish.css';
 import './public-careers.css';
@@ -57,7 +58,7 @@ export default function PublicCareers() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
-  const [applyNotice, setApplyNotice] = useState("");
+  const [applicationJobId, setApplicationJobId] = useState<string | null>(null);
 
   useEffect(() => {
     const abort = new AbortController();
@@ -86,11 +87,36 @@ export default function PublicCareers() {
   const hasFilters = search.trim() !== '' || workMode !== 'ALL' || department !== 'ALL' || location !== 'ALL';
   const resetFilters = () => { setSearch(''); setWorkMode('ALL'); setDepartment('ALL'); setLocation('ALL'); };
 
-const handleApply = () => {
-  setApplyNotice(
-    "Chức năng gửi hồ sơ đang chờ API ứng tuyển từ Backend. Hệ thống chưa gửi hồ sơ của bạn."
-  );
+const handleApply = (jobId: string) => {
+  setApplicationJobId(jobId);
 };
+
+const closedForApplications = detail?.job.status === 'CLOSED'
+  || detail?.job.isExpired === true;
+const applicationOpen = Boolean(id && applicationJobId === id && !closedForApplications);
+
+useEffect(() => {
+  if (!applicationOpen) return;
+
+  const previousOverflow = document.body.style.overflow;
+  const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  document.body.style.overflow = 'hidden';
+
+  const handleEscape = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') setApplicationJobId(null);
+  };
+  document.addEventListener('keydown', handleEscape);
+  const frame = window.requestAnimationFrame(() => {
+    document.querySelector<HTMLInputElement>('.s403-application-modal input[name="fullName"]')?.focus();
+  });
+
+  return () => {
+    document.removeEventListener('keydown', handleEscape);
+    window.cancelAnimationFrame(frame);
+    document.body.style.overflow = previousOverflow;
+    previousFocus?.focus();
+  };
+}, [applicationOpen]);
 
   return <div className="s310-careers-page">
     <a className="s310-skip-link" href="#careers-main">Bỏ qua điều hướng</a>
@@ -121,19 +147,24 @@ const handleApply = () => {
           </section>
           : detail ? <>
             <Link className="s310-careers-inlineback" to="/careers"><ArrowLeft size={16}/> Xem tất cả vị trí đang tuyển</Link>
-            {applyNotice && (
-  <div className="s402-apply-info" role="status">
-    {applyNotice}
-  </div>
-)}
-
-<div className="s310-careers-detail">
-  <JobPublicContent
-    data={detail}
-    candidateActions
-    onApply={handleApply}
-  />
-</div>
+            <div className="s310-careers-detail">
+              <JobPublicContent data={detail} candidateActions onApply={handleApply}/>
+            </div>
+            {applicationOpen && id && (
+              <div className="s403-application-backdrop">
+                <div className="s403-application-modal" role="dialog" aria-modal="true" aria-label="Biểu mẫu nộp hồ sơ ứng tuyển">
+                  <button
+                    type="button"
+                    className="s403-application-close"
+                    onClick={() => setApplicationJobId(null)}
+                    aria-label="Đóng biểu mẫu ứng tuyển"
+                  >
+                    <X size={20} aria-hidden="true"/>
+                  </button>
+                  <JobApplicationForm key={id} jobId={id}/>
+                </div>
+              </div>
+            )}
             <div className="s310-careers-bottom"><div><strong>Muốn tìm vị trí khác?</strong><span>Khám phá các cơ hội đang được công khai.</span></div><Link to="/careers" className="s310-careers-outline">Xem danh sách <ArrowRight size={16}/></Link></div>
           </> : null}
       </> : <>
