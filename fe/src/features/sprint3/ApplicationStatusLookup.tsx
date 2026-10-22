@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { ArrowLeft, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import WithdrawLookupAction from '../sprint4/WithdrawLookupAction';
 import './application-status-lookup.css';
 import './job-posting-publish.css';
 import './public-careers.css';
@@ -17,6 +18,7 @@ export default function ApplicationStatusLookup() {
   const [fields, setFields] = useState<LookupFields>({ trackingCode: '', email: '' });
   const [errors, setErrors] = useState<LookupErrors>({});
   const [message, setMessage] = useState('');
+  const [verified, setVerified] = useState<LookupFields | null>(null);
 
   function submitLookup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -39,6 +41,7 @@ export default function ApplicationStatusLookup() {
 
     const apiBase = String(import.meta.env.VITE_ATS_API_URL || '').replace(/\/+$/, '');
 
+    setVerified(null);
     setMessage('Đang tra cứu...');
 
     void fetch(`${apiBase}/api/candidates/track-status`, {
@@ -61,6 +64,7 @@ export default function ApplicationStatusLookup() {
           return;
         }
 
+        setVerified({ trackingCode: fields.trackingCode.trim(), email: fields.email.trim().toLowerCase() });
         setMessage(`Trạng thái hồ sơ: ${result.data.statusLabel}`);
       })
       .catch(() => {
@@ -69,6 +73,7 @@ export default function ApplicationStatusLookup() {
   }
 
   function updateField(field: keyof LookupFields, value: string) {
+    setVerified(null);
     setFields(current => ({ ...current, [field]: value }));
     setErrors(current => ({ ...current, [field]: undefined }));
     setMessage('');
@@ -142,6 +147,7 @@ export default function ApplicationStatusLookup() {
             </button>
           </form>
 
+          {verified && <WithdrawLookupAction trackingCode={verified.trackingCode} email={verified.email} />}
           <Link className="s310-lookup-back" to="/careers"><ArrowLeft size={15}/> Quay lại tin tuyển dụng</Link>
         </section>
       </main>

@@ -312,9 +312,24 @@ model Application {
   assignedRecruiter User?       @relation("RecruiterApplications", fields: [assignedRecruiterId], references: [id])
   interviews        Interview[]
   offers            Offer[]
+  withdrawalTokens  ApplicationWithdrawalToken[]
 
   // Ngăn cùng email (chuẩn hóa) nộp lại vào cùng vị trí, kể cả khi tạo 2 Candidate song song
   @@unique([jobId, applicantEmailNormalized])
+}
+
+// S4-06: Token bi bam SHA-256, dung mot lan, het han sau 30 phut.
+model ApplicationWithdrawalToken {
+  id            String    @id @default(uuid())
+  applicationId String
+  tokenHash     String    @unique
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, expiresAt])
 }
 
 model Interview {
