@@ -1,3 +1,7 @@
+import {
+  publicStatusHandler,
+  publicStatusLimiter,
+} from './public-status-s4-05';
 import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { CandidateController, createCandidateSchema, updateCandidateSchema } from './candidate.controller';
@@ -39,6 +43,11 @@ const uploadSingleCv = (req: Request, res: Response, next: NextFunction) => {
   });
 };
 
+router.post(
+  '/track-status',
+  publicStatusLimiter,
+  publicStatusHandler
+);
 router.use(authenticate);
 
 // S4-04: Bóc tách thông tin ứng viên từ CV PDF cho Recruiter
